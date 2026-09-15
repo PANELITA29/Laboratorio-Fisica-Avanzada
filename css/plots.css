@@ -1164,3 +1164,408 @@
     padding: 0;
   }
 }
+
+/* ==========================================================================
+   RESPONSIVE PLOTS / QUIZ / MODAL
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  /* Zona 3: Gráficas */
+  .plots-container {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .plot-card {
+    padding: 0.625rem;
+  }
+
+  .plot-title {
+    font-size: 0.75rem;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+
+  .plot-legend-tag {
+    font-size: 0.6rem;
+    padding: 0.075rem 0.3rem;
+  }
+
+  .canvas-wrapper {
+    height: 180px;
+  }
+
+  /* Zona 4: Quiz */
+  .quiz-selector-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .quiz-select {
+    width: 100%;
+    padding: 0.625rem 0.75rem;
+    font-size: 0.85rem;
+    min-height: 44px;
+  }
+
+  .score-badge {
+    align-self: flex-start;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.7rem;
+  }
+
+  .quiz-prompt-box {
+    padding: 0.75rem;
+    font-size: 0.82rem;
+  }
+
+  .quiz-option {
+    padding: 0.75rem;
+    gap: 0.625rem;
+    font-size: 0.82rem;
+    min-height: 48px;
+  }
+
+  .option-badge {
+    font-size: 0.7rem;
+    min-width: 32px;
+  }
+
+  .justification-box {
+    padding: 0.875rem;
+  }
+
+  .justification-title {
+    font-size: 0.82rem;
+  }
+
+  .justification-text {
+    font-size: 0.78rem;
+  }
+
+  .justification-formula {
+    font-size: 0.75rem;
+    padding: 0.375rem 0.5rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .justification-tip {
+    font-size: 0.72rem;
+  }
+
+  .quiz-action-bar {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .quiz-action-bar .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Modal */
+  .modal-overlay {
+    padding: 1rem;
+    align-items: flex-start;
+    padding-top: 2rem;
+  }
+
+  .modal-window {
+    max-height: 100vh;
+    max-width: 100%;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    margin-top: auto;
+  }
+
+  .modal-header {
+    padding: 1rem 1.25rem;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: rgba(15, 23, 42, 0.98);
+  }
+
+  .modal-title {
+    font-size: 1rem;
+  }
+
+  .btn-close-modal {
+    font-size: 1.25rem;
+    padding: 0.375rem;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .theory-tabs-nav {
+    position: sticky;
+    top: 56px;
+    z-index: 9;
+    background: rgba(15, 23, 42, 0.98);
+    border-bottom: 1px solid var(--border-card);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .theory-tab-btn {
+    padding: 0.625rem 1rem;
+    font-size: 0.8rem;
+    min-width: max-content;
+  }
+
+  .theory-body-content {
+    padding: 1rem;
+    gap: 1rem;
+  }
+
+  .theory-title {
+    font-size: 1.1rem;
+  }
+
+  .theory-concept-card {
+    padding: 0.875rem;
+    font-size: 0.82rem;
+  }
+
+  .theory-formula-card {
+    padding: 0.875rem;
+  }
+
+  .formula-text {
+    font-size: 1rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+  }
+
+  .units-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .unit-card {
+    padding: 0.625rem;
+  }
+
+  .unit-symbol {
+    font-size: 1.1rem;
+    width: 28px;
+  }
+
+  .unit-desc {
+    font-size: 0.72rem;
+  }
+
+  .analogy-card {
+    padding: 0.875rem;
+    font-size: 0.82rem;
+  }
+
+  .real-life-grid,
+  .topologies-grid,
+  .faults-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .real-example-card,
+  .topology-card,
+  .fault-card,
+  .law-card {
+    padding: 0.875rem;
+    font-size: 0.8rem;
+  }
+
+  .rules-list {
+    font-size: 0.72rem;
+    padding-left: 1rem;
+  }
+
+  /* Color Code Modal */
+  .bands-selector-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+
+  .band-select-col {
+    gap: 0.25rem;
+  }
+
+  .color-dropdown {
+    padding: 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  .manual-ohms-input-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .manual-ohms-input {
+    width: 100%;
+    font-size: 0.85rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .color-target-dropdown {
+    width: 100%;
+  }
+
+  .color-actions-btn-group {
+    margin-left: 0;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .color-actions-btn-group .btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  /* Report Modal */
+  .report-inputs-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-actions-btn-group {
+    flex-direction: column;
+  }
+
+  .report-actions-btn-group .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .report-preview-scroll {
+    max-height: 50vh;
+  }
+
+  .printable-lab-report {
+    padding: 1.5rem;
+  }
+
+  .report-head {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  .report-meta-box {
+    width: 100%;
+  }
+
+  .report-grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .report-table {
+    font-size: 0.75rem;
+  }
+
+  .report-table th,
+  .report-table td {
+    padding: 0.375rem 0.5rem;
+  }
+
+  .report-formulas-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-signatures {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}
+
+@media (min-width: 481px) and (max-width: 768px) {
+  .plots-container {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-window {
+    max-width: 95vw;
+    max-height: 90vh;
+  }
+
+  .theory-body-content {
+    padding: 1.25rem;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .plots-container {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .modal-window {
+    max-width: 85vw;
+  }
+}
+
+/* Tablet landscape - modal centrado */
+@media (min-width: 769px) and (max-width: 1199px) and (orientation: landscape) {
+  .modal-overlay {
+    align-items: center;
+    padding-top: 1.5rem;
+  }
+
+  .modal-window {
+    max-height: 85vh;
+    border-radius: var(--radius-lg);
+    margin-top: 0;
+  }
+}
+
+/* Touch-friendly para modal en móviles */
+@media (pointer: coarse) {
+  .modal-overlay {
+    padding: 1rem;
+  }
+
+  .theory-tab-btn {
+    min-height: 44px;
+    padding: 0.75rem 1rem;
+  }
+
+  .modal-header {
+    min-height: 56px;
+  }
+}
+
+/* Landscape móvil - modal más ancho */
+@media (max-width: 768px) and (orientation: landscape) {
+  .modal-overlay {
+    padding: 0.5rem;
+    align-items: center;
+  }
+
+  .modal-window {
+    max-height: 95vh;
+    max-width: 95vw;
+    border-radius: var(--radius-lg);
+    margin-top: 0;
+  }
+
+  .modal-header {
+    position: static;
+  }
+
+  .theory-tabs-nav {
+    position: static;
+  }
+}
+
+/* Safe area para dispositivos con notch */
+@supports (padding: max(0px)) {
+  .modal-overlay {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+    padding-top: max(1.5rem, env(safe-area-inset-top));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  @media (max-width: 768px) {
+    .modal-overlay {
+      padding-bottom: max(2rem, env(safe-area-inset-bottom));
+    }
+  }
+}
