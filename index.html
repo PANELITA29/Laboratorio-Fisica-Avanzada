@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="es" color-scheme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Laboratorio Virtual de Física Avanzada</title>
+  <meta name="description" content="Simulador interactivo de circuitos eléctricos con cálculo en tiempo real, análisis de fallas, telemetría multímetro y evaluación.">
+<meta name="theme-color" content="#070a12">
+<!-- Preconnect para fuentes críticas -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="font" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap" type="font/woff2" crossorigin>
+<!-- Hojas de Estilos Modulares -->
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/controls.css">
+  <link rel="stylesheet" href="css/plots.css">
+</head>
+<body>
+
+  <!-- SVG Icon Sprite -->
+  <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+    <symbol id="icon-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></symbol>
+    <symbol id="icon-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4 8.82 16.18"></path><path d="M3 20 17.18 7.82"></path><path d="M12 4h10"></path><path d="M12 20H2"></path></symbol>
+    <symbol id="icon-series" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="8" height="8" rx="2"></rect><rect x="14" y="2" width="8" height="8" rx="2"></rect><rect x="2" y="14" width="8" height="8" rx="2"></rect><rect x="14" y="14" width="8" height="8" rx="2"></rect><line x1="10" y1="6" x2="14" y2="6"></line><line x1="10" y1="18" x2="14" y2="18"></line></symbol>
+    <symbol id="icon-parallel" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="18" x2="20" y2="18"></line><line x1="12" y1="2" x2="12" y2="22"></line></symbol>
+    <symbol id="icon-mixed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="8" height="8" rx="2"></rect><rect x="14" y="2" width="8" height="8" rx="2"></rect><rect x="2" y="14" width="8" height="8" rx="2"></rect><line x1="10" y1="6" x2="14" y2="6"></line><line x1="10" y1="18" x2="14" y2="18"></line><line x1="6" y1="10" x2="6" y2="14"></line></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></symbol>
+    <symbol id="icon-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></symbol>
+    <symbol id="icon-flask" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.31"></path><path d="M14 2v7.31"></path><path d="M8.5 2h7"></path><path d="M7 16.5 3 22 5 16"></path><path d="M17 16.5 21 22 19 16"></path><path d="M3.5 12h17"></path></symbol>
+    <symbol id="icon-microscope" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 18h8"></path><path d="M3 11h18"></path><path d="M10 11V9a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v10"></path><path d="M10 11v10"></path><path d="M18 11v10"></path></symbol>
+    <symbol id="icon-fire" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></symbol>
+  </svg>
+
+  <!-- =========================================================================
+       BARRA SUPERIOR DE LA PLATAFORMA
+       ========================================================================= -->
+  <header class="app-header" aria-label="Encabezado principal">
+    <div class="header-brand">
+      <div class="brand-icon" aria-hidden="true"><svg class="icon" aria-hidden="true"><use href="#icon-bolt"></use></svg></div>
+      <div>
+        <h1 class="brand-title">LABORATORIO VIRTUAL DE FÍSICA AVANZADA</h1>
+        <div class="brand-subtitle">ELECTRODINÁMICA • LEY DE OHM • LEYES DE KIRCHHOFF (LVK / LCK)</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button type="button" id="btn-open-color-code" class="btn btn-secondary" title="Calculadora y Código de Colores EIA">
+        <span>🎨</span>
+        <span>Código de Colores</span>
+      </button>
+      <button type="button" id="btn-open-report" class="btn btn-primary" title="Generar Informe Académico y Exportar CSV">
+        <span>📑</span>
+        <span>Exportar Informe</span>
+      </button>
+      <button type="button" id="btn-open-theory" class="btn btn-secondary" title="Abrir Fundamentos y Teoría">
+        <svg class="icon" aria-hidden="true"><use href="#icon-book"></use></svg>
+        <span>Fundamentos</span>
+      </button>
+      <button type="button" id="btn-reset-circuit" class="btn btn-secondary" title="Restablecer Parámetros Predeterminados">
+        <svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg>
+        <span>Reset</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       GRID WORKBENCH: LAS 4 ZONAS DEL LABORATORIO
+       ========================================================================= -->
+  <main class="workbench-grid" aria-label="Área principal del laboratorio">
+
+    <!-- -----------------------------------------------------------------------
+         ZONA 1: ESQUEMA Y CONTROLES
+         ----------------------------------------------------------------------- -->
+    <section class="zone-card" id="zone-1-controls" aria-labelledby="zone-1-title">
+      <header class="zone-header">
+        <div class="zone-title-wrap">
+          <span class="zone-badge">ZONA 1</span>
+          <h2 id="zone-1-title" class="zone-title">ESQUEMA Y CONTROLES</h2>
+        </div>
+        <span class="status-badge status-success" id="circuit-topology-badge">SERIE</span>
+      </header>
+
+      <div class="zone-content">
+        <!-- Selector de Topología -->
+        <div class="topology-selector-group" role="group" aria-label="Selección de Topología">
+          <button type="button" class="topology-btn active" data-topology="series" id="topo-btn-series" aria-pressed="true">
+            <svg class="icon" aria-hidden="true"><use href="#icon-series"></use></svg>
+            <span>Serie</span>
+          </button>
+          <button type="button" class="topology-btn" data-topology="parallel" id="topo-btn-parallel" aria-pressed="false">
+            <svg class="icon" aria-hidden="true"><use href="#icon-parallel"></use></svg>
+            <span>Paralelo</span>
+          </button>
+          <button type="button" class="topology-btn" data-topology="mixed" id="topo-btn-mixed" aria-pressed="false">
+            <svg class="icon" aria-hidden="true"><use href="#icon-mixed"></use></svg>
+            <span>Mixto</span>
+          </button>
+        </div>
+
+        <!-- Esquemático Dinámico con Flujo de Partículas -->
+        <div class="schematic-canvas-container">
+          <canvas id="schematic-canvas" class="schematic-canvas" width="480" height="220" aria-describedby="schematic-description" role="img"></canvas>
+          <div id="schematic-description" class="sr-only" aria-live="polite"></div>
+        </div>
+
+        <!-- Sliders de Control de Variables -->
+        <div class="parameters-panel">
+          <!-- Slider Voltaje -->
+          <div class="slider-row">
+            <div class="slider-header">
+              <label for="slider-voltage" class="slider-label">Voltaje de Fuente (V):</label>
+              <span class="slider-value-badge" id="val-badge-voltage">12.0 V</span>
+            </div>
+            <input type="range" id="slider-voltage" name="voltage" class="custom-range" min="0" max="48" step="1" value="12" autocomplete="off">
+          </div>
+
+          <!-- Slider Resistencia 1 -->
+          <div class="slider-row">
+            <div class="slider-header">
+              <label for="slider-r1" class="slider-label">Resistencia R1 (Ω):</label>
+              <span class="slider-value-badge" id="val-badge-r1">10.0 Ω</span>
+            </div>
+            <input type="range" id="slider-r1" name="resistor-1" class="custom-range" min="1" max="100" step="1" value="10" autocomplete="off">
+          </div>
+
+          <!-- Slider Resistencia 2 -->
+          <div class="slider-row">
+            <div class="slider-header">
+              <label for="slider-r2" class="slider-label">Resistencia R2 (Ω):</label>
+              <span class="slider-value-badge" id="val-badge-r2">20.0 Ω</span>
+            </div>
+            <input type="range" id="slider-r2" name="resistor-2" class="custom-range" min="1" max="100" step="1" value="20" autocomplete="off">
+          </div>
+
+          <!-- Slider Resistencia 3 -->
+          <div class="slider-row">
+            <div class="slider-header">
+              <label for="slider-r3" class="slider-label">Resistencia R3 (Ω):</label>
+              <span class="slider-value-badge" id="val-badge-r3">30.0 Ω</span>
+            </div>
+            <input type="range" id="slider-r3" name="resistor-3" class="custom-range" min="1" max="100" step="1" value="30" autocomplete="off">
+          </div>
+        </div>
+
+        <!-- Switches de Corte (Simular Fallas) -->
+        <div class="faults-control-panel">
+          <div class="faults-panel-title">Switches de Corte y Fallas:</div>
+          <div class="switches-grid">
+            <!-- Switch R1 -->
+            <div class="fault-switch-card">
+              <span class="switch-name">Rama R1</span>
+              <div class="switch-btn-group" data-switch-index="0">
+                <button type="button" class="switch-mode-btn state-on active" data-state="ON" title="Operación Normal">ON</button>
+                <button type="button" class="switch-mode-btn state-open" data-state="OPEN" title="Circuito Abierto">ABRIR</button>
+                <button type="button" class="switch-mode-btn state-short" data-state="SHORT" title="Cortocircuito">CORTO</button>
+              </div>
+            </div>
+
+            <!-- Switch R2 -->
+            <div class="fault-switch-card">
+              <span class="switch-name">Rama R2</span>
+              <div class="switch-btn-group" data-switch-index="1">
+                <button type="button" class="switch-mode-btn state-on active" data-state="ON" title="Operación Normal">ON</button>
+                <button type="button" class="switch-mode-btn state-open" data-state="OPEN" title="Circuito Abierto">ABRIR</button>
+                <button type="button" class="switch-mode-btn state-short" data-state="SHORT" title="Cortocircuito">CORTO</button>
+              </div>
+            </div>
+
+            <!-- Switch R3 -->
+            <div class="fault-switch-card">
+              <span class="switch-name">Rama R3</span>
+              <div class="switch-btn-group" data-switch-index="2">
+                <button type="button" class="switch-mode-btn state-on active" data-state="ON" title="Operación Normal">ON</button>
+                <button type="button" class="switch-mode-btn state-open" data-state="OPEN" title="Circuito Abierto">ABRIR</button>
+                <button type="button" class="switch-mode-btn state-short" data-state="SHORT" title="Cortocircuito">CORTO</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- -----------------------------------------------------------------------
+         ZONA 2: MULTÍMETRO Y TABLA DE DATOS
+         ----------------------------------------------------------------------- -->
+    <section class="zone-card" id="zone-2-multimeter" aria-labelledby="zone-2-title">
+      <header class="zone-header">
+        <div class="zone-title-wrap">
+          <span class="zone-badge">ZONA 2</span>
+          <h2 id="zone-2-title" class="zone-title">MULTÍMETRO Y TABLA DE DATOS</h2>
+        </div>
+        <span class="status-badge status-success" id="lcd-status-badge">NOMINAL</span>
+      </header>
+
+      <div class="zone-content">
+        <!-- Display LCD de Mediciones Globales -->
+        <div class="multimeter-lcd-frame">
+          <div class="lcd-metrics-row">
+            <div class="lcd-cell">
+              <span class="lcd-label">Req Equivalente:</span>
+              <span class="lcd-value tabular-nums" id="lcd-req">60.00 Ω</span>
+            </div>
+            <div class="lcd-cell">
+              <span class="lcd-label">Corriente Total (IT):</span>
+              <span class="lcd-value tabular-nums" id="lcd-it">0.200 A</span>
+            </div>
+            <div class="lcd-cell">
+              <span class="lcd-label">Potencia Total (PT):</span>
+              <span class="lcd-value tabular-nums" id="lcd-pt">2.40 W</span>
+            </div>
+          </div>
+
+          <div class="diagnosis-banner" id="system-diagnosis-msg" aria-live="polite" aria-atomic="true">
+            Circuito estable. Req = 60.00 Ω, IT = 0.20 A.
+          </div>
+        </div>
+
+        <!-- Tabla Analítica de Ramas -->
+        <div class="telemetry-table-wrapper">
+          <table class="telemetry-table">
+            <thead>
+              <tr>
+                <th>Rama</th>
+                <th>R (Ω)</th>
+                <th>V (V)</th>
+                <th>I (A)</th>
+                <th>P (W)</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody id="telemetry-table-body">
+              <!-- Filas inyectadas dinámicamente -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Tarjetas de Validación Formal de Leyes de Kirchhoff -->
+        <div class="kirchhoff-checks-panel">
+          <div class="check-item">
+            <div class="check-label-wrap">
+              <span class="check-name">Ley de Voltajes (LVK / 2da Ley):</span>
+              <span class="check-formula font-mono" id="kvl-expression">V_T = V₁ + V₂ + V₃</span>
+            </div>
+            <span class="badge-check check-pass" id="kvl-status-badge"><svg class="icon" aria-hidden="true"><use href="#icon-check"></use></svg> Cumple LVK</span>
+          </div>
+
+          <div class="check-item">
+            <div class="check-label-wrap">
+              <span class="check-name">Ley de Corrientes (LCK / 1ra Ley):</span>
+              <span class="check-formula font-mono" id="kcl-expression">I_T = I₁ = I₂ = I₃</span>
+            </div>
+            <span class="badge-check check-pass" id="kcl-status-badge"><svg class="icon" aria-hidden="true"><use href="#icon-check"></use></svg> Cumple LCK</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- -----------------------------------------------------------------------
+         ZONA 3: GRÁFICAS DINÁMICAS (CANVAS)
+         ----------------------------------------------------------------------- -->
+    <section class="zone-card" id="zone-3-plots" aria-labelledby="zone-3-title">
+      <header class="zone-header">
+        <div class="zone-title-wrap">
+          <span class="zone-badge">ZONA 3</span>
+          <h2 id="zone-3-title" class="zone-title">GRÁFICAS DINÁMICAS (CANVAS 60FPS)</h2>
+        </div>
+        <span class="plot-legend-tag legend-vi">TIEMPO REAL</span>
+      </header>
+
+      <div class="zone-content">
+        <div class="plots-container">
+          <!-- Gráfica 1: V vs I (Recta Ley de Ohm) -->
+          <div class="plot-card">
+            <div class="plot-header">
+              <h3 class="plot-title"><svg class="icon" aria-hidden="true"><use href="#icon-flask"></use></svg> Gráfica 1: Voltaje vs Corriente</h3>
+              <span class="plot-legend-tag legend-vi">Recta Ley de Ohm</span>
+            </div>
+            <div class="canvas-wrapper">
+              <canvas id="canvas-plot-vi" class="canvas-plot" width="340" height="210" aria-describedby="plot-vi-description" role="img"></canvas>
+              <div id="plot-vi-description" class="sr-only" aria-live="polite"></div>
+            </div>
+          </div>
+
+          <!-- Gráfica 2: I vs Req (Hipérbola Decreciente) -->
+          <div class="plot-card">
+            <div class="plot-header">
+              <h3 class="plot-title"><svg class="icon" aria-hidden="true"><use href="#icon-flask"></use></svg> Gráfica 2: Corriente vs Req</h3>
+              <span class="plot-legend-tag legend-ireq">Hipérbola (I = V/Req)</span>
+            </div>
+            <div class="canvas-wrapper">
+              <canvas id="canvas-plot-ireq" class="canvas-plot" width="340" height="210" aria-describedby="plot-ireq-description" role="img"></canvas>
+              <div id="plot-ireq-description" class="sr-only" aria-live="polite"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- -----------------------------------------------------------------------
+         ZONA 4: EVALUACIÓN Y SUSTENTACIÓN
+         ----------------------------------------------------------------------- -->
+    <section class="zone-card" id="zone-4-evaluation" aria-labelledby="zone-4-title">
+      <header class="zone-header">
+        <div class="zone-title-wrap">
+          <span class="zone-badge">ZONA 4</span>
+          <h2 id="zone-4-title" class="zone-title">EVALUACIÓN Y SUSTENTACIÓN</h2>
+        </div>
+        <span class="score-badge" id="quiz-score-badge">0/5 Correctas</span>
+      </header>
+
+      <div class="zone-content">
+        <div class="quiz-container">
+          <!-- Selector de Pregunta y Botón de Reinicio -->
+          <div class="quiz-selector-bar">
+            <select id="quiz-select" class="quiz-select" aria-label="Seleccionar Pregunta de Evaluación">
+              <!-- Opciones inyectadas por QuizView -->
+            </select>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-reset-quiz" title="Borrar respuestas y reiniciar puntaje a 0/10">
+              <span>🔄</span> Reiniciar Test
+            </button>
+          </div>
+
+          <!-- Enunciado del Problema -->
+          <div class="quiz-prompt-box" id="quiz-prompt">
+            Cargando pregunta de laboratorio...
+          </div>
+
+          <!-- Opciones [A], [B], [C], [D] -->
+          <div class="quiz-options-grid" id="quiz-options-container">
+            <!-- Botones inyectados dinámicamente -->
+          </div>
+
+          <!-- Cuadro Verde: Justificación Teórica y Matemática -->
+          <div class="justification-box hidden" id="quiz-justification-box">
+            <div class="justification-header">
+              <svg class="icon" aria-hidden="true"><use href="#icon-check"></use></svg>
+              <h3 class="justification-title" id="justification-title">Justificación Teórica</h3>
+            </div>
+            <p class="justification-text" id="justification-text"></p>
+            <div class="justification-formula" id="justification-formula"></div>
+            <div class="justification-tip" id="justification-tip"></div>
+            <div class="quiz-action-bar">
+              <button type="button" class="btn btn-primary" id="btn-apply-experiment">
+                <svg class="icon" aria-hidden="true"><use href="#icon-microscope"></use></svg>
+                <span>Probar Caso en el Simulador</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- =========================================================================
+       MODAL DE FUNDAMENTOS TEÓRICOS
+       ========================================================================= -->
+  <div class="modal-overlay hidden" id="theory-modal" role="dialog" aria-modal="true" aria-labelledby="modal-theory-title">
+    <div class="modal-window">
+      <header class="modal-header" aria-label="Cabecera del modal">
+        <h2 class="modal-title" id="modal-theory-title"><svg class="icon" aria-hidden="true"><use href="#icon-book"></use></svg> Fundamentos Teóricos y Modelos Eléctricos</h2>
+        <button type="button" class="btn-close-modal" id="btn-close-theory" aria-label="Cerrar Modal"><svg class="icon" aria-hidden="true"><use href="#icon-close"></use></svg></button>
+      </header>
+
+      <nav class="theory-tabs-nav" role="tablist" aria-label="Módulos teóricos">
+        <button type="button" class="theory-tab-btn active" data-tab="ohm" role="tab" aria-selected="true" aria-controls="panel-ohm" id="tab-ohm">1. Ley de Ohm</button>
+        <button type="button" class="theory-tab-btn" data-tab="kirchhoff" role="tab" aria-selected="false" aria-controls="panel-kirchhoff" id="tab-kirchhoff">2. Leyes de Kirchhoff</button>
+        <button type="button" class="theory-tab-btn" data-tab="topologies" role="tab" aria-selected="false" aria-controls="panel-topologies" id="tab-topologies">3. Topologías (Serie / Paralelo / Mixto)</button>
+        <button type="button" class="theory-tab-btn" data-tab="faults" role="tab" aria-selected="false" aria-controls="panel-faults" id="tab-faults">4. Análisis de Fallas</button>
+      </nav>
+
+      <div class="theory-body-content" id="theory-content-body">
+        <!-- Inyectado por TheoryModal.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL DE CÓDIGO DE COLORES (EIA-RS-279)
+       ========================================================================= -->
+  <div class="modal-overlay hidden" id="color-code-modal" role="dialog" aria-modal="true" aria-labelledby="modal-color-title">
+    <div class="modal-window modal-medium">
+      <header class="modal-header">
+        <h2 class="modal-title" id="modal-color-title">🎨 Decodificador y Calculadora de Código de Colores (4 Bandas EIA)</h2>
+        <button type="button" class="btn-close-modal" id="btn-close-color-code" aria-label="Cerrar Modal">&times;</button>
+      </header>
+
+      <div class="modal-body-content">
+        <!-- Visualización Gráfica del Resistor -->
+        <div class="resistor-graphic-viewer">
+          <div class="resistor-lead-left"></div>
+          <div class="resistor-body-capsule" id="resistor-preview-body">
+            <span class="preview-stripe" id="preview-band-1" title="1er Dígito"></span>
+            <span class="preview-stripe" id="preview-band-2" title="2do Dígito"></span>
+            <span class="preview-stripe" id="preview-band-3" title="Multiplicador"></span>
+            <span class="preview-stripe preview-stripe-tol" id="preview-band-4" title="Tolerancia"></span>
+          </div>
+          <div class="resistor-lead-right"></div>
+        </div>
+
+        <!-- Lectura Digital del Resistor -->
+        <div class="color-readout-card">
+          <div class="color-val-main" id="color-calc-ohms">10.00 Ω (±5%)</div>
+          <div class="color-val-range" id="color-calc-range">Rango real admisible: 9.50 Ω - 10.50 Ω</div>
+        </div>
+
+        <!-- Selectores de Bandas -->
+        <div class="bands-selector-grid">
+          <div class="band-select-col">
+            <label for="color-band-1" class="band-col-label">Banda 1 (1er Dígito)</label>
+            <select id="color-band-1" class="color-dropdown">
+              <option value="brown" selected>🟤 Marrón (1)</option>
+              <option value="red">🔴 Rojo (2)</option>
+              <option value="orange">🟠 Naranja (3)</option>
+              <option value="yellow">🟡 Amarillo (4)</option>
+              <option value="green">🟢 Verde (5)</option>
+              <option value="blue">🔵 Azul (6)</option>
+              <option value="violet">🟣 Violeta (7)</option>
+              <option value="gray">⚪ Gris (8)</option>
+              <option value="white">⚪ Blanco (9)</option>
+            </select>
+          </div>
+
+          <div class="band-select-col">
+            <label for="color-band-2" class="band-col-label">Banda 2 (2do Dígito)</label>
+            <select id="color-band-2" class="color-dropdown">
+              <option value="black" selected>⚫ Negro (0)</option>
+              <option value="brown">🟤 Marrón (1)</option>
+              <option value="red">🔴 Rojo (2)</option>
+              <option value="orange">🟠 Naranja (3)</option>
+              <option value="yellow">🟡 Amarillo (4)</option>
+              <option value="green">🟢 Verde (5)</option>
+              <option value="blue">🔵 Azul (6)</option>
+              <option value="violet">🟣 Violeta (7)</option>
+              <option value="gray">⚪ Gris (8)</option>
+              <option value="white">⚪ Blanco (9)</option>
+            </select>
+          </div>
+
+          <div class="band-select-col">
+            <label for="color-band-3" class="band-col-label">Banda 3 (Multiplicador)</label>
+            <select id="color-band-3" class="color-dropdown">
+              <option value="silver">🔘 Plateado (x0.01)</option>
+              <option value="gold">🟡 Dorado (x0.1)</option>
+              <option value="black" selected>⚫ Negro (x1)</option>
+              <option value="brown">🟤 Marrón (x10)</option>
+              <option value="red">🔴 Rojo (x100)</option>
+              <option value="orange">🟠 Naranja (x1k)</option>
+              <option value="yellow">🟡 Amarillo (x10k)</option>
+              <option value="green">🟢 Verde (x100k)</option>
+              <option value="blue">🔵 Azul (x1M)</option>
+            </select>
+          </div>
+
+          <div class="band-select-col">
+            <label for="color-band-4" class="band-col-label">Banda 4 (Tolerancia)</label>
+            <select id="color-band-4" class="color-dropdown">
+              <option value="gold" selected>🟡 Dorado (±5%)</option>
+              <option value="silver">🔘 Plateado (±10%)</option>
+              <option value="brown">🟤 Marrón (±1%)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Entrada Manual y Botones de Acción -->
+        <div class="manual-ohms-input-row">
+          <div class="manual-input-wrap">
+            <label for="input-manual-ohms">Valor en Ohmios (Ω):</label>
+            <input type="number" id="input-manual-ohms" class="manual-ohms-input" min="0.1" max="10000000" step="any" value="10" placeholder="Ej: 220, 1000">
+          </div>
+
+          <div class="manual-target-wrap">
+            <label for="select-color-target-resistor">Destino:</label>
+            <select id="select-color-target-resistor" class="color-target-dropdown">
+              <option value="0" selected>Rama R1</option>
+              <option value="1">Rama R2</option>
+              <option value="2">Rama R3</option>
+            </select>
+          </div>
+
+          <div class="color-actions-btn-group">
+            <button type="button" class="btn btn-primary" id="btn-apply-color-to-target">
+              <span>⚡</span> Cargar en Circuito
+            </button>
+            <button type="button" class="btn btn-secondary" id="btn-reset-color-code-calc" title="Restablecer a 10Ω (Marrón-Negro-Negro-Dorado)">
+              <span>🔄</span> Restablecer
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL DE GENERACIÓN DE INFORMES DE LABORATORIO (PDF / CSV)
+       ========================================================================= -->
+  <div class="modal-overlay hidden" id="report-modal" role="dialog" aria-modal="true" aria-labelledby="modal-report-title">
+    <div class="modal-window modal-large">
+      <header class="modal-header">
+        <h2 class="modal-title" id="modal-report-title">📑 Generador de Informes de Práctica Experimental</h2>
+        <button type="button" class="btn-close-modal" id="btn-close-report" aria-label="Cerrar Modal">&times;</button>
+      </header>
+
+      <!-- Barra de Metadatos de Estudiante y Acciones -->
+      <div class="report-controls-bar">
+        <div class="report-inputs-grid">
+          <div>
+            <label for="report-input-student" class="report-input-label">Nombre del Estudiante:</label>
+            <input type="text" id="report-input-student" class="report-text-input" value="Alexander Humboldt" placeholder="Tu nombre completo">
+          </div>
+          <div>
+            <label for="report-input-course" class="report-input-label">Materia / Grupo:</label>
+            <input type="text" id="report-input-course" class="report-text-input" value="Física II - Electrodinámica (Grupo A)" placeholder="Materia">
+          </div>
+          <div>
+            <label for="report-input-inst" class="report-input-label">Institución Educativa:</label>
+            <input type="text" id="report-input-inst" class="report-text-input" value="Facultad de Ciencias e Ingeniería" placeholder="Universidad / Colegio">
+          </div>
+        </div>
+
+        <div class="report-actions-btn-group">
+          <button type="button" class="btn btn-secondary" id="btn-reset-report-meta" title="Restablecer datos del estudiante a los valores por defecto">
+            <span>🔄</span> Restablecer Datos
+          </button>
+          <button type="button" class="btn btn-secondary" id="btn-download-csv">
+            <span>📥</span> Descargar CSV
+          </button>
+          <button type="button" class="btn btn-primary" id="btn-print-pdf">
+            <span>🖨️</span> Imprimir / PDF
+          </button>
+        </div>
+      </div>
+
+      <!-- Vista Previa del Informe Impreso -->
+      <div class="report-preview-scroll" id="report-preview-container">
+        <!-- Renderizado dinámicamente por ReportExporter.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Orquestador Principal de la Aplicación -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

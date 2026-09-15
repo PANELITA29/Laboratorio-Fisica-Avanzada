@@ -1,0 +1,26 @@
+# Dependencias
+node_modules/
+*.log
+npm-debug.log*
+
+# Build
+dist/
+build/
+*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Temp
+*.tmp
+*.temp
+.cache/
