@@ -3,10 +3,11 @@
  * Componente de Evaluación Formativa y Sustentación Teórica (Zona 4).
  * 
  * Permite:
- * - Navegar entre reactivos del banco de preguntas.
- * - Responder de forma interactiva con feedback visual inmediato.
- * - Desplegar el cuadro verde de justificación teórica y fórmulas matemáticas paso a paso.
- * - Probar la hipótesis directamente en el simulador mediante un botón de ajuste asistido.
+ * - Visualizar todas las 10 preguntas continuas en un contenedor deslizable sin menú desplegable.
+ * - Navegar rápidamente entre reactivos mediante una barra de pastillas interactivas (1..10).
+ * - Responder cada reactivo de forma interactiva con feedback visual inmediato.
+ * - Desplegar el cuadro verde de justificación teórica y fórmulas matemáticas paso a paso en cada reactivo.
+ * - Probar la hipótesis directamente en el simulador mediante el botón de ajuste asistido de cada pregunta.
  */
 
 import { QUIZ_QUESTIONS } from '../../data/questions.js';
@@ -20,12 +21,14 @@ export class QuizView {
     this.container = container;
     this.stateManager = stateManager;
     this.questions = QUIZ_QUESTIONS;
-    this.currentQuestionIndex = 0;
     this.selectedAnswers = {}; // { questionId: optionId }
+    this.activeQuestionIndex = 0;
 
     this._initDOMElements();
+    this._renderQuestionsList();
     this._bindEvents();
-    this._renderQuestion();
+    this._updateScoreBadge();
+    this._setupIntersectionObserver();
   }
 
   /**
@@ -33,44 +36,150 @@ export class QuizView {
    * @private
    */
   _initDOMElements() {
-    this.selectEl = this.container.querySelector('#quiz-select');
-    this.promptEl = this.container.querySelector('#quiz-prompt');
-    this.optionsContainer = this.container.querySelector('#quiz-options-container');
-    this.justificationBox = this.container.querySelector('#quiz-justification-box');
-    this.justificationTitle = this.container.querySelector('#justification-title');
-    this.justificationText = this.container.querySelector('#justification-text');
-    this.justificationFormula = this.container.querySelector('#justification-formula');
-    this.justificationTip = this.container.querySelector('#justification-tip');
-    this.btnApplyExperiment = this.container.querySelector('#btn-apply-experiment');
-    this.scoreBadge = this.container.querySelector('#quiz-score-badge');
+    this.navPillsContainer = this.container.querySelector('#quiz-nav-pills');
+    this.scrollListContainer = this.container.querySelector('#quiz-questions-list');
     this.btnResetQuiz = this.container.querySelector('#btn-reset-quiz');
+    this.scoreBadge = this.container.querySelector('#quiz-score-badge');
+  }
 
-    // Población inicial del selector de preguntas
-    if (this.selectEl) {
-      this.selectEl.innerHTML = this.questions.map((q, idx) => `
-        <option value="${idx}">Pregunta ${q.id}: ${q.title.split(':')[1] || q.title}</option>
+  /**
+   * Renderiza la barra de pastillas (pills) y todas las tarjetas de preguntas en el contenedor deslizante.
+   * @private
+   */
+  _renderQuestionsList() {
+    if (this.navPillsContainer) {
+      this.navPillsContainer.innerHTML = this.questions.map((q, idx) => `
+        <button
+          type="button"
+          class="quiz-pill-btn ${idx === 0 ? 'active' : ''}"
+          data-target-idx="${idx}"
+          id="quiz-pill-${q.id}"
+          title="Saltar a Pregunta ${q.id}"
+          aria-label="Pregunta ${q.id}"
+        >
+          ${q.id}
+        </button>
       `).join('');
+    }
+
+    if (this.scrollListContainer) {
+      this.scrollListContainer.innerHTML = this.questions.map((q, idx) => {
+        const titleText = q.title.includes(':') ? q.title.split(':')[1].trim() : q.title;
+
+        return `
+          <article
+            class="quiz-item-card"
+            id="quiz-question-${q.id}"
+            data-question-id="${q.id}"
+            data-question-index="${idx}"
+          >
+            <header class="quiz-item-header">
+              <div class="quiz-item-title-wrap">
+                <span class="quiz-item-badge">Pregunta ${q.id} de ${this.questions.length}</span>
+                <h3 class="quiz-item-title">${titleText}</h3>
+              </div>
+              <span class="quiz-item-status status-unanswered" id="quiz-status-${q.id}">Pendiente</span>
+            </header>
+
+            <div class="quiz-prompt-box">
+              ${q.prompt}
+            </div>
+
+            <div class="quiz-options-grid" id="quiz-options-${q.id}">
+              ${q.options.map(opt => `
+                <button
+                  type="button"
+                  class="quiz-option"
+                  data-question-id="${q.id}"
+                  data-option-id="${opt.id}"
+                  tabindex="0"
+                >
+                  <span class="option-badge">[${opt.id}]</span>
+                  <span class="option-text">${opt.text}</span>
+                </button>
+              `).join('')}
+            </div>
+
+            <div class="justification-box hidden" id="quiz-justification-${q.id}">
+              <div class="justification-header">
+                <svg class="icon" aria-hidden="true">
+                  <use href="#icon-check"></use>
+                </svg>
+                <h4 class="justification-title">Justificación Teórica: ${q.justification.law}</h4>
+              </div>
+              <p class="justification-text">${q.justification.explanation}</p>
+              <div class="justification-formula">${q.justification.formula}</div>
+              <div class="justification-tip">
+                <strong><svg class="icon" aria-hidden="true"><use href="#icon-flask"></use></svg> Aplicación Práctica:</strong> ${q.justification.realWorldTip}
+              </div>
+              <div class="quiz-action-bar">
+                <button
+                  type="button"
+                  class="btn btn-primary btn-apply-experiment"
+                  data-preset-idx="${idx}"
+                  title="Configurar el circuito en el laboratorio para comprobar este principio"
+                >
+                  <svg class="icon" aria-hidden="true">
+                    <use href="#icon-microscope"></use>
+                  </svg>
+                  <span>Probar Caso en el Simulador</span>
+                </button>
+              </div>
+            </div>
+          </article>
+        `;
+      }).join('');
     }
   }
 
   /**
-   * Enlaza eventos de usuario.
+   * Enlaza eventos de usuario delegados y directos.
    * @private
    */
   _bindEvents() {
-    if (this.selectEl) {
-      this.selectEl.addEventListener('change', (e) => {
-        this.currentQuestionIndex = parseInt(e.target.value, 10) || 0;
-        this._renderQuestion();
+    // Delegación de clics en las opciones de preguntas y botones de experimento
+    if (this.scrollListContainer) {
+      this.scrollListContainer.addEventListener('click', (e) => {
+        const optionBtn = e.target.closest('.quiz-option');
+        if (optionBtn) {
+          const qId = parseInt(optionBtn.getAttribute('data-question-id'), 10);
+          const optId = optionBtn.getAttribute('data-option-id');
+          this._handleAnswerSelect(qId, optId);
+          return;
+        }
+
+        const applyBtn = e.target.closest('.btn-apply-experiment');
+        if (applyBtn) {
+          const presetIdx = parseInt(applyBtn.getAttribute('data-preset-idx'), 10);
+          this._applyPresetForQuestion(presetIdx);
+        }
+      });
+
+      this.scrollListContainer.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          const optionBtn = e.target.closest('.quiz-option');
+          if (optionBtn) {
+            e.preventDefault();
+            const qId = parseInt(optionBtn.getAttribute('data-question-id'), 10);
+            const optId = optionBtn.getAttribute('data-option-id');
+            this._handleAnswerSelect(qId, optId);
+          }
+        }
       });
     }
 
-    if (this.btnApplyExperiment) {
-      this.btnApplyExperiment.addEventListener('click', () => {
-        this._applyPresetForCurrentQuestion();
+    // Delegación de clics en las pastillas (pills) de navegación rápida
+    if (this.navPillsContainer) {
+      this.navPillsContainer.addEventListener('click', (e) => {
+        const pillBtn = e.target.closest('.quiz-pill-btn');
+        if (pillBtn) {
+          const targetIdx = parseInt(pillBtn.getAttribute('data-target-idx'), 10);
+          this.scrollToQuestion(targetIdx);
+        }
       });
     }
 
+    // Botón de reinicio general del test
     if (this.btnResetQuiz) {
       this.btnResetQuiz.addEventListener('click', () => {
         this.resetQuiz();
@@ -79,108 +188,183 @@ export class QuizView {
   }
 
   /**
-   * Reinicia todas las respuestas seleccionadas y el puntaje a 0/10.
+   * Configura IntersectionObserver para destacar la pastilla activa conforme se desliza la lista.
+   * @private
    */
-  resetQuiz() {
-    this.selectedAnswers = {};
-    this.currentQuestionIndex = 0;
-    if (this.selectEl) this.selectEl.value = '0';
-    this._renderQuestion();
+  _setupIntersectionObserver() {
+    if (!this.scrollListContainer || !('IntersectionObserver' in window)) return;
+
+    const options = {
+      root: this.scrollListContainer,
+      rootMargin: '0px 0px -60% 0px',
+      threshold: 0.1
+    };
+
+    this.observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const idx = parseInt(entry.target.getAttribute('data-question-index'), 10);
+          if (!isNaN(idx)) {
+            this._setActivePill(idx);
+          }
+        }
+      });
+    }, options);
+
+    this.scrollListContainer.querySelectorAll('.quiz-item-card').forEach(card => {
+      this.observer.observe(card);
+    });
   }
 
   /**
-   * Renderiza el reactivo actual en pantalla.
+   * Desplaza suavemente el contenedor deslizable hacia la pregunta especificada.
+   * @param {number} index - Índice de la pregunta (0..9)
+   */
+  scrollToQuestion(index) {
+    const q = this.questions[index];
+    if (!q || !this.scrollListContainer) return;
+
+    const targetEl = this.scrollListContainer.querySelector(`#quiz-question-${q.id}`);
+    if (targetEl) {
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      this._setActivePill(index);
+    }
+  }
+
+  /**
+   * Actualiza la pastilla activa visualmente.
    * @private
    */
-  _renderQuestion() {
-    const q = this.questions[this.currentQuestionIndex];
+  _setActivePill(index) {
+    this.activeQuestionIndex = index;
+    if (!this.navPillsContainer) return;
+
+    const pills = this.navPillsContainer.querySelectorAll('.quiz-pill-btn');
+    pills.forEach((pill, idx) => {
+      if (idx === index) {
+        pill.classList.add('active');
+      } else {
+        pill.classList.remove('active');
+      }
+    });
+  }
+
+  /**
+   * Maneja la selección de respuesta para una pregunta específica.
+   * @private
+   */
+  _handleAnswerSelect(questionId, optionId) {
+    const q = this.questions.find(item => item.id === questionId);
     if (!q) return;
 
-    if (this.promptEl) {
-      this.promptEl.textContent = q.prompt;
-    }
+    this.selectedAnswers[questionId] = optionId;
+    const isCorrect = q.correctAnswer === optionId;
 
-    const selected = this.selectedAnswers[q.id];
+    const card = this.scrollListContainer?.querySelector(`#quiz-question-${questionId}`);
+    if (!card) return;
 
-    // Renderizar opciones [A], [B], [C], [D]
-    if (this.optionsContainer) {
-      this.optionsContainer.innerHTML = q.options.map(opt => {
-        let isChosen = selected === opt.id;
-        let isCorrect = q.correctAnswer === opt.id;
-        let optionClass = 'quiz-option';
+    // Actualizar clases de la tarjeta
+    card.classList.remove('card-answered-correct', 'card-answered-incorrect');
+    card.classList.add(isCorrect ? 'card-answered-correct' : 'card-answered-incorrect');
 
-        if (selected) {
-          if (isChosen && isCorrect) {
-            optionClass += ' option-correct';
-          } else if (isChosen && !isCorrect) {
-            optionClass += ' option-incorrect';
-          } else if (isCorrect) {
-            optionClass += ' option-reveal-correct';
-          }
+    // Actualizar botones de opciones
+    const optionBtns = card.querySelectorAll('.quiz-option');
+    optionBtns.forEach(btn => {
+      const optId = btn.getAttribute('data-option-id');
+      btn.classList.remove('option-correct', 'option-incorrect', 'option-reveal-correct');
+
+      if (optId === optionId) {
+        if (isCorrect) {
+          btn.classList.add('option-correct');
+        } else {
+          btn.classList.add('option-incorrect');
         }
-
-        return `
-          <button type="button" class="${optionClass}" data-option-id="${opt.id}" ${selected ? 'disabled' : ''} tabindex="${selected ? '-1' : '0'}">
-            <span class="option-badge">[${opt.id}]</span>
-            <span class="option-text">${opt.text}</span>
-          </button>
-        `;
-      }).join('');
-
-      // Agregar listeners a los botones de opciones (click + teclado)
-      this.optionsContainer.querySelectorAll('.quiz-option').forEach(btn => {
-        const handleSelect = () => {
-          const optId = btn.getAttribute('data-option-id');
-          this._handleAnswerSelect(q.id, optId);
-        };
-        
-        btn.addEventListener('click', handleSelect);
-        btn.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            handleSelect();
-          }
-        });
-      });
-    }
-
-    // Renderizar Cuadro Verde de Justificación Teórica
-    if (this.justificationBox) {
-      if (selected) {
-        this.justificationBox.classList.remove('hidden');
-        if (this.justificationTitle) {
-          this.justificationTitle.textContent = `Justificación Teórica: ${q.justification.law}`;
-        }
-        if (this.justificationText) {
-          this.justificationText.textContent = q.justification.explanation;
-        }
-        if (this.justificationFormula) {
-          // Usar textContent para seguridad, el CSS maneja el estilo monoespaciado
-          this.justificationFormula.textContent = q.justification.formula;
-        }
-        if (this.justificationTip) {
-          // Reemplazar emoji 💡 con SVG inline seguro
-          this.justificationTip.innerHTML = '<strong><svg class="icon" aria-hidden="true"><use href="#icon-flask"></use></svg> Aplicación Práctica:</strong> ' + q.justification.realWorldTip;
-        }
-      } else {
-        this.justificationBox.classList.add('hidden');
+      } else if (optId === q.correctAnswer) {
+        btn.classList.add('option-reveal-correct');
       }
+
+      btn.setAttribute('disabled', 'true');
+      btn.setAttribute('tabindex', '-1');
+    });
+
+    // Actualizar badge de estado
+    const statusBadge = card.querySelector(`#quiz-status-${questionId}`);
+    if (statusBadge) {
+      statusBadge.className = `quiz-item-status ${isCorrect ? 'status-correct' : 'status-incorrect'}`;
+      statusBadge.innerHTML = isCorrect
+        ? '<svg class="icon-sm" aria-hidden="true"><use href="#icon-check"></use></svg> Correcta'
+        : '✗ Incorrecta';
+    }
+
+    // Mostrar cuadro de justificación teórica
+    const justBox = card.querySelector(`#quiz-justification-${questionId}`);
+    if (justBox) {
+      justBox.classList.remove('hidden');
+    }
+
+    // Actualizar pastilla de navegación rápida
+    const pill = this.navPillsContainer?.querySelector(`#quiz-pill-${questionId}`);
+    if (pill) {
+      pill.classList.remove('pill-correct', 'pill-incorrect');
+      pill.classList.add(isCorrect ? 'pill-correct' : 'pill-incorrect');
     }
 
     this._updateScoreBadge();
   }
 
   /**
-   * Maneja la selección de respuesta por el usuario.
-   * @private
+   * Reinicia todas las respuestas seleccionadas y el puntaje a 0/10.
    */
-  _handleAnswerSelect(questionId, optionId) {
-    this.selectedAnswers[questionId] = optionId;
-    this._renderQuestion();
+  resetQuiz() {
+    this.selectedAnswers = {};
+    this.activeQuestionIndex = 0;
+
+    if (this.scrollListContainer) {
+      this.questions.forEach(q => {
+        const card = this.scrollListContainer.querySelector(`#quiz-question-${q.id}`);
+        if (card) {
+          card.classList.remove('card-answered-correct', 'card-answered-incorrect');
+
+          const optionBtns = card.querySelectorAll('.quiz-option');
+          optionBtns.forEach(btn => {
+            btn.classList.remove('option-correct', 'option-incorrect', 'option-reveal-correct');
+            btn.removeAttribute('disabled');
+            btn.setAttribute('tabindex', '0');
+          });
+
+          const statusBadge = card.querySelector(`#quiz-status-${q.id}`);
+          if (statusBadge) {
+            statusBadge.className = 'quiz-item-status status-unanswered';
+            statusBadge.textContent = 'Pendiente';
+          }
+
+          const justBox = card.querySelector(`#quiz-justification-${q.id}`);
+          if (justBox) {
+            justBox.classList.add('hidden');
+          }
+        }
+      });
+
+      this.scrollListContainer.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    if (this.navPillsContainer) {
+      const pills = this.navPillsContainer.querySelectorAll('.quiz-pill-btn');
+      pills.forEach((pill, idx) => {
+        pill.classList.remove('pill-correct', 'pill-incorrect');
+        if (idx === 0) {
+          pill.classList.add('active');
+        } else {
+          pill.classList.remove('active');
+        }
+      });
+    }
+
+    this._updateScoreBadge();
   }
 
   /**
-   * Obtiene el progreso y detalle de respuestas del cuestionario para los informes.
+   * Obtiene el progreso y detalle de respuestas del cuestionario para los informes técnicos.
    * @returns {Object}
    */
   getQuizProgress() {
@@ -224,13 +408,11 @@ export class QuizView {
     if (!this.scoreBadge) return;
     const total = this.questions.length;
     let correct = 0;
-    let answered = 0;
 
     this.questions.forEach(q => {
       const ans = this.selectedAnswers[q.id];
-      if (ans) {
-        answered++;
-        if (ans === q.correctAnswer) correct++;
+      if (ans && ans === q.correctAnswer) {
+        correct++;
       }
     });
 
@@ -239,11 +421,11 @@ export class QuizView {
 
   /**
    * Configura automáticamente el simulador con los parámetros ideales para experimentar la pregunta.
+   * @param {number} qIndex - Índice de la pregunta (0..9)
    * @private
    */
-  _applyPresetForCurrentQuestion() {
+  _applyPresetForQuestion(qIndex) {
     if (!this.stateManager) return;
-    const qIndex = this.currentQuestionIndex;
 
     if (qIndex === 0) {
       // Pregunta 1: Voltaje al doble (24V con R=10Ω)

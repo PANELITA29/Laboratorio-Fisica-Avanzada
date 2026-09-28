@@ -502,9 +502,9 @@ body {
   .btn-close-modal,
   .custom-range,
   select,
-  .quiz-select {
-    min-height: 44px;
-    min-width: 44px;
+  .quiz-pill-btn {
+    min-height: 40px;
+    min-width: 40px;
   }
 
   .custom-range {

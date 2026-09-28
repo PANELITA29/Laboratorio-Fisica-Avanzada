@@ -682,20 +682,19 @@
       <span class="zone-badge">ZONA 4</span>
       <h2 id="zone-4-title" class="zone-title">EVALUACIÓN Y SUSTENTACIÓN</h2>
      </div>
-     <span class="score-badge" id="quiz-score-badge">0/5 Correctas</span>
+     <span class="score-badge" id="quiz-score-badge">0/10 Correctas</span>
     </header>
 
     <div class="zone-content">
      <div class="quiz-container">
-      <!-- Selector de Pregunta y Botón de Reinicio -->
-      <div class="quiz-selector-bar">
-       <select
-        id="quiz-select"
-        class="quiz-select"
-        aria-label="Seleccionar Pregunta de Evaluación"
-       >
-        <!-- Opciones inyectadas por QuizView -->
-       </select>
+      <!-- Barra Superior de Navegación Rápida y Reinicio -->
+      <div class="quiz-nav-header">
+       <div class="quiz-nav-track-wrap">
+        <span class="quiz-nav-label">Preguntas:</span>
+        <div class="quiz-nav-pills" id="quiz-nav-pills" role="tablist" aria-label="Navegación rápida de preguntas">
+         <!-- Pills 1..10 inyectadas dinámicamente -->
+        </div>
+       </div>
        <button
         type="button"
         class="btn btn-secondary btn-sm"
@@ -706,37 +705,14 @@
        </button>
       </div>
 
-      <!-- Enunciado del Problema -->
-      <div class="quiz-prompt-box" id="quiz-prompt">
-       Cargando pregunta de laboratorio...
-      </div>
-
-      <!-- Opciones [A], [B], [C], [D] -->
-      <div class="quiz-options-grid" id="quiz-options-container">
-       <!-- Botones inyectados dinámicamente -->
-      </div>
-
-      <!-- Cuadro Verde: Justificación Teórica y Matemática -->
-      <div class="justification-box hidden" id="quiz-justification-box">
-       <div class="justification-header">
-        <svg class="icon" aria-hidden="true">
-         <use href="#icon-check"></use>
-        </svg>
-        <h3 class="justification-title" id="justification-title">
-         Justificación Teórica
-        </h3>
-       </div>
-       <p class="justification-text" id="justification-text"></p>
-       <div class="justification-formula" id="justification-formula"></div>
-       <div class="justification-tip" id="justification-tip"></div>
-       <div class="quiz-action-bar">
-        <button type="button" class="btn btn-primary" id="btn-apply-experiment">
-         <svg class="icon" aria-hidden="true">
-          <use href="#icon-microscope"></use>
-         </svg>
-         <span>Probar Caso en el Simulador</span>
-        </button>
-       </div>
+      <!-- Contenedor Deslizante con todas las 10 Preguntas -->
+      <div
+       class="quiz-scroll-list"
+       id="quiz-questions-list"
+       tabindex="0"
+       aria-label="Lista continua de preguntas de evaluación"
+      >
+       <!-- 10 Preguntas inyectadas dinámicamente por QuizView -->
       </div>
      </div>
     </div>
