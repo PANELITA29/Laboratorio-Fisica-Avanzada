@@ -11,21 +11,18 @@ import {
   Activity,
   Volume2,
   VolumeX,
-  FileText,
   ArrowLeft,
   Play,
   BookOpen,
   Award,
   CheckCircle2,
   QrCode,
-  Smartphone,
   X,
 } from 'lucide-react';
 import { Language, dictionary } from './assets/js/i18n';
 import { audioSynth } from './assets/js/audio-synth';
 import { TelemetryItem } from './assets/js/report-generator';
 import { PWAInstallButton } from './components/PWAInstallButton';
-import { ScientificReportModal } from './components/ScientificReportModal';
 import { TheoryModal } from './components/TheoryModal';
 import { ColorCodeModal } from './components/ColorCodeModal';
 import { LabQRCodeModal, HubQRCodeBanner } from './components/LabQRCodeModal';
@@ -54,7 +51,6 @@ export default function App() {
   const [isOnline, setIsOnline] = useState<boolean>(
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
-  const [isReportOpen, setIsReportOpen] = useState<boolean>(false);
   const [isTheoryOpen, setIsTheoryOpen] = useState<boolean>(false);
   const [isColorCodeOpen, setIsColorCodeOpen] = useState<boolean>(false);
   const [isQRModalOpen, setIsQRModalOpen] = useState<boolean>(false);
@@ -177,15 +173,15 @@ export default function App() {
             </button>
           </nav>
 
-          {/* Zone 3: Primary Action (Generate Scientific Report) */}
+          {/* Zone 3: Quick QR Mobile Access */}
           <div className="flex items-center gap-3 shrink-0">
             <button
               type="button"
-              onClick={() => setIsReportOpen(true)}
+              onClick={() => setIsQRModalOpen(true)}
               className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-slate-950 bg-cyan-400 rounded-lg hover:bg-cyan-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
-              <FileText className="w-3.5 h-3.5" />
-              <span>{t.generateReport}</span>
+              <QrCode className="w-3.5 h-3.5" />
+              <span>Acceso Móvil QR</span>
             </button>
           </div>
         </div>
@@ -734,17 +730,6 @@ export default function App() {
         }}
       />
 
-      {/* Official Scientific Report Generator Modal */}
-      <ScientificReportModal
-        isOpen={isReportOpen}
-        onClose={() => setIsReportOpen(false)}
-        lang={lang}
-        activeLabName={activeLabDisplayName}
-        telemetry={liveTelemetry}
-        completedChallengesCount={completedCount}
-        totalScore={totalScore}
-      />
-
       {/* Scannable Mobile QR Code Modal */}
       <LabQRCodeModal
         isOpen={isQRModalOpen}
@@ -776,14 +761,6 @@ export default function App() {
             >
               Repositorio GitHub
             </a>
-            <span aria-hidden="true">·</span>
-            <button
-              type="button"
-              onClick={() => setIsReportOpen(true)}
-              className="hover:text-cyan-400 transition-colors cursor-pointer"
-            >
-              Exportar Informe PDF
-            </button>
           </div>
         </div>
       </footer>
