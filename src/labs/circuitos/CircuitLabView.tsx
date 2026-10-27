@@ -1104,10 +1104,10 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
             </div>
 
             {/* Interactive 3D WebGL Workbench or 2D Schematic Canvas */}
-            <div className="relative w-full aspect-[16/9] bg-[#070B14]">
-              {/* Guía Rápida para Estudiantes sobre el Lienzo 3D */}
+            <div className="relative w-full h-[300px] sm:h-[380px] md:h-auto md:aspect-[16/9] bg-[#070B14]">
+              {/* Guía Rápida para Estudiantes sobre el Lienzo 3D (Visible en pantallas medianas y grandes) */}
               {viewDimension === '3d' && (
-                <div className="absolute bottom-2.5 left-2.5 right-2.5 z-10 pointer-events-none flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-[#050811]/90 border border-slate-800/90 text-[11px] font-mono text-slate-300">
+                <div className="hidden sm:flex absolute bottom-2.5 left-2.5 right-2.5 z-10 pointer-events-none flex-wrap items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-[#050811]/90 border border-slate-800/90 text-[11px] font-mono text-slate-300">
                   <span>🖱️ <strong className="text-cyan-300">Arrastra R₁, R₂ o R₃:</strong> Hacia los lados cambia Ω · Hacia afuera desconecta (ABRIR)</span>
                   <span>⚡ <strong className="text-amber-300">Clic en Interruptor 3D:</strong> Corta o da paso a la energía</span>
                 </div>
@@ -1159,8 +1159,16 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
               )}
             </div>
 
+            {/* Guía Táctil en Móvil debajo del Lienzo 3D (para no tapar la mesa 3D en celulares) */}
+            {viewDimension === '3d' && (
+              <div className="sm:hidden px-3 py-2 bg-[#060913] border-t border-slate-800/80 text-[10px] font-mono text-slate-300 flex flex-col gap-1">
+                <span>👆 <strong className="text-cyan-300">Toca y arrastra R₁, R₂ o R₃:</strong> Hacia los lados cambia Ω · Hacia afuera desconecta (ABRIR)</span>
+                <span>⚡ <strong className="text-amber-300">Toca el Interruptor 3D:</strong> Enciende o apaga el circuito</span>
+              </div>
+            )}
+
             {/* Preset & Component Selector Bar Under Canvas */}
-            <div className="px-4 py-3 bg-[#090D16] border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
+            <div className="px-3.5 sm:px-4 py-3 bg-[#090D16] border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-xs text-slate-400 mr-1">Presets:</span>
                 <button
@@ -1213,15 +1221,15 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
           </div>
 
           {/* ZONA 2: Multímetro Digital LCD, Banner Diagnóstico y Tabla Analítica por Rama */}
-          <div className="p-5 rounded-xl bg-[#0D1322] border border-slate-800 space-y-4">
+          <div className="p-4 sm:p-5 rounded-xl bg-[#0D1322] border border-slate-800 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
-                <Gauge className="w-4 h-4 text-cyan-400" />
-                <h3 className="text-sm font-bold text-white">
+                <Gauge className="w-4 h-4 text-cyan-400 shrink-0" />
+                <h3 className="text-xs sm:text-sm font-bold text-white">
                   ZONA 2 · Multímetro Digital LCD y Verificación de Kirchhoff (LVK / LCK)
                 </h3>
               </div>
-              <div className="flex items-center gap-2 text-[11px] font-mono">
+              <div className="flex flex-wrap items-center gap-1.5 text-[10px] sm:text-[11px] font-mono">
                 <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-500/40 text-emerald-300">
                   ● LVK: Equilibrio
                 </span>
@@ -1232,13 +1240,13 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
             </div>
 
             {/* LCD Matrix Display Readouts */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-3 rounded-lg bg-[#050811] border border-slate-800">
-                <span className="text-[10px] font-mono text-slate-400 block uppercase">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+              <div className="p-2.5 sm:p-3 rounded-lg bg-[#050811] border border-slate-800">
+                <span className="text-[10px] font-mono text-slate-400 block uppercase truncate">
                   RESISTENCIA EQ (R_eq)
                 </span>
                 <div className="mt-1 flex items-baseline gap-1">
-                  <span className="text-2xl font-mono font-bold text-cyan-300 tabular-nums">
+                  <span className="text-lg sm:text-2xl font-mono font-bold text-cyan-300 tabular-nums">
                     {Number.isFinite(topologyResult.equivalentResistance)
                       ? topologyResult.equivalentResistance.toFixed(2)
                       : '∞'}
@@ -1247,14 +1255,14 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                 </div>
               </div>
 
-              <div className="p-3 rounded-lg bg-[#050811] border border-slate-800">
-                <span className="text-[10px] font-mono text-slate-400 block uppercase">
+              <div className="p-2.5 sm:p-3 rounded-lg bg-[#050811] border border-slate-800">
+                <span className="text-[10px] font-mono text-slate-400 block uppercase truncate">
                   CORRIENTE TOTAL (I_T)
                 </span>
                 <div className="mt-1 flex items-baseline gap-1">
                   <span
                     data-testid="ammeter-readout"
-                    className="text-2xl font-mono font-bold text-amber-400 tabular-nums"
+                    className="text-lg sm:text-2xl font-mono font-bold text-amber-400 tabular-nums"
                   >
                     {topologyResult.totalCurrent.toFixed(3)}
                   </span>
@@ -1262,26 +1270,26 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                 </div>
               </div>
 
-              <div className="p-3 rounded-lg bg-[#050811] border border-slate-800">
-                <span className="text-[10px] font-mono text-slate-400 block uppercase">
+              <div className="p-2.5 sm:p-3 rounded-lg bg-[#050811] border border-slate-800">
+                <span className="text-[10px] font-mono text-slate-400 block uppercase truncate">
                   POTENCIA JOULE (P_T)
                 </span>
                 <div className="mt-1 flex items-baseline gap-1">
-                  <span className="text-2xl font-mono font-bold text-emerald-400 tabular-nums">
+                  <span className="text-lg sm:text-2xl font-mono font-bold text-emerald-400 tabular-nums">
                     {topologyResult.totalPower.toFixed(2)}
                   </span>
                   <span className="text-xs font-mono text-slate-400">W</span>
                 </div>
               </div>
 
-              <div className="p-3 rounded-lg bg-[#050811] border border-slate-800">
-                <span className="text-[10px] font-mono text-slate-400 block uppercase">
+              <div className="p-2.5 sm:p-3 rounded-lg bg-[#050811] border border-slate-800">
+                <span className="text-[10px] font-mono text-slate-400 block uppercase truncate">
                   SONDAS V+ / COM (ΔV)
                 </span>
                 <div className="mt-1 flex items-baseline gap-1">
                   <span
                     data-testid="multimeter-readout"
-                    className="text-2xl font-mono font-bold text-white tabular-nums"
+                    className="text-lg sm:text-2xl font-mono font-bold text-white tabular-nums"
                   >
                     {multimeterVoltage.toFixed(2)}
                   </span>
@@ -1292,7 +1300,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
 
             {/* Natural Language Diagnostic Banner */}
             <div
-              className={`p-3 rounded-lg border text-xs font-mono flex items-center justify-between gap-3 ${
+              className={`p-3 rounded-lg border text-xs font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 ${
                 topologyResult.isShortCircuitFault
                   ? 'bg-rose-950/60 border-rose-500 text-rose-200'
                   : topologyResult.isOpenCircuitFault
@@ -1312,26 +1320,26 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
 
             {/* Analytical Breakdown Table Per Branch (R1, R2, R3) */}
             <div className="overflow-x-auto rounded-lg border border-slate-800">
-              <table className="w-full text-left text-xs font-mono">
+              <table className="w-full min-w-[460px] text-left text-xs font-mono">
                 <thead className="bg-[#090D16] text-slate-400 border-b border-slate-800">
                   <tr>
-                    <th className="py-2 px-3">Rama</th>
-                    <th className="py-2 px-3">R Nominal</th>
-                    <th className="py-2 px-3">Caída V_k</th>
-                    <th className="py-2 px-3">Corriente I_k</th>
-                    <th className="py-2 px-3">Potencia P_k</th>
-                    <th className="py-2 px-3">Estado</th>
+                    <th className="py-2 px-2.5 sm:px-3">Rama</th>
+                    <th className="py-2 px-2.5 sm:px-3">R Nominal</th>
+                    <th className="py-2 px-2.5 sm:px-3">Caída V_k</th>
+                    <th className="py-2 px-2.5 sm:px-3">Corriente I_k</th>
+                    <th className="py-2 px-2.5 sm:px-3">Potencia P_k</th>
+                    <th className="py-2 px-2.5 sm:px-3">Estado</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/70 bg-[#070A12]">
                   {topologyResult.branches.map((b) => (
                     <tr key={b.branchId}>
-                      <td className="py-2 px-3 font-bold text-cyan-300">{b.branchId}</td>
-                      <td className="py-2 px-3 text-slate-200">{b.nominalOhms} Ω</td>
-                      <td className="py-2 px-3 text-amber-300">{b.voltageDrop.toFixed(2)} V</td>
-                      <td className="py-2 px-3 text-sky-300">{b.current.toFixed(3)} A</td>
-                      <td className="py-2 px-3 text-emerald-300">{b.power.toFixed(2)} W</td>
-                      <td className="py-2 px-3">
+                      <td className="py-2 px-2.5 sm:px-3 font-bold text-cyan-300">{b.branchId}</td>
+                      <td className="py-2 px-2.5 sm:px-3 text-slate-200">{b.nominalOhms} Ω</td>
+                      <td className="py-2 px-2.5 sm:px-3 text-amber-300">{b.voltageDrop.toFixed(2)} V</td>
+                      <td className="py-2 px-2.5 sm:px-3 text-sky-300">{b.current.toFixed(3)} A</td>
+                      <td className="py-2 px-2.5 sm:px-3 text-emerald-300">{b.power.toFixed(2)} W</td>
+                      <td className="py-2 px-2.5 sm:px-3">
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                             b.faultState === 'ON'

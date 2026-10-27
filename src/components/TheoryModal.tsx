@@ -26,21 +26,21 @@ export const TheoryModal: React.FC<TheoryModalProps> = ({ isOpen, onClose, lang 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-4 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="theory-modal-title"
     >
-      <div className="w-full max-w-4xl rounded-2xl bg-[#0B0F1A] border border-slate-800 shadow-2xl overflow-hidden my-8">
+      <div className="w-full max-w-4xl rounded-2xl bg-[#0B0F1A] border border-slate-800 shadow-2xl overflow-hidden my-4 sm:my-8">
         {/* Header */}
-        <div className="px-6 py-4 bg-[#0F1626] border-b border-slate-800 flex items-center justify-between gap-4">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-[#0F1626] border-b border-slate-800 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <BookOpen className="w-5 h-5 text-cyan-400" />
+            <BookOpen className="w-5 h-5 text-cyan-400 shrink-0" />
             <div>
-              <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-400 block">
+              <span className="text-[10px] sm:text-[11px] font-mono uppercase tracking-wider text-cyan-400 block">
                 ENCICLOPEDIA CIENTÍFICA QUANTUMLABS · PHET FORMULA
               </span>
-              <h2 id="theory-modal-title" className="text-lg font-bold text-white">
+              <h2 id="theory-modal-title" className="text-base sm:text-lg font-bold text-white">
                 {lang === 'es'
                   ? 'Fundamentos Teóricos, Ecuaciones y Demostraciones'
                   : 'Theoretical Foundations, Equations & Proofs'}
@@ -51,20 +51,20 @@ export const TheoryModal: React.FC<TheoryModalProps> = ({ isOpen, onClose, lang 
             type="button"
             onClick={onClose}
             aria-label={lang === 'es' ? 'Cerrar Fundamentos' : 'Close Foundations'}
-            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Navigation Tabs */}
-        <div className="px-6 py-2.5 bg-[#090D16] border-b border-slate-800 flex flex-wrap items-center gap-1.5">
+        <div className="px-4 sm:px-6 py-2.5 bg-[#090D16] border-b border-slate-800 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
                 activeTab === tab.id
                   ? 'bg-cyan-500 text-slate-950 font-bold'
                   : 'bg-[#0F1626] text-slate-300 hover:text-white border border-slate-800'
@@ -77,7 +77,7 @@ export const TheoryModal: React.FC<TheoryModalProps> = ({ isOpen, onClose, lang 
         </div>
 
         {/* Content Body */}
-        <div className="p-6 space-y-5 max-h-[68vh] overflow-y-auto text-xs text-slate-300 leading-relaxed">
+        <div className="p-4 sm:p-6 space-y-5 max-h-[68vh] overflow-y-auto text-xs text-slate-300 leading-relaxed">
           {activeTab === 'ohm' && (
             <div className="space-y-4">
               <div className="p-4 rounded-xl bg-[#0F172A] border border-cyan-500/30">

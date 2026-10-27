@@ -75,21 +75,21 @@ export const ColorCodeModal: React.FC<ColorCodeModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-4 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="eia-modal-title"
     >
-      <div className="w-full max-w-4xl rounded-2xl bg-[#0B0F1A] border border-slate-800 shadow-2xl overflow-hidden my-8">
+      <div className="w-full max-w-4xl rounded-2xl bg-[#0B0F1A] border border-slate-800 shadow-2xl overflow-hidden my-4 sm:my-8">
         {/* Header */}
-        <div className="px-6 py-4 bg-[#0F1626] border-b border-slate-800 flex items-center justify-between gap-4">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-[#0F1626] border-b border-slate-800 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <Palette className="w-5 h-5 text-cyan-400" />
+            <Palette className="w-5 h-5 text-cyan-400 shrink-0" />
             <div>
-              <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-400 block">
+              <span className="text-[10px] sm:text-[11px] font-mono uppercase tracking-wider text-cyan-400 block">
                 NORMA INTERNACIONAL IEC 60062 / EIA-RS-279
               </span>
-              <h2 id="eia-modal-title" className="text-lg font-bold text-white">
+              <h2 id="eia-modal-title" className="text-base sm:text-lg font-bold text-white">
                 {lang === 'es'
                   ? 'Calculadora Interactiva y Código de Colores EIA (4 y 5 Bandas)'
                   : 'Interactive EIA Resistor Color Code Calculator (4 & 5 Bands)'}
@@ -100,21 +100,21 @@ export const ColorCodeModal: React.FC<ColorCodeModalProps> = ({
             type="button"
             onClick={onClose}
             aria-label={lang === 'es' ? 'Cerrar Calculadora EIA' : 'Close EIA Calculator'}
-            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+        <div className="p-4 sm:p-6 space-y-5 sm:space-y-6 max-h-[75vh] overflow-y-auto">
           {/* Top Mode Switcher & Live Resistor SVG Preview */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-center">
             <div className="lg:col-span-5 space-y-3">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setBandCount(4)}
-                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-mono font-bold border transition-colors cursor-pointer ${
+                  className={`flex-1 py-2 px-2.5 sm:px-3 rounded-lg text-xs font-mono font-bold border transition-colors cursor-pointer ${
                     bandCount === 4
                       ? 'bg-cyan-500 text-slate-950 border-cyan-400'
                       : 'bg-[#0F1626] text-slate-300 border-slate-800 hover:text-white'
@@ -125,7 +125,7 @@ export const ColorCodeModal: React.FC<ColorCodeModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setBandCount(5)}
-                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-mono font-bold border transition-colors cursor-pointer ${
+                  className={`flex-1 py-2 px-2.5 sm:px-3 rounded-lg text-xs font-mono font-bold border transition-colors cursor-pointer ${
                     bandCount === 5
                       ? 'bg-purple-500 text-white border-purple-400'
                       : 'bg-[#0F1626] text-slate-300 border-slate-800 hover:text-white'
@@ -135,12 +135,12 @@ export const ColorCodeModal: React.FC<ColorCodeModalProps> = ({
                 </button>
               </div>
 
-              <div className="p-4 rounded-xl bg-[#0F172A] border border-cyan-500/30 text-center space-y-1">
+              <div className="p-3.5 sm:p-4 rounded-xl bg-[#0F172A] border border-cyan-500/30 text-center space-y-1">
                 <span className="text-[11px] font-mono text-slate-400 uppercase block">
                   VALOR NOMINAL CALCULADO
                 </span>
-                <div className="text-3xl font-mono font-extrabold text-cyan-300 tabular-nums">
-                  {formatResistance(calculatedOhms)} <span className="text-base text-amber-300">{selectedTol.tol}</span>
+                <div className="text-2xl sm:text-3xl font-mono font-extrabold text-cyan-300 tabular-nums">
+                  {formatResistance(calculatedOhms)} <span className="text-sm sm:text-base text-amber-300">{selectedTol.tol}</span>
                 </div>
                 <span className="text-[11px] font-mono text-slate-400 block">
                   ({calculatedOhms.toLocaleString()} Ω exactos)
@@ -149,8 +149,8 @@ export const ColorCodeModal: React.FC<ColorCodeModalProps> = ({
             </div>
 
             {/* Realistic Axial Ceramic Resistor Preview */}
-            <div className="lg:col-span-7 p-5 rounded-xl bg-[#070B14] border border-slate-800 flex flex-col items-center justify-center">
-              <svg viewBox="0 0 420 120" className="w-full max-w-md h-28">
+            <div className="lg:col-span-7 p-4 sm:p-5 rounded-xl bg-[#070B14] border border-slate-800 flex flex-col items-center justify-center">
+              <svg viewBox="0 0 420 120" className="w-full max-w-md h-24 sm:h-28">
                 {/* Axial Metallic Leads */}
                 <line x1="20" y1="60" x2="105" y2="60" stroke="#94A3B8" strokeWidth="8" strokeLinecap="round" />
                 <line x1="315" y1="60" x2="400" y2="60" stroke="#94A3B8" strokeWidth="8" strokeLinecap="round" />
@@ -213,7 +213,7 @@ export const ColorCodeModal: React.FC<ColorCodeModalProps> = ({
           </div>
 
           {/* Band Selectors */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
             <div>
               <label htmlFor="eia-b1" className="block font-mono text-slate-300 mb-1">
                 1ª Banda (Dígito 1)
@@ -308,8 +308,8 @@ export const ColorCodeModal: React.FC<ColorCodeModalProps> = ({
           </div>
 
           {/* Standard EIA Color Reference Table */}
-          <div className="rounded-xl border border-slate-800 overflow-hidden">
-            <table className="w-full text-left text-xs font-mono">
+          <div className="rounded-xl border border-slate-800 overflow-x-auto">
+            <table className="w-full min-w-[420px] text-left text-xs font-mono">
               <thead className="bg-[#0F1626] text-slate-400 border-b border-slate-800">
                 <tr>
                   <th className="py-2 px-3">Color</th>
@@ -323,7 +323,7 @@ export const ColorCodeModal: React.FC<ColorCodeModalProps> = ({
                   <tr key={c.digit}>
                     <td className="py-1.5 px-3 flex items-center gap-2">
                       <span
-                        className="w-3.5 h-3.5 rounded-sm border border-slate-600 inline-block"
+                        className="w-3.5 h-3.5 rounded-sm border border-slate-600 inline-block shrink-0"
                         style={{ backgroundColor: c.hex }}
                       />
                       <span className="text-slate-200">{lang === 'es' ? c.nameEs : c.nameEn}</span>

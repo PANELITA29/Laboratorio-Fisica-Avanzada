@@ -56,21 +56,21 @@ export const LabQRCodeModal: React.FC<LabQRCodeModalProps> = ({ isOpen, onClose,
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 sm:p-4 overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="qr-modal-title"
     >
-      <div className="w-full max-w-lg rounded-2xl bg-[#0B0F1A] border border-cyan-500/40 shadow-2xl overflow-hidden my-8">
+      <div className="w-full max-w-lg rounded-2xl bg-[#0B0F1A] border border-cyan-500/40 shadow-2xl overflow-hidden my-4 sm:my-8">
         {/* Header */}
-        <div className="px-6 py-4 bg-[#0F1626] border-b border-slate-800 flex items-center justify-between gap-4">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-[#0F1626] border-b border-slate-800 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <QrCode className="w-5 h-5 text-cyan-400" />
+            <QrCode className="w-5 h-5 text-cyan-400 shrink-0" />
             <div>
-              <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-400 block">
+              <span className="text-[10px] sm:text-[11px] font-mono uppercase tracking-wider text-cyan-400 block">
                 ACCESO MÓVIL INMEDIATO · WEB OFICIAL VERCEL
               </span>
-              <h2 id="qr-modal-title" className="text-lg font-bold text-white">
+              <h2 id="qr-modal-title" className="text-base sm:text-lg font-bold text-white">
                 {lang === 'es'
                   ? 'Escanea para Abrir el Laboratorio 3D en Vercel'
                   : 'Scan to Launch the 3D Laboratory on Vercel'}
@@ -81,14 +81,14 @@ export const LabQRCodeModal: React.FC<LabQRCodeModalProps> = ({ isOpen, onClose,
             type="button"
             onClick={onClose}
             aria-label={lang === 'es' ? 'Cerrar Código QR' : 'Close QR Code'}
-            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-5 text-center">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5 text-center">
           <p className="text-xs text-slate-300 leading-relaxed">
             {lang === 'es'
               ? 'Apunta la cámara de cualquier teléfono móvil o tablet hacia este código QR para entrar directamente a la web oficial en Vercel y experimentar con los 3 laboratorios en 3D (Circuitos DC, Espacio-Tiempo de Einstein y Péndulos RK4).'
@@ -96,7 +96,7 @@ export const LabQRCodeModal: React.FC<LabQRCodeModalProps> = ({ isOpen, onClose,
           </p>
 
           {/* Scannable QR Frame (Pure White Background for Instant Camera Recognition) */}
-          <div className="mx-auto w-64 h-64 p-3 rounded-2xl bg-white border-4 border-cyan-400 shadow-2xl flex items-center justify-center">
+          <div className="mx-auto w-56 h-56 sm:w-64 sm:h-64 p-3 rounded-2xl bg-white border-4 border-cyan-400 shadow-2xl flex items-center justify-center">
             {qrSvgMarkup ? (
               <div
                 data-testid="lab-qr-svg"
@@ -109,7 +109,7 @@ export const LabQRCodeModal: React.FC<LabQRCodeModalProps> = ({ isOpen, onClose,
           </div>
 
           {/* Direct Lab Deep-Link Presets on Vercel */}
-          <div className="flex flex-wrap items-center justify-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
             <button
               type="button"
               onClick={() => setTargetUrl(VERCEL_OFFICIAL_URL)}
@@ -161,7 +161,7 @@ export const LabQRCodeModal: React.FC<LabQRCodeModalProps> = ({ isOpen, onClose,
             <label htmlFor="qr-url-input" className="block text-[11px] font-mono text-slate-400">
               {lang === 'es' ? 'Enlace de Vercel codificado en el QR:' : 'Vercel URL encoded in QR:'}
             </label>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <input
                 id="qr-url-input"
                 type="text"
@@ -172,7 +172,7 @@ export const LabQRCodeModal: React.FC<LabQRCodeModalProps> = ({ isOpen, onClose,
               <button
                 type="button"
                 onClick={handleCopyUrl}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-cyan-500 text-slate-950 font-bold text-xs hover:bg-cyan-400 transition-colors cursor-pointer shrink-0"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-cyan-500 text-slate-950 font-bold text-xs hover:bg-cyan-400 transition-colors cursor-pointer shrink-0"
               >
                 {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>{copied ? 'Copiado' : 'Copiar'}</span>
@@ -182,10 +182,10 @@ export const LabQRCodeModal: React.FC<LabQRCodeModalProps> = ({ isOpen, onClose,
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3.5 bg-[#0F1626] border-t border-slate-800 flex items-center justify-between text-xs">
+        <div className="px-4 sm:px-6 py-3.5 bg-[#0F1626] border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-1.5 text-emerald-400 font-mono">
-            <Smartphone className="w-4 h-4" />
-            <span>Compatible con iOS / Android (PWA instalable)</span>
+            <Smartphone className="w-4 h-4 shrink-0" />
+            <span>Compatible con iOS / Android (PWA)</span>
           </div>
           <a
             href={targetUrl}

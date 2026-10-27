@@ -120,26 +120,28 @@ export default function App() {
       : 'Suite Completa (3 Laboratorios 3D)';
 
   return (
-    <div className="min-h-screen bg-[#07090E] text-slate-100 flex flex-col">
+    <div className="min-h-screen w-full overflow-x-hidden bg-[#07090E] text-slate-100 flex flex-col">
       {/* Animación Cinemática de Entrada Cuántica + Barra de Progreso al Hacer Scroll */}
       <QuantumIntroSplash />
       <ScrollProgressBar />
 
-      {/* Top Bar Contract: 3 Zones separated by gap-8 */}
-      <header className="sticky top-0 z-40 bg-[#07090E]/95 border-b border-slate-800/90 px-6 py-3.5 no-print">
-        <div className="max-w-[1360px] mx-auto flex items-center justify-between gap-8">
+      {/* Top Bar Contract: Responsive Desktop & Mobile Navigation */}
+      <header className="sticky top-0 z-40 bg-[#07090E]/95 border-b border-slate-800/90 px-3.5 sm:px-6 py-3 no-print">
+        <div className="max-w-[1360px] mx-auto flex items-center justify-between gap-2 sm:gap-6">
           {/* Zone 1: Single-line Brand Wordmark */}
           <button
             type="button"
             onClick={() => setActiveView('hub')}
-            className="text-lg font-bold tracking-tight text-white whitespace-nowrap shrink-0 flex items-center gap-2.5 cursor-pointer"
+            className="text-sm sm:text-lg font-bold tracking-tight text-white whitespace-nowrap shrink-0 flex items-center gap-2 cursor-pointer"
           >
-            <Atom className="w-6 h-6 text-cyan-400 shrink-0" />
-            <span>QUANTUM LABS · LabFísica 3D</span>
+            <Atom className="w-5 h-5 sm:w-6 sm:h-6 text-cyan-400 shrink-0" />
+            <span className="truncate">
+              QUANTUM LABS <span className="hidden sm:inline">· LabFísica 3D</span>
+            </span>
           </button>
 
-          {/* Zone 2: 4–5 Single-Line Navigation Links */}
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-300">
+          {/* Zone 2: Desktop Single-Line Navigation Links */}
+          <nav className="hidden lg:flex items-center gap-5 text-sm font-medium text-slate-300">
             <button
               type="button"
               onClick={() => setActiveView('hub')}
@@ -169,6 +171,15 @@ export default function App() {
             </button>
             <button
               type="button"
+              onClick={() => setActiveView('mechanics')}
+              className={`hover:text-cyan-400 transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                activeView === 'mechanics' ? 'text-cyan-400 font-semibold' : ''
+              }`}
+            >
+              Péndulos y Ondas 3D
+            </button>
+            <button
+              type="button"
               onClick={() => setIsTheoryOpen(true)}
               className="hover:text-cyan-400 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
@@ -184,40 +195,106 @@ export default function App() {
           </nav>
 
           {/* Zone 3: Quick QR Mobile Access */}
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => setIsQRModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 text-xs font-semibold text-slate-950 bg-cyan-400 rounded-lg hover:bg-cyan-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 text-xs font-semibold text-slate-950 bg-cyan-400 rounded-lg hover:bg-cyan-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
-              <QrCode className="w-3.5 h-3.5" />
-              <span>Acceso Móvil QR</span>
+              <QrCode className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden xs:inline sm:inline">Acceso Móvil QR</span>
+              <span className="inline xs:hidden sm:hidden">QR</span>
             </button>
           </div>
         </div>
+
+        {/* Mobile & Tablet Horizontal Quick-Navigation Bar (< lg) */}
+        <nav
+          aria-label="Navegación móvil"
+          className="flex lg:hidden items-center gap-1.5 overflow-x-auto no-scrollbar pt-2.5 mt-2.5 border-t border-slate-800/80 text-xs font-medium text-slate-300"
+        >
+          <button
+            type="button"
+            onClick={() => setActiveView('hub')}
+            className={`px-2.5 py-1 rounded-md whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+              activeView === 'hub'
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
+                : 'bg-[#0D1322] text-slate-300'
+            }`}
+          >
+            {t.navExplore}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('circuits')}
+            className={`px-2.5 py-1 rounded-md whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+              activeView === 'circuits'
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold'
+                : 'bg-[#0D1322] text-slate-300'
+            }`}
+          >
+            Circuitos 3D
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('space')}
+            className={`px-2.5 py-1 rounded-md whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+              activeView === 'space'
+                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40 font-semibold'
+                : 'bg-[#0D1322] text-slate-300'
+            }`}
+          >
+            Espacio 3D
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveView('mechanics')}
+            className={`px-2.5 py-1 rounded-md whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+              activeView === 'mechanics'
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold'
+                : 'bg-[#0D1322] text-slate-300'
+            }`}
+          >
+            Péndulos 3D
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsTheoryOpen(true)}
+            className="px-2.5 py-1 rounded-md bg-[#0D1322] text-slate-300 hover:text-cyan-300 whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            Fundamentos
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsColorCodeOpen(true)}
+            className="px-2.5 py-1 rounded-md bg-[#0D1322] text-slate-300 hover:text-cyan-300 whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            Código EIA
+          </button>
+        </nav>
       </header>
 
       {/* Secondary Institutional & Utility Bar (Language ES/EN, Offline Status, Audio Synth, PWA Install) */}
-      <div className="bg-[#0A0E17] border-b border-slate-800/70 px-6 py-2.5 no-print">
-        <div className="max-w-[1360px] mx-auto flex flex-wrap items-center justify-between gap-4 text-xs">
-          <div className="flex flex-wrap items-center gap-3 text-slate-300">
-            <span className="font-medium text-cyan-300">{t.authorBadge}</span>
-            <span aria-hidden="true" className="text-slate-600">·</span>
-            <span className="font-mono text-emerald-400">
+      <div className="bg-[#0A0E17] border-b border-slate-800/70 px-3.5 sm:px-6 py-2.5 no-print">
+        <div className="max-w-[1360px] mx-auto flex flex-wrap items-center justify-between gap-2.5 sm:gap-4 text-xs">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-slate-300">
+            <span className="font-medium text-cyan-300 text-[11px] sm:text-xs">{t.authorBadge}</span>
+            <span aria-hidden="true" className="text-slate-600 hidden sm:inline">·</span>
+            <span className="font-mono text-emerald-400 text-[11px] sm:text-xs">
               {isOnline ? `● ${t.statusOnline}` : `▲ ${t.statusOffline}`}
             </span>
             <span aria-hidden="true" className="text-slate-600">·</span>
-            <span className="font-mono text-amber-300">
-              {t.scoreLabel}: {totalScore} PTS ({completedCount}/6 Retos)
+            <span className="font-mono text-amber-300 text-[11px] sm:text-xs">
+              {t.scoreLabel}: {totalScore} PTS ({completedCount}/6)
             </span>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
             {activeView !== 'hub' && (
               <button
                 type="button"
                 onClick={() => setActiveView('hub')}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium transition-colors cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span>{t.backToHub}</span>
@@ -233,7 +310,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setLang('es')}
-                className={`px-2.5 py-1 rounded-md text-xs font-mono font-semibold transition-colors cursor-pointer ${
+                className={`px-2 py-1 rounded-md text-xs font-mono font-semibold transition-colors cursor-pointer ${
                   lang === 'es' ? 'bg-cyan-500 text-slate-950' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -242,7 +319,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setLang('en')}
-                className={`px-2.5 py-1 rounded-md text-xs font-mono font-semibold transition-colors cursor-pointer ${
+                className={`px-2 py-1 rounded-md text-xs font-mono font-semibold transition-colors cursor-pointer ${
                   lang === 'en' ? 'bg-cyan-500 text-slate-950' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -255,7 +332,7 @@ export default function App() {
               type="button"
               onClick={handleToggleMute}
               aria-label={isMuted ? t.unmuteAudio : t.muteAudio}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#07090E] border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-[#07090E] border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 transition-colors cursor-pointer"
             >
               {isMuted ? (
                 <VolumeX className="w-3.5 h-3.5 text-rose-400" />
@@ -272,7 +349,7 @@ export default function App() {
               type="button"
               data-testid="open-qr-btn"
               onClick={() => setIsQRModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 hover:bg-cyan-900/80 hover:text-white transition-colors cursor-pointer font-mono"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 hover:bg-cyan-900/80 hover:text-white transition-colors cursor-pointer font-mono"
             >
               <QrCode className="w-3.5 h-3.5 text-cyan-400" />
               <span>Código QR</span>
@@ -285,16 +362,16 @@ export default function App() {
       </div>
 
       {/* Main Content Container */}
-      <main className="flex-1 max-w-[1360px] w-full mx-auto px-6 py-8">
+      <main className="flex-1 max-w-[1360px] w-full mx-auto px-3.5 sm:px-6 py-5 sm:py-8">
         {activeView === 'hub' && (
-          <div className="space-y-16">
+          <div className="space-y-10 sm:space-y-16">
             {/* Hero Educativo con Animación de Entrada Escalonada */}
-            <section className="text-center max-w-4xl mx-auto pt-4 space-y-5 quantum-hero-enter">
-              <p className="text-xs font-mono uppercase tracking-widest text-cyan-400">
+            <section className="text-center max-w-4xl mx-auto pt-2 sm:pt-4 space-y-4 sm:space-y-5 quantum-hero-enter">
+              <p className="text-[11px] sm:text-xs font-mono uppercase tracking-widest text-cyan-400 px-2">
                 {t.heroKicker}
               </p>
               <h1
-                className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1] quantum-hero-enter quantum-hero-delay-1"
+                className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.12] quantum-hero-enter quantum-hero-delay-1"
                 style={{ textWrap: 'balance' }}
               >
                 <span className="block text-white">{t.heroTitleLine1}</span>
@@ -302,10 +379,10 @@ export default function App() {
                   {t.heroTitleLine2}
                 </span>
               </h1>
-              <p className="text-base sm:text-lg text-slate-300 font-medium max-w-2xl mx-auto quantum-hero-enter quantum-hero-delay-2">
+              <p className="text-sm sm:text-lg text-slate-300 font-medium max-w-2xl mx-auto quantum-hero-enter quantum-hero-delay-2">
                 “{t.heroMotto}”
               </p>
-              <p className="text-sm text-slate-400 max-w-2xl mx-auto leading-relaxed quantum-hero-enter quantum-hero-delay-2">
+              <p className="text-xs sm:text-sm text-slate-400 max-w-2xl mx-auto leading-relaxed quantum-hero-enter quantum-hero-delay-2">
                 {t.heroDescription}
               </p>
 

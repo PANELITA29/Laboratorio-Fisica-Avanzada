@@ -747,29 +747,31 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
         </div>
       )}
 
-      {/* Escenario Principal 3D (100% centro libre de obstrucciones + Collapsible Bottom Dock) */}
-      <div className="relative w-full h-[580px] rounded-xl bg-[#05070E] border border-slate-800 overflow-hidden">
-        {/* Contenedor aislado del Canvas WebGL */}
-        <div
-          ref={mountRef}
-          data-testid="space-3d-canvas"
-          className="w-full h-full"
-        />
+      {/* Escenario Principal 3D (En móvil el dock se ubica debajo del lienzo 3D para no tapar la simulación) */}
+      <div className="space-y-3 lg:space-y-0 lg:relative w-full">
+        <div className="relative w-full h-[340px] sm:h-[440px] lg:h-[580px] rounded-xl bg-[#05070E] border border-slate-800 overflow-hidden">
+          {/* Contenedor aislado del Canvas WebGL */}
+          <div
+            ref={mountRef}
+            data-testid="space-3d-canvas"
+            className="w-full h-full"
+          />
 
-        {/* Minimal Spec Badge (Top-Left, solid surface without backdrop-blur over WebGL) */}
-        <div className="absolute top-4 left-4 pointer-events-none bg-[#090D16] border border-slate-800 rounded-lg px-3.5 py-2.5 space-y-1">
-          <div className="text-[11px] font-mono text-purple-400 uppercase">
-            TELEMETRÍA ORBITAL EN VIVO (VERLET)
-          </div>
-          <div className="flex items-center gap-4 text-xs font-mono text-slate-200 tabular-nums">
-            <span>r: {liveStats.primaryOrbitalRadius.toFixed(2)} u</span>
-            <span>v: {liveStats.primarySpeed.toFixed(2)} u/s</span>
-            <span className="text-cyan-400">E_tot: {liveStats.totalEnergy.toFixed(0)} GJ</span>
+          {/* Minimal Spec Badge (Top-Left, solid surface without backdrop-blur over WebGL) */}
+          <div className="absolute top-2.5 left-2.5 right-2.5 sm:right-auto sm:top-4 sm:left-4 pointer-events-none bg-[#090D16]/95 border border-slate-800 rounded-lg px-3 py-2 sm:px-3.5 sm:py-2.5 space-y-1">
+            <div className="text-[10px] sm:text-[11px] font-mono text-purple-400 uppercase truncate">
+              TELEMETRÍA ORBITAL EN VIVO (VERLET)
+            </div>
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-[11px] sm:text-xs font-mono text-slate-200 tabular-nums">
+              <span>r: {liveStats.primaryOrbitalRadius.toFixed(2)} u</span>
+              <span>v: {liveStats.primarySpeed.toFixed(2)} u/s</span>
+              <span className="text-cyan-400">E_tot: {liveStats.totalEnergy.toFixed(0)} GJ</span>
+            </div>
           </div>
         </div>
 
-        {/* Collapsible Unified Bottom Control Dock */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[94%] max-w-[920px] flex flex-col items-center">
+        {/* Collapsible Unified Control Dock (Flujo normal en móvil/tablet, flotante inferior en escritorio lg+) */}
+        <div className="w-full lg:absolute lg:bottom-4 lg:left-1/2 lg:-translate-x-1/2 lg:w-[94%] lg:max-w-[920px] flex flex-col items-center z-10">
           <button
             type="button"
             onClick={() => setDockCollapsed((prev) => !prev)}
@@ -780,9 +782,9 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
           </button>
 
           {!dockCollapsed && (
-            <div className="w-full rounded-xl bg-[#0B0F1C] border border-slate-700/90 p-4 shadow-2xl space-y-3">
+            <div className="w-full rounded-xl bg-[#0B0F1C] border border-slate-700/90 p-3.5 sm:p-4 shadow-2xl space-y-3">
               {/* Row 1: Camera Kinematics & Vector Layers */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 border-b border-slate-800 pb-3">
                 {/* Camera Selector */}
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-xs font-mono text-slate-400 flex items-center gap-1 mr-1">
@@ -880,7 +882,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
               </div>
 
               {/* Row 2: Orbital Sliders & Playback Controls */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 items-center">
                 <div>
                   <div className="flex items-center justify-between gap-1 text-xs mb-1">
                     <label htmlFor="insertion-vel-slider" className="text-slate-300 whitespace-nowrap truncate">

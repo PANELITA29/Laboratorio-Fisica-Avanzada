@@ -721,61 +721,63 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
         </div>
       )}
 
-      {/* Escenario 3D Principal con Barras de Conservación de Energía en Vivo y Dock Inferior Colapsable */}
-      <div className="relative w-full h-[560px] rounded-xl bg-[#060A12] border border-slate-800 overflow-hidden">
-        <div ref={mountRef} data-testid="mechanics-3d-canvas" className="w-full h-full" />
+      {/* Escenario 3D Principal con Barras de Conservación de Energía en Vivo y Dock Inferior (Debajo en móvil, flotante en lg+) */}
+      <div className="space-y-3 lg:space-y-0 lg:relative w-full">
+        <div className="relative w-full h-[340px] sm:h-[440px] lg:h-[560px] rounded-xl bg-[#060A12] border border-slate-800 overflow-hidden">
+          <div ref={mountRef} data-testid="mechanics-3d-canvas" className="w-full h-full" />
 
-        {/* Medidor en Vivo de Conservación de Energía (Top-Left, superficie sólida sin backdrop-blur) */}
-        <div className="absolute top-4 left-4 pointer-events-none bg-[#090D16] border border-slate-800 rounded-lg p-3.5 w-72 space-y-2">
-          <div className="flex items-center justify-between text-[11px] font-mono text-emerald-400 uppercase">
-            <span className="flex items-center gap-1">
-              <Activity className="w-3.5 h-3.5" />
-              CONSERVACIÓN E = K + U
-            </span>
-            <span>T = {liveEnergy.theoreticalPeriod.toFixed(2)} s</span>
-          </div>
-
-          <div className="space-y-1.5 text-[11px] font-mono">
-            <div>
-              <div className="flex justify-between text-slate-300">
-                <span>Cinética (K)</span>
-                <span className="tabular-nums">{liveEnergy.kineticEnergy.toFixed(2)} J</span>
-              </div>
-              <div className="w-full h-1.5 rounded bg-slate-800 overflow-hidden mt-0.5">
-                <div
-                  className="h-full bg-emerald-400 transition-transform origin-left"
-                  style={{
-                    transform: `scaleX(${Math.min(
-                      1,
-                      liveEnergy.kineticEnergy / Math.max(0.1, liveEnergy.totalEnergy)
-                    )})`,
-                  }}
-                />
-              </div>
+          {/* Medidor en Vivo de Conservación de Energía (Top-Left, superficie sólida sin backdrop-blur) */}
+          <div className="absolute top-2.5 left-2.5 right-2.5 sm:right-auto sm:top-4 sm:left-4 pointer-events-none bg-[#090D16]/95 border border-slate-800 rounded-lg p-2.5 sm:p-3.5 sm:w-72 space-y-1.5 sm:space-y-2">
+            <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-mono text-emerald-400 uppercase">
+              <span className="flex items-center gap-1">
+                <Activity className="w-3.5 h-3.5 shrink-0" />
+                <span>CONSERVACIÓN E = K + U</span>
+              </span>
+              <span>T = {liveEnergy.theoreticalPeriod.toFixed(2)} s</span>
             </div>
 
-            <div>
-              <div className="flex justify-between text-slate-300">
-                <span>Potencial (U)</span>
-                <span className="tabular-nums">{liveEnergy.potentialEnergy.toFixed(2)} J</span>
+            <div className="grid grid-cols-2 sm:grid-cols-1 gap-2 sm:gap-1.5 text-[10px] sm:text-[11px] font-mono">
+              <div>
+                <div className="flex justify-between text-slate-300">
+                  <span>Cinética (K)</span>
+                  <span className="tabular-nums">{liveEnergy.kineticEnergy.toFixed(2)} J</span>
+                </div>
+                <div className="w-full h-1.5 rounded bg-slate-800 overflow-hidden mt-0.5">
+                  <div
+                    className="h-full bg-emerald-400 transition-transform origin-left"
+                    style={{
+                      transform: `scaleX(${Math.min(
+                        1,
+                        liveEnergy.kineticEnergy / Math.max(0.1, liveEnergy.totalEnergy)
+                      )})`,
+                    }}
+                  />
+                </div>
               </div>
-              <div className="w-full h-1.5 rounded bg-slate-800 overflow-hidden mt-0.5">
-                <div
-                  className="h-full bg-cyan-400 transition-transform origin-left"
-                  style={{
-                    transform: `scaleX(${Math.min(
-                      1,
-                      liveEnergy.potentialEnergy / Math.max(0.1, liveEnergy.totalEnergy)
-                    )})`,
-                  }}
-                />
+
+              <div>
+                <div className="flex justify-between text-slate-300">
+                  <span>Potencial (U)</span>
+                  <span className="tabular-nums">{liveEnergy.potentialEnergy.toFixed(2)} J</span>
+                </div>
+                <div className="w-full h-1.5 rounded bg-slate-800 overflow-hidden mt-0.5">
+                  <div
+                    className="h-full bg-cyan-400 transition-transform origin-left"
+                    style={{
+                      transform: `scaleX(${Math.min(
+                        1,
+                        liveEnergy.potentialEnergy / Math.max(0.1, liveEnergy.totalEnergy)
+                      )})`,
+                    }}
+                  />
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Collapsible Bottom Control Dock */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[94%] max-w-[920px] flex flex-col items-center">
+        {/* Collapsible Control Dock (Flujo normal debajo del lienzo en móvil/tablet, flotante en escritorio lg+) */}
+        <div className="w-full lg:absolute lg:bottom-4 lg:left-1/2 lg:-translate-x-1/2 lg:w-[94%] lg:max-w-[920px] flex flex-col items-center z-10">
           <button
             type="button"
             onClick={() => setDockCollapsed((prev) => !prev)}
@@ -786,9 +788,9 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
           </button>
 
           {!dockCollapsed && (
-            <div className="w-full rounded-xl bg-[#0B0F1C] border border-slate-700/90 p-4 shadow-2xl space-y-3">
+            <div className="w-full rounded-xl bg-[#0B0F1C] border border-slate-700/90 p-3.5 sm:p-4 shadow-2xl space-y-3">
               {/* Row 1: Vector Toggles & Planetary Gravity Selector */}
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 border-b border-slate-800 pb-3">
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span className="text-xs font-mono text-slate-400 flex items-center gap-1 mr-1">
                     <Layers className="w-3.5 h-3.5 text-emerald-400" />
@@ -865,7 +867,7 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
               </div>
 
               {/* Row 2: Sliders L, m (Mito de Galileo), b, k_c and Play/Reset */}
-              <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-center">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-center">
                 <div>
                   <div className="flex justify-between text-xs mb-1">
                     <label htmlFor="pendulum-length-slider" className="text-slate-300">
@@ -950,7 +952,7 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center justify-end gap-2 sm:col-span-2 lg:col-span-1">
                   <button
                     type="button"
                     onClick={() => setIsPaused((p) => !p)}

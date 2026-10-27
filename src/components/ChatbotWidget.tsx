@@ -102,20 +102,23 @@ export const ChatbotWidget: React.FC<ChatbotWidgetProps> = ({
         ];
 
   return (
-    <div id="chatbot-widget" className="fixed bottom-5 right-5 z-40 no-print">
+    <div id="chatbot-widget" className="fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-40 no-print">
       {!isOpen ? (
         <button
           type="button"
           onClick={() => setIsOpen(true)}
           aria-label={lang === 'es' ? 'Abrir Asistente IA QuantumLabs' : 'Open QuantumLabs AI Assistant'}
-          className="flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-cyan-500 to-sky-500 text-slate-950 font-bold text-xs shadow-xl hover:from-cyan-400 hover:to-sky-400 transition-all cursor-pointer border border-cyan-300"
+          className="flex items-center gap-2 px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-full bg-gradient-to-r from-cyan-500 to-sky-500 text-slate-950 font-bold text-xs shadow-xl hover:from-cyan-400 hover:to-sky-400 transition-all cursor-pointer border border-cyan-300"
         >
-          <Bot className="w-5 h-5" />
-          <span>{lang === 'es' ? 'Tutor IA QuantumLabs' : 'QuantumLabs AI Tutor'}</span>
-          <span className="w-2 h-2 rounded-full bg-emerald-950 animate-ping" />
+          <Bot className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+          <span className="hidden xs:inline sm:inline">
+            {lang === 'es' ? 'Tutor IA QuantumLabs' : 'QuantumLabs AI Tutor'}
+          </span>
+          <span className="inline xs:hidden sm:hidden">Tutor IA</span>
+          <span className="w-2 h-2 rounded-full bg-emerald-950 animate-ping shrink-0" />
         </button>
       ) : (
-        <div className="w-[350px] sm:w-[390px] rounded-2xl bg-[#0B0F1A] border border-cyan-500/40 shadow-2xl overflow-hidden flex flex-col">
+        <div className="w-[calc(100vw-1.5rem)] max-w-[390px] rounded-2xl bg-[#0B0F1A] border border-cyan-500/40 shadow-2xl overflow-hidden flex flex-col">
           {/* Header */}
           <div className="px-4 py-3 bg-[#0F1626] border-b border-slate-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
