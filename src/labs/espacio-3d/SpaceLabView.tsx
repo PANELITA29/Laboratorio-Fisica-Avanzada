@@ -37,6 +37,7 @@ import {
   validateSpaceChallenge2,
   SpaceValidationResult,
 } from './space-challenges';
+import { ScrollReveal } from '../../components/QuantumAnimations';
 
 interface SpaceLabViewProps {
   lang: Language;
@@ -967,7 +968,8 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
         </div>
       </div>
 
-      {/* Panel Analítico Interactivo: Leyes de Kepler (1ª-3ª), Velocidad de Escape y Transferencia de Hohmann */}
+      {/* Panel Analítico Interactivo: Leyes de Kepler (Animado al Hacer Scroll) */}
+      <ScrollReveal direction="up" delayMs={80}>
       <div className="p-5 rounded-xl bg-[#0D1322] border border-slate-800 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
           <div>
@@ -1170,8 +1172,10 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
           </p>
         </div>
       </div>
+      </ScrollReveal>
 
-      {/* Guía Pedagógica Interactiva del Laboratorio Espacial 3D */}
+      {/* Guía Pedagógica Interactiva del Laboratorio Espacial 3D (Animada al Hacer Scroll) */}
+      <ScrollReveal direction="up" delayMs={140}>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="p-4 rounded-xl bg-[#0D1322] border border-slate-800 space-y-1.5">
           <div className="flex items-center gap-2 text-xs font-mono font-bold text-purple-400 uppercase">
@@ -1204,6 +1208,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
           </p>
         </div>
       </div>
+      </ScrollReveal>
     </div>
   );
 };

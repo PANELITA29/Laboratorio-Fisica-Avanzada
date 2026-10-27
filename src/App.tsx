@@ -17,6 +17,7 @@ import {
   Award,
   CheckCircle2,
   QrCode,
+  ChevronDown,
   X,
 } from 'lucide-react';
 import { Language, dictionary } from './assets/js/i18n';
@@ -27,6 +28,11 @@ import { TheoryModal } from './components/TheoryModal';
 import { ColorCodeModal } from './components/ColorCodeModal';
 import { LabQRCodeModal, HubQRCodeBanner } from './components/LabQRCodeModal';
 import { ChatbotWidget } from './components/ChatbotWidget';
+import {
+  QuantumIntroSplash,
+  ScrollProgressBar,
+  ScrollReveal,
+} from './components/QuantumAnimations';
 import { CircuitLabView } from './labs/circuitos/CircuitLabView';
 import { SpaceLabView } from './labs/espacio-3d/SpaceLabView';
 import { MechanicsLabView } from './labs/mecanica-3d/MechanicsLabView';
@@ -115,6 +121,10 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#07090E] text-slate-100 flex flex-col">
+      {/* Animación Cinemática de Entrada Cuántica + Barra de Progreso al Hacer Scroll */}
+      <QuantumIntroSplash />
+      <ScrollProgressBar />
+
       {/* Top Bar Contract: 3 Zones separated by gap-8 */}
       <header className="sticky top-0 z-40 bg-[#07090E]/95 border-b border-slate-800/90 px-6 py-3.5 no-print">
         <div className="max-w-[1360px] mx-auto flex items-center justify-between gap-8">
@@ -278,13 +288,13 @@ export default function App() {
       <main className="flex-1 max-w-[1360px] w-full mx-auto px-6 py-8">
         {activeView === 'hub' && (
           <div className="space-y-16">
-            {/* Hero Educativo (Inspirado en Quantum Labs / PhET Colorado) */}
-            <section className="text-center max-w-4xl mx-auto pt-4 space-y-5">
+            {/* Hero Educativo con Animación de Entrada Escalonada */}
+            <section className="text-center max-w-4xl mx-auto pt-4 space-y-5 quantum-hero-enter">
               <p className="text-xs font-mono uppercase tracking-widest text-cyan-400">
                 {t.heroKicker}
               </p>
               <h1
-                className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1]"
+                className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1] quantum-hero-enter quantum-hero-delay-1"
                 style={{ textWrap: 'balance' }}
               >
                 <span className="block text-white">{t.heroTitleLine1}</span>
@@ -292,15 +302,15 @@ export default function App() {
                   {t.heroTitleLine2}
                 </span>
               </h1>
-              <p className="text-base sm:text-lg text-slate-300 font-medium max-w-2xl mx-auto">
+              <p className="text-base sm:text-lg text-slate-300 font-medium max-w-2xl mx-auto quantum-hero-enter quantum-hero-delay-2">
                 “{t.heroMotto}”
               </p>
-              <p className="text-sm text-slate-400 max-w-2xl mx-auto leading-relaxed">
+              <p className="text-sm text-slate-400 max-w-2xl mx-auto leading-relaxed quantum-hero-enter quantum-hero-delay-2">
                 {t.heroDescription}
               </p>
 
               {/* Subject Filter Buttons */}
-              <div className="pt-2 flex flex-wrap items-center justify-center gap-2">
+              <div className="pt-2 flex flex-wrap items-center justify-center gap-2 quantum-hero-enter quantum-hero-delay-3">
                 <button
                   type="button"
                   onClick={() => setFilter('all')}
@@ -346,13 +356,25 @@ export default function App() {
                   {lang === 'es' ? 'Mecánica y Ondas 3D (1)' : '3D Mechanics & Waves (1)'}
                 </button>
               </div>
+
+              {/* Indicador Animado de Scroll hacia Abajo */}
+              <div className="pt-3 flex justify-center">
+                <a
+                  href="#labs-3d-grid"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#0D1322]/90 border border-slate-800 text-[11px] font-mono text-cyan-300 hover:border-cyan-500/50 transition-colors"
+                >
+                  <span>Desliza hacia abajo para explorar</span>
+                  <ChevronDown className="w-3.5 h-3.5 quantum-scroll-cue" />
+                </a>
+              </div>
             </section>
 
             {/* Simulation Cards Grid (3 Interactive 3D Laboratories) */}
-            <section className="grid grid-cols-1 lg:grid-cols-3 gap-7 items-stretch">
+            <section id="labs-3d-grid" className="grid grid-cols-1 lg:grid-cols-3 gap-7 items-stretch">
               {/* Card 1: Kit de Construcción de Circuitos DC (Mesa 3D + Esquemático 2D) */}
               {(filter === 'all' || filter === 'circuits') && (
-                <article className="rounded-2xl bg-[#0B101E] border border-slate-800/90 hover:border-cyan-500/50 transition-colors flex flex-col justify-between overflow-hidden">
+                <ScrollReveal direction="up" delayMs={0} className="h-full flex">
+                <article className="w-full rounded-2xl bg-[#0B101E] border border-slate-800/90 hover:border-cyan-500/50 transition-all duration-300 hover:-translate-y-1 flex flex-col justify-between overflow-hidden">
                   <div>
                     {/* 16:9 Interactive Animated Preview Thumbnail */}
                     <div
@@ -439,11 +461,13 @@ export default function App() {
                     </button>
                   </div>
                 </article>
+                </ScrollReveal>
               )}
 
               {/* Card 2: Laboratorio de Gravedad, Órbitas y Espacio-Tiempo 3D */}
               {(filter === 'all' || filter === 'space') && (
-                <article className="rounded-2xl bg-[#0B101E] border border-slate-800/90 hover:border-purple-500/50 transition-colors flex flex-col justify-between overflow-hidden">
+                <ScrollReveal direction="up" delayMs={130} className="h-full flex">
+                <article className="w-full rounded-2xl bg-[#0B101E] border border-slate-800/90 hover:border-purple-500/50 transition-all duration-300 hover:-translate-y-1 flex flex-col justify-between overflow-hidden">
                   <div>
                     <div
                       onClick={() => setActiveView('space')}
@@ -522,11 +546,13 @@ export default function App() {
                     </button>
                   </div>
                 </article>
+                </ScrollReveal>
               )}
 
               {/* Card 3: Laboratorio de Dinámica Clásica, Resonancia y Ondas 3D */}
               {(filter === 'all' || filter === 'mechanics') && (
-                <article className="rounded-2xl bg-[#0B101E] border border-slate-800/90 hover:border-emerald-500/50 transition-colors flex flex-col justify-between overflow-hidden">
+                <ScrollReveal direction="up" delayMs={260} className="h-full flex">
+                <article className="w-full rounded-2xl bg-[#0B101E] border border-slate-800/90 hover:border-emerald-500/50 transition-all duration-300 hover:-translate-y-1 flex flex-col justify-between overflow-hidden">
                   <div>
                     <div
                       onClick={() => setActiveView('mechanics')}
@@ -605,14 +631,80 @@ export default function App() {
                     </button>
                   </div>
                 </article>
+                </ScrollReveal>
               )}
             </section>
 
-            {/* Scannable Mobile Access QR Code Section (Replaces Technical File/Git Architecture) */}
-            <HubQRCodeBanner
-              lang={lang}
-              onOpenModal={() => setIsQRModalOpen(true)}
-            />
+            {/* Sección Animada al Hacer Scroll: Ruta de Aprendizaje Paso a Paso para Estudiantes */}
+            <ScrollReveal direction="up" delayMs={80}>
+              <section className="rounded-2xl bg-[#0A0F1D] border border-slate-800/90 p-6 sm:p-8 space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                  <div>
+                    <span className="text-xs font-mono uppercase tracking-wider text-cyan-400 block">
+                      METODOLOGÍA PEDAGÓGICA INTERACTIVA · APRENDE EXPERIMENTANDO EN 3D
+                    </span>
+                    <h2 className="text-xl sm:text-2xl font-bold text-white mt-0.5">
+                      ¿Cómo aprender Física en 3 Pasos dentro de QuantumLabs?
+                    </h2>
+                  </div>
+                  <span className="px-3 py-1 rounded-lg bg-cyan-950/80 border border-cyan-500/40 text-xs font-mono text-cyan-300">
+                    Fórmulas + Analogías + Retos 3D
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  <ScrollReveal direction="left" delayMs={100}>
+                    <div className="p-4 rounded-xl bg-[#070B14] border border-slate-800/90 space-y-2 h-full">
+                      <span className="inline-block px-2.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono font-bold text-xs">
+                        PASO 01 · MANIPULA EN 3D
+                      </span>
+                      <h3 className="text-sm font-bold text-white">
+                        Arrastra componentes y deforma el espacio-tiempo
+                      </h3>
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        Mueve resistencias sobre la mesa óptica 3D, corta ramas o inyecta impulsos orbitales para ver cómo responde el sistema físico a 60 FPS.
+                      </p>
+                    </div>
+                  </ScrollReveal>
+
+                  <ScrollReveal direction="up" delayMs={220}>
+                    <div className="p-4 rounded-xl bg-[#070B14] border border-slate-800/90 space-y-2 h-full">
+                      <span className="inline-block px-2.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono font-bold text-xs">
+                        PASO 02 · COMPRENDE LA FÓRMULA
+                      </span>
+                      <h3 className="text-sm font-bold text-white">
+                        Sustitución matemática paso a paso en vivo
+                      </h3>
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        Cada deslizador reemplaza tus datos directamente en las ecuaciones de Ohm, Kirchhoff, Kepler e Huygens junto con analogías de la vida diaria.
+                      </p>
+                    </div>
+                  </ScrollReveal>
+
+                  <ScrollReveal direction="right" delayMs={340}>
+                    <div className="p-4 rounded-xl bg-[#070B14] border border-slate-800/90 space-y-2 h-full">
+                      <span className="inline-block px-2.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono font-bold text-xs">
+                        PASO 03 · SIMULA Y SUPERA RETOS
+                      </span>
+                      <h3 className="text-sm font-bold text-white">
+                        Comprueba cada pregunta del test en la mesa 3D
+                      </h3>
+                      <p className="text-xs text-slate-300 leading-relaxed">
+                        Pulsa el botón “Simular este ejercicio en la Mesa 3D” en el cuestionario para que el laboratorio arme automáticamente el experimento frente a ti.
+                      </p>
+                    </div>
+                  </ScrollReveal>
+                </div>
+              </section>
+            </ScrollReveal>
+
+            {/* Scannable Mobile Access QR Code Section (Animated on Scroll) */}
+            <ScrollReveal direction="scale" delayMs={120}>
+              <HubQRCodeBanner
+                lang={lang}
+                onOpenModal={() => setIsQRModalOpen(true)}
+              />
+            </ScrollReveal>
           </div>
         )}
 

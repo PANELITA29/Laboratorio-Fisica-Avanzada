@@ -28,6 +28,7 @@ import {
   validateMechanicsChallenge1,
   validateMechanicsChallenge2,
 } from './mechanics-engine';
+import { ScrollReveal } from '../../components/QuantumAnimations';
 
 interface MechanicsLabViewProps {
   lang: Language;
@@ -578,7 +579,7 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
   }, []);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 quantum-hero-enter">
       {/* Header del Laboratorio 3 */}
       <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-[#0D1322] border border-slate-800/90">
         <div>
@@ -973,7 +974,8 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
         </div>
       </div>
 
-      {/* Panel Paso a Paso de la Fórmula de Huygens + Experimento del Mito de Galileo */}
+      {/* Panel Paso a Paso de la Fórmula de Huygens + Experimento del Mito de Galileo (Animado al Hacer Scroll) */}
+      <ScrollReveal direction="up" delayMs={80}>
       <div className="p-4 rounded-xl bg-[#070B14] border border-emerald-500/30 space-y-2 text-xs">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="font-mono font-bold text-emerald-300">
@@ -987,8 +989,10 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
           💡 <strong className="text-rose-300">Prueba el Mito de la Masa ({mass.toFixed(1)} kg):</strong> Si mueves el control de <strong>Masa Esfera (m)</strong>, verás que el Peso <span className="font-mono text-rose-300">P = m·g = {(mass * gravity).toFixed(1)} N</span> y la Energía Total <span className="font-mono text-cyan-300">E = {liveEnergy.totalEnergy.toFixed(1)} J</span> suben o bajan, ¡pero el <strong>Período T = {liveEnergy.theoreticalPeriod.toFixed(2)} segundos NO cambia</strong> porque la masa no está en la fórmula <span className="font-mono">T = 2π√(L/g)</span>!
         </p>
       </div>
+      </ScrollReveal>
 
-      {/* Explicación Pedagógica Intuitiva del Laboratorio 3 */}
+      {/* Explicación Pedagógica Intuitiva del Laboratorio 3 (Animada al Hacer Scroll) */}
+      <ScrollReveal direction="up" delayMs={150}>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="p-4 rounded-xl bg-[#0D1322] border border-slate-800 space-y-1.5">
           <div className="flex items-center gap-2 text-xs font-mono font-bold text-emerald-400 uppercase">
@@ -1020,6 +1024,7 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
           </p>
         </div>
       </div>
+      </ScrollReveal>
     </div>
   );
 };

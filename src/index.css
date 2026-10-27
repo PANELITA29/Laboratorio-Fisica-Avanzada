@@ -21,6 +21,63 @@
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
+
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@keyframes quantumSpin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes quantumHeroEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(22px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes quantumFloatPulse {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(5px);
+  }
+}
+
+.quantum-spin-slow {
+  animation: quantumSpin 9s linear infinite;
+}
+
+.quantum-hero-enter {
+  animation: quantumHeroEnter 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.quantum-hero-delay-1 {
+  animation-delay: 120ms;
+}
+
+.quantum-hero-delay-2 {
+  animation-delay: 240ms;
+}
+
+.quantum-hero-delay-3 {
+  animation-delay: 360ms;
+}
+
+.quantum-scroll-cue {
+  animation: quantumFloatPulse 2s ease-in-out infinite;
 }
 
 @media print {

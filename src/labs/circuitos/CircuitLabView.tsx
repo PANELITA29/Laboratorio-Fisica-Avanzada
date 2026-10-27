@@ -40,6 +40,7 @@ import {
   ValidationResult,
 } from './circuit-challenges';
 import { CircuitWorkbench3D } from './CircuitWorkbench3D';
+import { ScrollReveal } from '../../components/QuantumAnimations';
 
 interface CircuitLabViewProps {
   lang: Language;
@@ -807,7 +808,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 quantum-hero-enter">
       {/* Top Sub-Navigation & QuantumLabs Topology/Power Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-[#0D1322] border border-slate-800/90">
         <div>
@@ -1921,7 +1922,8 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
         </div>
       </div>
 
-      {/* ZONA 4: Módulo de Evaluación y Defensa Científica (10 Preguntas Interactivas con Píldoras 1..10) */}
+      {/* ZONA 4: Módulo de Evaluación y Defensa Científica (Animado al Hacer Scroll) */}
+      <ScrollReveal direction="up" delayMs={80}>
       <section className="p-6 rounded-2xl bg-[#0D1322] border border-slate-800 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-3">
           <div className="flex items-center gap-2.5">
@@ -2044,6 +2046,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
           </div>
         )}
       </section>
+      </ScrollReveal>
     </div>
   );
 };
