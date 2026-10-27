@@ -23,12 +23,12 @@ export const LabQRCodeModal: React.FC<LabQRCodeModalProps> = ({ isOpen, onClose,
       urlToEncode,
       {
         type: 'svg',
-        margin: 2,
+        margin: 3,
         width: 240,
         errorCorrectionLevel: 'H',
         color: {
-          dark: '#06B6D4',
-          light: '#070B14',
+          dark: '#000000',
+          light: '#FFFFFF',
         },
       },
       (err, svgStr) => {
@@ -95,16 +95,16 @@ export const LabQRCodeModal: React.FC<LabQRCodeModalProps> = ({ isOpen, onClose,
               : 'Point any smartphone or tablet camera at this QR code to open the official Vercel web app and interact live with all 3 3D laboratories.'}
           </p>
 
-          {/* Scannable QR Frame */}
-          <div className="mx-auto w-64 h-64 p-3 rounded-2xl bg-[#070B14] border-2 border-cyan-500/50 shadow-xl flex items-center justify-center">
+          {/* Scannable QR Frame (Pure White Background for Instant Camera Recognition) */}
+          <div className="mx-auto w-64 h-64 p-3 rounded-2xl bg-white border-4 border-cyan-400 shadow-2xl flex items-center justify-center">
             {qrSvgMarkup ? (
               <div
                 data-testid="lab-qr-svg"
-                className="w-full h-full [&>svg]:w-full [&>svg]:h-full"
+                className="w-full h-full [&>svg]:w-full [&>svg]:h-full rounded-lg overflow-hidden"
                 dangerouslySetInnerHTML={{ __html: qrSvgMarkup }}
               />
             ) : (
-              <span className="text-xs font-mono text-cyan-400">Generando QR...</span>
+              <span className="text-xs font-mono text-slate-900 font-bold">Generando QR...</span>
             )}
           </div>
 
@@ -215,12 +215,12 @@ export const HubQRCodeBanner: React.FC<{
       liveUrl,
       {
         type: 'svg',
-        margin: 2,
+        margin: 3,
         width: 168,
         errorCorrectionLevel: 'H',
         color: {
-          dark: '#22D3EE',
-          light: '#070B14',
+          dark: '#000000',
+          light: '#FFFFFF',
         },
       },
       (err, str) => {
@@ -279,9 +279,9 @@ export const HubQRCodeBanner: React.FC<{
       <div
         onClick={onOpenModal}
         title="Haz clic para ampliar el Código QR"
-        className="shrink-0 flex flex-col items-center gap-2 p-3.5 rounded-2xl bg-[#070B14] border-2 border-cyan-400/60 hover:border-cyan-300 transition-colors cursor-pointer shadow-xl"
+        className="shrink-0 flex flex-col items-center gap-2 p-3.5 rounded-2xl bg-white border-4 border-cyan-400 hover:border-cyan-300 transition-colors cursor-pointer shadow-2xl"
       >
-        <div className="w-36 h-36 flex items-center justify-center">
+        <div className="w-36 h-36 flex items-center justify-center bg-white rounded-lg overflow-hidden">
           {svgStr ? (
             <div
               data-testid="hub-qr-svg"
@@ -289,10 +289,10 @@ export const HubQRCodeBanner: React.FC<{
               dangerouslySetInnerHTML={{ __html: svgStr }}
             />
           ) : (
-            <span className="text-xs font-mono text-cyan-400">QR...</span>
+            <span className="text-xs font-mono text-slate-900 font-bold">QR...</span>
           )}
         </div>
-        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-cyan-300">
+        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-950">
           {lang === 'es' ? 'ESCANEAR CON CÁMARA' : 'SCAN WITH CAMERA'}
         </span>
       </div>
