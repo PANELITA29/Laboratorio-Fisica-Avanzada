@@ -279,7 +279,7 @@ export const HubQRCodeBanner: React.FC<{
       <div
         onClick={onOpenModal}
         title="Haz clic para ampliar el Código QR"
-        className="shrink-0 flex flex-col items-center gap-2 p-3.5 rounded-2xl bg-white border-4 border-cyan-400 hover:border-cyan-300 transition-colors cursor-pointer shadow-2xl"
+        className="shrink-0 flex flex-col items-center justify-center p-3.5 rounded-2xl bg-white border-4 border-cyan-400 hover:border-cyan-300 transition-colors cursor-pointer shadow-2xl"
       >
         <div className="w-36 h-36 flex items-center justify-center bg-white rounded-lg overflow-hidden">
           {svgStr ? (
@@ -292,9 +292,6 @@ export const HubQRCodeBanner: React.FC<{
             <span className="text-xs font-mono text-slate-900 font-bold">QR...</span>
           )}
         </div>
-        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-950">
-          {lang === 'es' ? 'ESCANEAR CON CÁMARA' : 'SCAN WITH CAMERA'}
-        </span>
       </div>
     </section>
   );
