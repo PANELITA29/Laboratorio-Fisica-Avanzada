@@ -9,21 +9,16 @@ interface LabQRCodeModalProps {
   lang: Language;
 }
 
-const DEFAULT_PUBLIC_URL = 'https://ais-pre-wkrj4tugqfy7qw2xafqlw7-700056240911.us-east1.run.app';
+const VERCEL_OFFICIAL_URL = 'https://laboratorio-fisica-avanzada.vercel.app';
 
 export const LabQRCodeModal: React.FC<LabQRCodeModalProps> = ({ isOpen, onClose, lang }) => {
-  const [targetUrl, setTargetUrl] = useState<string>(() => {
-    if (typeof window !== 'undefined' && window.location.origin && !window.location.origin.includes('localhost')) {
-      return window.location.origin;
-    }
-    return DEFAULT_PUBLIC_URL;
-  });
+  const [targetUrl, setTargetUrl] = useState<string>(VERCEL_OFFICIAL_URL);
   const [qrSvgMarkup, setQrSvgMarkup] = useState<string>('');
   const [copied, setCopied] = useState<boolean>(false);
 
   useEffect(() => {
     let active = true;
-    const urlToEncode = targetUrl.trim() || DEFAULT_PUBLIC_URL;
+    const urlToEncode = targetUrl.trim() || VERCEL_OFFICIAL_URL;
     QRCode.toString(
       urlToEncode,
       {
@@ -73,12 +68,12 @@ export const LabQRCodeModal: React.FC<LabQRCodeModalProps> = ({ isOpen, onClose,
             <QrCode className="w-5 h-5 text-cyan-400" />
             <div>
               <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-400 block">
-                ACCESO MÓVIL INMEDIATO · FERIA DE LA CIENCIA
+                ACCESO MÓVIL INMEDIATO · WEB OFICIAL VERCEL
               </span>
               <h2 id="qr-modal-title" className="text-lg font-bold text-white">
                 {lang === 'es'
-                  ? 'Escanea para Abrir el Laboratorio 3D'
-                  : 'Scan to Launch the 3D Laboratory'}
+                  ? 'Escanea para Abrir el Laboratorio 3D en Vercel'
+                  : 'Scan to Launch the 3D Laboratory on Vercel'}
               </h2>
             </div>
           </div>
@@ -96,8 +91,8 @@ export const LabQRCodeModal: React.FC<LabQRCodeModalProps> = ({ isOpen, onClose,
         <div className="p-6 space-y-5 text-center">
           <p className="text-xs text-slate-300 leading-relaxed">
             {lang === 'es'
-              ? 'Apunta la cámara de cualquier teléfono móvil o tablet hacia este código QR para experimentar en vivo con los 3 laboratorios interactivos en 3D (Circuitos DC, Espacio-Tiempo de Einstein y Oscilaciones RK4).'
-              : 'Point any smartphone or tablet camera at this QR code to interact live with all 3 interactive 3D laboratories (DC Circuits, Einstein Spacetime, and RK4 Oscillations).'}
+              ? 'Apunta la cámara de cualquier teléfono móvil o tablet hacia este código QR para entrar directamente a la web oficial en Vercel y experimentar con los 3 laboratorios en 3D (Circuitos DC, Espacio-Tiempo de Einstein y Péndulos RK4).'
+              : 'Point any smartphone or tablet camera at this QR code to open the official Vercel web app and interact live with all 3 3D laboratories.'}
           </p>
 
           {/* Scannable QR Frame */}
@@ -113,42 +108,58 @@ export const LabQRCodeModal: React.FC<LabQRCodeModalProps> = ({ isOpen, onClose,
             )}
           </div>
 
-          {/* Direct Lab Deep-Link Presets */}
+          {/* Direct Lab Deep-Link Presets on Vercel */}
           <div className="flex flex-wrap items-center justify-center gap-2">
             <button
               type="button"
-              onClick={() => setTargetUrl(DEFAULT_PUBLIC_URL)}
-              className="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-cyan-300 border border-slate-700 cursor-pointer"
+              onClick={() => setTargetUrl(VERCEL_OFFICIAL_URL)}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-mono border cursor-pointer transition-colors ${
+                targetUrl === VERCEL_OFFICIAL_URL
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-300 font-bold'
+                  : 'bg-slate-800 hover:bg-slate-700 text-cyan-300 border-slate-700'
+              }`}
             >
-              Portal Hub 3D
+              Web Vercel (Inicio)
             </button>
             <button
               type="button"
-              onClick={() => setTargetUrl(`${DEFAULT_PUBLIC_URL}/?lab=circuits`)}
-              className="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-amber-300 border border-slate-700 cursor-pointer"
+              onClick={() => setTargetUrl(`${VERCEL_OFFICIAL_URL}/?lab=circuits`)}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-mono border cursor-pointer transition-colors ${
+                targetUrl === `${VERCEL_OFFICIAL_URL}/?lab=circuits`
+                  ? 'bg-amber-400 text-slate-950 border-amber-300 font-bold'
+                  : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border-slate-700'
+              }`}
             >
-              Directo: Circuitos 3D
+              Vercel: Circuitos 3D
             </button>
             <button
               type="button"
-              onClick={() => setTargetUrl(`${DEFAULT_PUBLIC_URL}/?lab=space`)}
-              className="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-purple-300 border border-slate-700 cursor-pointer"
+              onClick={() => setTargetUrl(`${VERCEL_OFFICIAL_URL}/?lab=space`)}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-mono border cursor-pointer transition-colors ${
+                targetUrl === `${VERCEL_OFFICIAL_URL}/?lab=space`
+                  ? 'bg-purple-500 text-white border-purple-300 font-bold'
+                  : 'bg-slate-800 hover:bg-slate-700 text-purple-300 border-slate-700'
+              }`}
             >
-              Directo: Espacio 3D
+              Vercel: Espacio 3D
             </button>
             <button
               type="button"
-              onClick={() => setTargetUrl('https://laboratorio-fisica-avanzada.vercel.app/')}
-              className="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-emerald-300 border border-slate-700 cursor-pointer"
+              onClick={() => setTargetUrl(`${VERCEL_OFFICIAL_URL}/?lab=mechanics`)}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-mono border cursor-pointer transition-colors ${
+                targetUrl === `${VERCEL_OFFICIAL_URL}/?lab=mechanics`
+                  ? 'bg-emerald-400 text-slate-950 border-emerald-300 font-bold'
+                  : 'bg-slate-800 hover:bg-slate-700 text-emerald-300 border-slate-700'
+              }`}
             >
-              URL Vercel Oficial
+              Vercel: Péndulos 3D
             </button>
           </div>
 
           {/* Editable URL + Copy Button */}
           <div className="space-y-1.5 text-left">
             <label htmlFor="qr-url-input" className="block text-[11px] font-mono text-slate-400">
-              {lang === 'es' ? 'Enlace codificado en el QR:' : 'URL encoded in QR:'}
+              {lang === 'es' ? 'Enlace de Vercel codificado en el QR:' : 'Vercel URL encoded in QR:'}
             </label>
             <div className="flex items-center gap-2">
               <input
@@ -182,7 +193,7 @@ export const LabQRCodeModal: React.FC<LabQRCodeModalProps> = ({ isOpen, onClose,
             rel="noopener noreferrer"
             className="flex items-center gap-1 text-cyan-400 hover:text-cyan-300 font-mono"
           >
-            <span>Abrir enlace</span>
+            <span>Abrir web en Vercel</span>
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
         </div>
@@ -196,12 +207,7 @@ export const HubQRCodeBanner: React.FC<{
   onOpenModal: () => void;
 }> = ({ lang, onOpenModal }) => {
   const [svgStr, setSvgStr] = useState<string>('');
-  const liveUrl =
-    typeof window !== 'undefined' &&
-    window.location.origin &&
-    !window.location.origin.includes('localhost')
-      ? window.location.origin
-      : DEFAULT_PUBLIC_URL;
+  const liveUrl = VERCEL_OFFICIAL_URL;
 
   useEffect(() => {
     let active = true;
@@ -234,7 +240,7 @@ export const HubQRCodeBanner: React.FC<{
       <div className="space-y-3 max-w-2xl">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-cyan-950/80 border border-cyan-500/40 text-xs font-mono text-cyan-300">
           <QrCode className="w-3.5 h-3.5" />
-          <span>ACCESO MÓVIL FERIA DE LA CIENCIA · ESCANEA Y EXPERIMENTA EN 3D</span>
+          <span>ACCESO MÓVIL OFICIAL EN VERCEL · ESCANEA Y EXPERIMENTA EN 3D</span>
         </div>
         <h2 className="text-2xl font-bold text-white">
           {lang === 'es'
@@ -243,8 +249,8 @@ export const HubQRCodeBanner: React.FC<{
         </h2>
         <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
           {lang === 'es'
-            ? 'Escanea este código QR con la cámara de tu teléfono para abrir QuantumLabs 3D en tiempo real. Puedes manipular el banco óptico de circuitos DC, deformar la malla relativista del espacio-tiempo con shaders GLSL o experimentar con péndulos 3D desde tu dispositivo.'
-            : 'Scan this QR code with your phone camera to open QuantumLabs 3D in real time. Manipulate the 3D DC circuit workbench, deform the relativistic spacetime shader mesh, or experiment with 3D pendulums on your device.'}
+            ? 'Escanea este código QR con la cámara de tu teléfono para abrir directamente https://laboratorio-fisica-avanzada.vercel.app en tiempo real. Puedes manipular el banco óptico de circuitos DC, deformar la malla relativista del espacio-tiempo o experimentar con péndulos 3D desde tu celular.'
+            : 'Scan this QR code with your phone camera to open https://laboratorio-fisica-avanzada.vercel.app in real time.'}
         </p>
         <div className="pt-1 flex flex-wrap items-center gap-3">
           <button
@@ -259,7 +265,14 @@ export const HubQRCodeBanner: React.FC<{
                 : 'Enlarge QR Code / Pick Laboratory'}
             </span>
           </button>
-          <span className="text-xs font-mono text-slate-400 break-all">{liveUrl}</span>
+          <a
+            href={liveUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-mono text-cyan-300 hover:text-cyan-200 underline break-all"
+          >
+            {liveUrl}
+          </a>
         </div>
       </div>
 
