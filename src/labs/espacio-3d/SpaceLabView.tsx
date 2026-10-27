@@ -1098,12 +1098,15 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
           </div>
         </div>
 
-        {/* Telemetría Analítica de las 4 Leyes Celestes */}
+        {/* Telemetría Analítica de las 4 Leyes Celestes con Equivalencias Reales */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
           <div className="p-3 rounded-lg bg-[#07090E] border border-slate-800">
             <span className="text-[10px] text-slate-400 block">1ª LEY (PERIHELIO / AFELIO)</span>
             <span className="text-sm font-bold text-white">
               {keplerMetrics.perihelionAU.toFixed(2)} / {keplerMetrics.aphelionAU.toFixed(2)} UA
+            </span>
+            <span className="text-[10px] text-slate-400 block mt-0.5">
+              ≈ {(semiMajorAxisAU * 149.6).toFixed(0)} millones de km
             </span>
           </div>
           <div className="p-3 rounded-lg bg-[#07090E] border border-slate-800">
@@ -1111,11 +1114,17 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
             <span className="text-sm font-bold text-emerald-300">
               {keplerMetrics.perihelionVelocityKmS.toFixed(1)} / {keplerMetrics.aphelionVelocityKmS.toFixed(1)} km/s
             </span>
+            <span className="text-[10px] text-slate-400 block mt-0.5">
+              Más rápido cerca del Sol
+            </span>
           </div>
           <div className="p-3 rounded-lg bg-[#07090E] border border-slate-800">
             <span className="text-[10px] text-slate-400 block">3ª LEY (PERÍODO T² = a³/M)</span>
             <span className="text-sm font-bold text-cyan-300">
               T = {keplerMetrics.orbitalPeriodYears.toFixed(2)} años
+            </span>
+            <span className="text-[10px] text-cyan-400/90 block mt-0.5">
+              ≈ {(keplerMetrics.orbitalPeriodYears * 365.25).toFixed(0)} días terrestres
             </span>
           </div>
           <div className="p-3 rounded-lg bg-[#07090E] border border-slate-800">
@@ -1123,7 +1132,42 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
             <span className="text-sm font-bold text-amber-300">
               v_esc: {keplerMetrics.escapeVelocityKmS.toFixed(1)} km/s · Δv₁: {keplerMetrics.hohmannDeltaV1KmS.toFixed(2)}
             </span>
+            <span className="text-[10px] text-slate-400 block mt-0.5">
+              Límite escape: 1.41x v_c
+            </span>
           </div>
+        </div>
+
+        {/* Semáforo Orbital Pedagógico + Sustitución Paso a Paso para Secundaria */}
+        <div className="p-3.5 rounded-xl bg-[#070B14] border border-purple-500/30 space-y-2 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="font-mono font-bold text-purple-300">
+              🚦 Diagnóstico Orbital para Estudiantes y Fórmula de Kepler Paso a Paso:
+            </span>
+            <span className="font-mono text-[11px] text-cyan-300 bg-[#0B101E] px-2.5 py-0.5 rounded border border-slate-800">
+              {`T = √(a³ / M) = √(${semiMajorAxisAU.toFixed(2)}³ / ${centralMassSolar.toFixed(2)}) = ${keplerMetrics.orbitalPeriodYears.toFixed(2)} años`}
+            </span>
+          </div>
+
+          <p className="text-slate-200 leading-relaxed">
+            {insertionFactor >= 1.41 || liveStats.totalEnergy > 0 ? (
+              <span className="text-rose-300 font-medium">
+                🔴 <strong>¡Velocidad de Escape Superada ({insertionFactor.toFixed(2)}x ≥ 1.41x)!</strong> El planeta lleva tanta velocidad que venció el pozo gravitacional del Sol (Energía Total &gt; 0) y saldrá disparado hacia el espacio interestelar sin regresar jamás.
+              </span>
+            ) : hohmannActive ? (
+              <span className="text-emerald-300 font-medium">
+                🚀 <strong>Maniobra de Transferencia de Hohmann Activa:</strong> La nave encendió sus motores en el punto más cercano (sumando Δv₁ = {keplerMetrics.hohmannDeltaV1KmS.toFixed(2)} km/s) para estirar su elipse justo hasta tocar la órbita de Marte gastando el mínimo combustible posible.
+              </span>
+            ) : eccentricity >= 0.35 || insertionFactor >= 1.18 ? (
+              <span className="text-amber-300 font-medium">
+                🟡 <strong>Órbita Elíptica Alargada (Tipo Cometa, e = {eccentricity.toFixed(2)}):</strong> Por la 2ª Ley de Kepler, observa cómo el planeta se acelera hasta {keplerMetrics.perihelionVelocityKmS.toFixed(1)} km/s cuando pasa cerca del Sol (perihelio) y se frena a {keplerMetrics.aphelionVelocityKmS.toFixed(1)} km/s cuando se aleja (afelio).
+              </span>
+            ) : (
+              <span className="text-cyan-200 font-medium">
+                🟢 <strong>Órbita Estable Casi Circular (Tipo Tierra, e = {eccentricity.toFixed(2)}):</strong> La fuerza de gravedad (flecha azul hacia el Sol) y la velocidad tangencial (flecha verde) están en equilibrio a 90°, manteniendo al planeta a unos {(semiMajorAxisAU * 149.6).toFixed(0)} millones de km del Sol.
+              </span>
+            )}
+          </p>
         </div>
       </div>
 

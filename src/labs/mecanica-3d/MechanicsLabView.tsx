@@ -839,12 +839,13 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
                   </button>
                 </div>
 
-                <div className="flex items-center gap-1.5 text-xs font-mono">
+                <div className="flex flex-wrap items-center gap-1.5 text-xs font-mono">
                   <span className="text-slate-400">Gravedad:</span>
                   {[
-                    { label: 'Luna (1.62)', val: 1.62 },
-                    { label: 'Tierra (9.81)', val: 9.81 },
-                    { label: 'Júpiter (24.79)', val: 24.79 },
+                    { label: '🌙 Luna (1.62)', val: 1.62 },
+                    { label: '🔴 Marte (3.71)', val: 3.71 },
+                    { label: '🌍 Tierra (9.81)', val: 9.81 },
+                    { label: '🪐 Júpiter (24.79)', val: 24.79 },
                   ].map((gItem) => (
                     <button
                       key={gItem.label}
@@ -862,8 +863,8 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
                 </div>
               </div>
 
-              {/* Row 2: Sliders L, b, k_c and Play/Reset */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center">
+              {/* Row 2: Sliders L, m (Mito de Galileo), b, k_c and Play/Reset */}
+              <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-center">
                 <div>
                   <div className="flex justify-between text-xs mb-1">
                     <label htmlFor="pendulum-length-slider" className="text-slate-300">
@@ -887,8 +888,29 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
 
                 <div>
                   <div className="flex justify-between text-xs mb-1">
+                    <label htmlFor="pendulum-mass-slider" className="text-slate-300">
+                      Masa Esfera (m)
+                    </label>
+                    <span className="font-mono font-bold text-rose-300 tabular-nums">
+                      {mass.toFixed(1)} kg
+                    </span>
+                  </div>
+                  <input
+                    id="pendulum-mass-slider"
+                    type="range"
+                    min={0.5}
+                    max={8.0}
+                    step={0.5}
+                    value={mass}
+                    onChange={(e) => setMass(parseFloat(e.target.value))}
+                    className="w-full accent-rose-400 cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-xs mb-1">
                     <label htmlFor="pendulum-damping-slider" className="text-slate-300">
-                      Amortiguamiento (b)
+                      Fricción Aire (b)
                     </label>
                     <span className="font-mono font-bold text-cyan-300 tabular-nums">
                       {damping.toFixed(2)} N·s/m
@@ -949,6 +971,21 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
             </div>
           )}
         </div>
+      </div>
+
+      {/* Panel Paso a Paso de la Fórmula de Huygens + Experimento del Mito de Galileo */}
+      <div className="p-4 rounded-xl bg-[#070B14] border border-emerald-500/30 space-y-2 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="font-mono font-bold text-emerald-300">
+            📐 Fórmula del Péndulo Paso a Paso con tus Datos + Experimento del Mito de Galileo:
+          </span>
+          <span className="font-mono text-[11px] text-cyan-300 bg-[#0B101E] px-2.5 py-0.5 rounded border border-slate-800">
+            {`T = 2π · √(L / g) = 6.283 · √(${length.toFixed(2)} m / ${gravity.toFixed(2)} m/s²) = ${liveEnergy.theoreticalPeriod.toFixed(2)} s`}
+          </span>
+        </div>
+        <p className="text-slate-300 leading-relaxed">
+          💡 <strong className="text-rose-300">Prueba el Mito de la Masa ({mass.toFixed(1)} kg):</strong> Si mueves el control de <strong>Masa Esfera (m)</strong>, verás que el Peso <span className="font-mono text-rose-300">P = m·g = {(mass * gravity).toFixed(1)} N</span> y la Energía Total <span className="font-mono text-cyan-300">E = {liveEnergy.totalEnergy.toFixed(1)} J</span> suben o bajan, ¡pero el <strong>Período T = {liveEnergy.theoreticalPeriod.toFixed(2)} segundos NO cambia</strong> porque la masa no está en la fórmula <span className="font-mono">T = 2π√(L/g)</span>!
+        </p>
       </div>
 
       {/* Explicación Pedagógica Intuitiva del Laboratorio 3 */}

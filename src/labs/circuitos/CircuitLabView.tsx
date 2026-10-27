@@ -665,6 +665,146 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
   const quizCorrectCount = Object.entries(quizAnswers).filter(
     ([qIdx, ans]) => QUANTUM_DEFENSE_QUIZ[Number(qIdx)]?.correctIndex === ans
   ).length;
+  const [quizSimNotice, setQuizSimNotice] = useState<string | null>(null);
+
+  // Coloca automáticamente las sondas Roja (V+) y Negra (COM) en los extremos de un componente
+  const handleQuickProbeComponent = (targetId: string) => {
+    const comp = components.find((c) => c.id === targetId);
+    if (!comp) return;
+    setProbeRedNode(comp.nodeA);
+    setProbeBlackNode(comp.nodeB);
+    setSelectedId(comp.id);
+  };
+
+  // Configura automáticamente la mesa 3D con los datos exactos de la pregunta del cuestionario
+  const handleSimulateQuizQuestion = (questionId: number) => {
+    setIsPowered(true);
+    if (questionId === 1) {
+      setComponents(
+        buildTopologyComponents3D({
+          topology: 'series',
+          sourceVoltage: 24,
+          r1: 4,
+          r2: 4,
+          r3: 4,
+          f1: 'ON',
+          f2: 'ON',
+          f3: 'ON',
+          isPowered: true,
+        })
+      );
+      setTopology('series');
+      setQuizSimNotice('Simulando Pregunta 1 en Mesa 3D: Fuente = 24 V y R_eq = 4 + 4 + 4 = 12 Ω → I_T = 2.000 A.');
+    } else if (questionId === 2) {
+      setComponents(
+        buildTopologyComponents3D({
+          topology: 'series',
+          sourceVoltage: 24,
+          r1: 10,
+          r2: 20,
+          r3: 30,
+          f1: 'ON',
+          f2: 'ON',
+          f3: 'ON',
+          isPowered: true,
+        })
+      );
+      setTopology('series');
+      setQuizSimNotice('Simulando Pregunta 2 en Mesa 3D: Circuito Serie con R₁=10Ω, R₂=20Ω, R₃=30Ω. ¡Mira en la tabla cómo I_k es idéntica en las tres!');
+    } else if (questionId === 3) {
+      setComponents(
+        buildTopologyComponents3D({
+          topology: 'series',
+          sourceVoltage: 24,
+          r1: 10,
+          r2: 20,
+          r3: 30,
+          f1: 'ON',
+          f2: 'OPEN',
+          f3: 'ON',
+          isPowered: true,
+        })
+      );
+      setTopology('series');
+      setQuizSimNotice('Simulando Pregunta 3 en Mesa 3D: R₂ abierta (ABRIR) en Serie. La corriente cae a 0.000 A y los 24 V aparecen en R₂.');
+    } else if (questionId === 4) {
+      setComponents(
+        buildTopologyComponents3D({
+          topology: 'parallel',
+          sourceVoltage: 12,
+          r1: 30,
+          r2: 30,
+          r3: 30,
+          f1: 'ON',
+          f2: 'ON',
+          f3: 'ON',
+          isPowered: true,
+        })
+      );
+      setTopology('parallel');
+      setQuizSimNotice('Simulando Pregunta 4 en Mesa 3D: Tres resistencias de 30 Ω en Paralelo a 12 V → R_eq = 10.00 Ω.');
+    } else if (questionId === 5) {
+      setComponents(
+        buildTopologyComponents3D({
+          topology: 'parallel',
+          sourceVoltage: 12,
+          r1: 30,
+          r2: 30,
+          r3: 30,
+          f1: 'SHORT',
+          f2: 'ON',
+          f3: 'ON',
+          isPowered: true,
+        })
+      );
+      setTopology('parallel');
+      setQuizSimNotice('Simulando Pregunta 5 en Mesa 3D: Cortocircuito franco en R₁ en Paralelo → R₂ y R₃ quedan con 0 V y se activa la protección OCP.');
+    } else if (questionId === 6) {
+      setComponents(
+        buildTopologyComponents3D({
+          topology: 'mixed',
+          sourceVoltage: 20,
+          r1: 10,
+          r2: 20,
+          r3: 20,
+          f1: 'ON',
+          f2: 'ON',
+          f3: 'ON',
+          isPowered: true,
+        })
+      );
+      setTopology('mixed');
+      setQuizSimNotice('Simulando Pregunta 6 en Mesa 3D: Circuito Mixto con R₁=10Ω + (R₂=20Ω ∥ R₃=20Ω) → R_eq = 10 + 10 = 20.00 Ω.');
+    } else if (questionId === 7) {
+      setComponents(
+        buildTopologyComponents3D({
+          topology: 'series',
+          sourceVoltage: 20,
+          r1: 10,
+          r2: 10,
+          r3: 20,
+          f1: 'ON',
+          f2: 'ON',
+          f3: 'ON',
+          isPowered: true,
+        })
+      );
+      setTopology('series');
+      setQuizSimNotice('Simulando Pregunta 7: Prueba subir el Voltaje de 10 V a 20 V en el slider y observa cómo la Potencia P_T se multiplica por 4.');
+    } else if (questionId === 9) {
+      setEiaBandMode(4);
+      setR1(470);
+      setQuizSimNotice('Simulando Pregunta 9: R₁ ajustada a 470 Ω (Amarillo-Violeta-Marrón-Oro).');
+    } else if (questionId === 10) {
+      setRcModeActive(true);
+      const tau = (Math.max(10, r1 * 10) * capacitanceUF) / 1_000_000;
+      setRcCharging(true);
+      setRcElapsed(Number(tau.toFixed(2)));
+      setQuizSimNotice('Simulando Pregunta 10: Modo RC + LED 3D activado en t = 1τ (63.2% del voltaje de la fuente).');
+    } else {
+      setQuizSimNotice('Observa en el Multímetro Digital cómo se cumple ∑ ΔV = 0 (Ley de Voltajes de Kirchhoff).');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -964,6 +1104,13 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
 
             {/* Interactive 3D WebGL Workbench or 2D Schematic Canvas */}
             <div className="relative w-full aspect-[16/9] bg-[#070B14]">
+              {/* Guía Rápida para Estudiantes sobre el Lienzo 3D */}
+              {viewDimension === '3d' && (
+                <div className="absolute bottom-2.5 left-2.5 right-2.5 z-10 pointer-events-none flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-[#050811]/90 border border-slate-800/90 text-[11px] font-mono text-slate-300">
+                  <span>🖱️ <strong className="text-cyan-300">Arrastra R₁, R₂ o R₃:</strong> Hacia los lados cambia Ω · Hacia afuera desconecta (ABRIR)</span>
+                  <span>⚡ <strong className="text-amber-300">Clic en Interruptor 3D:</strong> Corta o da paso a la energía</span>
+                </div>
+              )}
               {viewDimension === '3d' ? (
                 <CircuitWorkbench3D
                   components={components}
@@ -1202,41 +1349,139 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
               </table>
             </div>
 
-            {/* Multimeter Probe Terminal Selectors */}
-            <div className="grid grid-cols-2 gap-3 text-xs pt-1">
-              <div>
-                <label htmlFor="probe-red" className="block text-[11px] text-rose-400 font-mono mb-1">
-                  Sonda 3D Roja (V+)
-                </label>
-                <select
-                  id="probe-red"
-                  value={probeRedNode}
-                  onChange={(e) => setProbeRedNode(e.target.value)}
-                  className="w-full rounded bg-[#07090E] border border-slate-700 px-2.5 py-1.5 text-xs font-mono text-slate-200"
-                >
-                  {Object.keys(NODE_POSITIONS).map((n) => (
-                    <option key={n} value={n}>
-                      Nodo {n.toUpperCase()}
-                    </option>
-                  ))}
-                </select>
+            {/* Paso a Paso con tus Datos Reales + Analogía Cotidiana para Estudiantes */}
+            <div className="p-3.5 rounded-xl bg-[#070B14] border border-cyan-500/30 space-y-2.5 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-mono font-bold text-cyan-300">
+                  📐 ¿De dónde salen estos números? (Fórmula Paso a Paso en Vivo)
+                </span>
+                <span className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 font-mono text-[10px]">
+                  Modo Aprendizaje Paso a Paso
+                </span>
               </div>
-              <div>
-                <label htmlFor="probe-black" className="block text-[11px] text-sky-400 font-mono mb-1">
-                  Sonda 3D Negra (COM)
-                </label>
-                <select
-                  id="probe-black"
-                  value={probeBlackNode}
-                  onChange={(e) => setProbeBlackNode(e.target.value)}
-                  className="w-full rounded bg-[#07090E] border border-slate-700 px-2.5 py-1.5 text-xs font-mono text-slate-200"
-                >
-                  {Object.keys(NODE_POSITIONS).map((n) => (
-                    <option key={n} value={n}>
-                      Nodo {n.toUpperCase()}
-                    </option>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-[11px]">
+                <div className="p-2 rounded bg-[#0B101E] border border-slate-800">
+                  <span className="text-slate-400 block text-[10px]">1. Resistencia Equivalente:</span>
+                  <span className="text-cyan-200 font-semibold">
+                    {topology === 'series'
+                      ? `R_eq = ${r1}+${r2}+${r3} = ${
+                          Number.isFinite(topologyResult.equivalentResistance)
+                            ? `${topologyResult.equivalentResistance.toFixed(1)} Ω`
+                            : '∞ Ω'
+                        }`
+                      : topology === 'parallel'
+                      ? `1/R_eq = 1/${r1}+1/${r2}+1/${r3} ⇒ ${
+                          Number.isFinite(topologyResult.equivalentResistance)
+                            ? `${topologyResult.equivalentResistance.toFixed(2)} Ω`
+                            : '∞ Ω'
+                        }`
+                      : `R_eq = ${r1} + (${r2}∥${r3}) = ${
+                          Number.isFinite(topologyResult.equivalentResistance)
+                            ? `${topologyResult.equivalentResistance.toFixed(2)} Ω`
+                            : '∞ Ω'
+                        }`}
+                  </span>
+                </div>
+
+                <div className="p-2 rounded bg-[#0B101E] border border-slate-800">
+                  <span className="text-slate-400 block text-[10px]">2. Ley de Ohm (I = V / R_eq):</span>
+                  <span className="text-amber-300 font-semibold">
+                    {topologyResult.isShortCircuitFault
+                      ? 'CORTO → OCP = 0.000 A'
+                      : !Number.isFinite(topologyResult.equivalentResistance) || !isPowered
+                      ? `I_T = 0.000 A`
+                      : `I_T = ${sourceVoltage.toFixed(1)}V / ${topologyResult.equivalentResistance.toFixed(
+                          1
+                        )}Ω = ${topologyResult.totalCurrent.toFixed(3)} A`}
+                  </span>
+                </div>
+
+                <div className="p-2 rounded bg-[#0B101E] border border-slate-800">
+                  <span className="text-slate-400 block text-[10px]">3. Potencia (P = V · I):</span>
+                  <span className="text-emerald-300 font-semibold">
+                    {`P_T = ${sourceVoltage.toFixed(1)}V × ${topologyResult.totalCurrent.toFixed(
+                      2
+                    )}A = ${topologyResult.totalPower.toFixed(2)} W`}
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-slate-300 leading-relaxed pt-0.5">
+                <strong className="text-amber-300">💡 Analogía de la vida real: </strong>
+                {topologyResult.isShortCircuitFault
+                  ? '¡Hiciste un puente sin resistencia! Es como romper una represa: trataría de pasar muchísima corriente de golpe y el fusible automático (Protección OCP) apaga todo para evitar que se queme.'
+                  : topologyResult.isOpenCircuitFault
+                  ? 'Hay una resistencia desconectada (ABRIR). Es como un puente levadizo levantado: los autos (electrones) no pueden cruzar por ese camino.'
+                  : topology === 'series'
+                  ? 'En SERIE el circuito es una carretera de un solo carril: exactamente la misma fila de electrones está obligada a pasar por R₁, R₂ y R₃, pero el voltaje (empujón) se reparte entre las tres.'
+                  : topology === 'parallel'
+                  ? 'En PARALELO el circuito es una autopista de 3 carriles independientes: cada resistencia recibe todo el voltaje de la fuente y los electrones eligen pasar en mayor cantidad por el carril más ancho (el de menor Ω).'
+                  : 'En MIXTO todos los electrones pasan primero por el peaje principal (R₁) y luego el camino se divide en dos carriles paralelos (R₂ y R₃).'}
+              </p>
+            </div>
+
+            {/* Botones de Medición Rápida con Sondas 3D + Selectores de Nodos */}
+            <div className="space-y-2 pt-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[11px] font-mono text-slate-300">
+                  🎯 <strong className="text-white">Medir directamente con las Sondas 3D en:</strong>
+                </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {[
+                    { id: 'bat-1', label: '🔋 Fuente DC' },
+                    { id: 'res-1', label: '📏 R₁' },
+                    { id: 'res-2', label: '📏 R₂' },
+                    { id: 'res-3', label: '📏 R₃' },
+                    { id: 'bulb-1', label: '💡 Bombilla' },
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleQuickProbeComponent(item.id)}
+                      className="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-cyan-500 hover:text-slate-950 text-[11px] font-mono text-cyan-300 border border-slate-700 transition-colors cursor-pointer"
+                    >
+                      {item.label}
+                    </button>
                   ))}
-                </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs pt-1">
+                <div>
+                  <label htmlFor="probe-red" className="block text-[11px] text-rose-400 font-mono mb-1">
+                    Sonda 3D Roja (V+)
+                  </label>
+                  <select
+                    id="probe-red"
+                    value={probeRedNode}
+                    onChange={(e) => setProbeRedNode(e.target.value)}
+                    className="w-full rounded bg-[#07090E] border border-slate-700 px-2.5 py-1.5 text-xs font-mono text-slate-200"
+                  >
+                    {Object.keys(NODE_POSITIONS).map((n) => (
+                      <option key={n} value={n}>
+                        Nodo {n.toUpperCase()}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="probe-black" className="block text-[11px] text-sky-400 font-mono mb-1">
+                    Sonda 3D Negra (COM)
+                  </label>
+                  <select
+                    id="probe-black"
+                    value={probeBlackNode}
+                    onChange={(e) => setProbeBlackNode(e.target.value)}
+                    className="w-full rounded bg-[#07090E] border border-slate-700 px-2.5 py-1.5 text-xs font-mono text-slate-200"
+                  >
+                    {Object.keys(NODE_POSITIONS).map((n) => (
+                      <option key={n} value={n}>
+                        Nodo {n.toUpperCase()}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -1474,6 +1719,8 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                 <svg viewBox="0 0 220 130" className="w-full h-28">
                   <line x1="28" y1="12" x2="28" y2="110" stroke="#334155" strokeWidth="1" />
                   <line x1="28" y1="110" x2="205" y2="110" stroke="#334155" strokeWidth="1" />
+                  <text x="6" y="22" fill="#94A3B8" fontSize="8" fontFamily="monospace">I(A)</text>
+                  <text x="178" y="123" fill="#94A3B8" fontSize="8" fontFamily="monospace">V (0-48V)</text>
                   <line
                     x1="28"
                     y1="110"
@@ -1483,12 +1730,21 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                     strokeWidth="2"
                     strokeDasharray="3 2"
                   />
-                  {/* Punto de operación móvil */}
+                  {/* Punto de operación móvil con coordenadas */}
                   {(() => {
                     const normV = Math.min(1, topologyResult.sourceVoltage / 48);
                     const cx = 28 + normV * 165;
                     const cy = 110 - normV * 88;
-                    return <circle cx={cx} cy={cy} r="5" fill="#F59E0B" stroke="#FFF" strokeWidth="1.5" />;
+                    const tx = Math.min(142, Math.max(32, cx - 22));
+                    const ty = Math.max(22, cy - 9);
+                    return (
+                      <g>
+                        <circle cx={cx} cy={cy} r="5" fill="#F59E0B" stroke="#FFF" strokeWidth="1.5" />
+                        <text x={tx} y={ty} fill="#FEF08A" fontSize="8.5" fontFamily="monospace" fontWeight="bold">
+                          ({topologyResult.sourceVoltage.toFixed(0)}V, {topologyResult.totalCurrent.toFixed(2)}A)
+                        </text>
+                      </g>
+                    );
                   })()}
                 </svg>
               </div>
@@ -1501,6 +1757,8 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                 <svg viewBox="0 0 220 130" className="w-full h-28">
                   <line x1="28" y1="12" x2="28" y2="110" stroke="#334155" strokeWidth="1" />
                   <line x1="28" y1="110" x2="205" y2="110" stroke="#334155" strokeWidth="1" />
+                  <text x="6" y="22" fill="#94A3B8" fontSize="8" fontFamily="monospace">I(A)</text>
+                  <text x="172" y="123" fill="#94A3B8" fontSize="8" fontFamily="monospace">R_eq (Ω)</text>
                   <path
                     d="M 35 18 Q 55 92 200 104"
                     fill="none"
@@ -1514,7 +1772,16 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                     const normR = (reqClamped - 5) / 145;
                     const cx = 35 + normR * 160;
                     const cy = 106 - (1 - normR) ** 2.2 * 84;
-                    return <circle cx={cx} cy={cy} r="5" fill="#22D3EE" stroke="#FFF" strokeWidth="1.5" />;
+                    const tx = Math.min(138, Math.max(32, cx - 20));
+                    const ty = Math.max(22, cy - 9);
+                    return (
+                      <g>
+                        <circle cx={cx} cy={cy} r="5" fill="#22D3EE" stroke="#FFF" strokeWidth="1.5" />
+                        <text x={tx} y={ty} fill="#67E8F9" fontSize="8.5" fontFamily="monospace" fontWeight="bold">
+                          ({Number.isFinite(topologyResult.equivalentResistance) ? topologyResult.equivalentResistance.toFixed(0) : '∞'}Ω, {topologyResult.totalCurrent.toFixed(2)}A)
+                        </text>
+                      </g>
+                    );
                   })()}
                 </svg>
               </div>
@@ -1704,11 +1971,32 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
         {/* Current Question Card */}
         {currentQuestion && (
           <div className="p-4 rounded-xl bg-[#07090E] border border-slate-800 space-y-3">
-            <div className="flex items-center justify-between text-xs font-mono text-cyan-400">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-cyan-400">
               <span>
                 PREGUNTA {currentQuestion.id} DE 10 · {currentQuestion.category.toUpperCase()}
               </span>
+              <button
+                type="button"
+                onClick={() => handleSimulateQuizQuestion(currentQuestion.id)}
+                className="px-3 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500 hover:text-slate-950 border border-cyan-400/60 text-cyan-200 font-mono font-bold text-[11px] transition-colors cursor-pointer"
+              >
+                🔬 Simular este ejercicio en la Mesa 3D
+              </button>
             </div>
+
+            {quizSimNotice && (
+              <div className="p-2.5 rounded-lg bg-cyan-950/50 border border-cyan-500/40 text-xs font-mono text-cyan-200 flex items-center justify-between gap-2">
+                <span>{quizSimNotice}</span>
+                <button
+                  type="button"
+                  onClick={() => setQuizSimNotice(null)}
+                  className="text-[10px] text-slate-400 hover:text-white cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
             <p className="text-sm font-semibold text-white">{currentQuestion.questionEs}</p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
