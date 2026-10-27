@@ -1,0 +1,6 @@
+{
+  "name": "LabFísica Avanzada - Suite de Simulación Científica",
+  "description": "Plataforma interactiva de laboratorios virtuales de Física Eléctrica y Gravitación Relativista 3D con estética PhET Colorado.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
