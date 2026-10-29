@@ -85,6 +85,9 @@ import {
   evaluateMultimeterMeasurement,
   generateFaultDiagnosisMission,
   validateFaultDiagnosisMission,
+  removeResistorKeepCable,
+  joinOrSeparateBranchCable,
+  restoreBranchResistor,
 } from './circuit-engine';
 
 test('QuantumLabs Topology Solver: Series, Parallel, and Mixed (R1 + R2||R3) analytical equilibrium', () => {
@@ -357,5 +360,49 @@ test('Objective C: Black Box Fault Diagnosis POE cycle generation and validation
   });
   assert.equal(failCheck.passed, false);
 });
+
+test('Cable Retention & Manual Cable Joining: deleting a resistor leaves the cable open, and only user joining restores current', () => {
+  const initial = buildTopologyComponents3D({
+    topology: 'series',
+    sourceVoltage: 24,
+    r1: 20,
+    r2: 30,
+    r3: 50,
+    f1: 'ON',
+    f2: 'ON',
+    f3: 'ON',
+    isPowered: true,
+  });
+
+  // 1. Delete R1 -> R1 becomes a 'wire' with faultState 'OPEN' (cable suelto), keeping its nodes
+  const afterRemove = removeResistorKeepCable(initial, 'res-1');
+  const r1WireOpen = afterRemove.find((c) => c.id === 'res-1');
+  assert.ok(r1WireOpen);
+  assert.equal(r1WireOpen.type, 'wire');
+  assert.equal(r1WireOpen.faultState, 'OPEN');
+
+  const diagOpen = analyzeWorkbenchCircuit(afterRemove, true, 'series');
+  assert.equal(diagOpen.totalCurrent, 0);
+  assert.equal(diagOpen.branches[0].componentType, 'wire');
+  assert.equal(diagOpen.branches[0].faultState, 'OPEN');
+
+  // 2. User manually joins the cable of R1 -> faultState becomes 'ON', current flows through R2 (30Ω) + R3 (50Ω) = 80Ω -> I = 24 / 80 = 0.30 A
+  const afterJoin = joinOrSeparateBranchCable(afterRemove, 'res-1');
+  const r1WireJoined = afterJoin.find((c) => c.id === 'res-1');
+  assert.equal(r1WireJoined?.faultState, 'ON');
+
+  const diagJoined = analyzeWorkbenchCircuit(afterJoin, true, 'series');
+  assert.equal(diagJoined.isShortCircuitFault, false);
+  assert.ok(Math.abs(diagJoined.equivalentResistance - 80) < 0.2);
+  assert.ok(Math.abs(diagJoined.totalCurrent - 0.3) < 0.005);
+
+  // 3. User restores resistor R1 -> returns to 20Ω resistor, Req = 100Ω, I = 0.24 A
+  const afterRestore = restoreBranchResistor(afterJoin, 'res-1', 20);
+  const diagRestored = analyzeWorkbenchCircuit(afterRestore, true, 'series');
+  assert.equal(diagRestored.branches[0].componentType, 'resistor');
+  assert.ok(Math.abs(diagRestored.equivalentResistance - 100) < 0.1);
+  assert.ok(Math.abs(diagRestored.totalCurrent - 0.24) < 0.005);
+});
+
 
 

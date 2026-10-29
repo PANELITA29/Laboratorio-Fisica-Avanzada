@@ -43,6 +43,9 @@ import {
   evaluateMultimeterMeasurement,
   generateFaultDiagnosisMission,
   validateFaultDiagnosisMission,
+  removeResistorKeepCable,
+  joinOrSeparateBranchCable,
+  restoreBranchResistor,
 } from './circuit-engine';
 import {
   CIRCUIT_CHALLENGES,
@@ -285,7 +288,9 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
     R2: false,
     R3: false,
   });
-  const [revealAllBranches, setRevealAllBranches] = useState<boolean>(false);
+  const [revealAllBranches, setRevealAllBranches] = useState<boolean>(true);
+  const [activeGraphMode, setActiveGraphMode] = useState<'all' | 'vi' | 'ir' | 'power' | 'rc'>('all');
+  const [showBlackBoxModal, setShowBlackBoxModal] = useState<boolean>(false);
 
   // === OBJETIVO C: MODO DESAFÍO "CAJA NEGRA" (DIAGNÓSTICO DE CIRCUITO AVERIADO - CICLO POE) ===
   const [diagnosisMission, setDiagnosisMission] = useState<FaultDiagnosisMission | null>(null);
@@ -332,9 +337,12 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
   const f1: BranchFaultState = compR1?.faultState ?? 'ON';
   const f2: BranchFaultState = compR2?.faultState ?? 'ON';
   const f3: BranchFaultState = compR3?.faultState ?? 'ON';
-  const typeR1 = compR1?.type === 'bulb' ? 'bulb' : 'resistor';
-  const typeR2 = compR2?.type === 'bulb' ? 'bulb' : 'resistor';
-  const typeR3 = compR3?.type === 'bulb' ? 'bulb' : 'resistor';
+  const typeR1: 'bulb' | 'resistor' | 'wire' =
+    compR1?.type === 'bulb' ? 'bulb' : compR1?.type === 'wire' ? 'wire' : 'resistor';
+  const typeR2: 'bulb' | 'resistor' | 'wire' =
+    compR2?.type === 'bulb' ? 'bulb' : compR2?.type === 'wire' ? 'wire' : 'resistor';
+  const typeR3: 'bulb' | 'resistor' | 'wire' =
+    compR3?.type === 'bulb' ? 'bulb' : compR3?.type === 'wire' ? 'wire' : 'resistor';
 
   const setR1 = (ohms: number) => updateComponentById('res-1', { resistance: ohms });
   const setR2 = (ohms: number) => updateComponentById('res-2', { resistance: ohms });
@@ -346,6 +354,26 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
     if (compBat) updateComponentById(compBat.id, { voltage: v });
   };
 
+  // Eliminar el resistor dejando el cable de corriente en la rama para que el usuario pueda unirlo manualmente
+  const handleRemoveBranchResistor = (compId: string) => {
+    audioSynth.playSwitchClick(false);
+    setComponents((prev) => removeResistorKeepCable(prev, compId));
+  };
+
+  // Unir o separar manualmente las dos puntas del cable de corriente donde estaba el resistor
+  const handleToggleJoinBranchCable = (compId: string) => {
+    const target = components.find((c) => c.id === compId);
+    const willJoin = target?.faultState === 'OPEN';
+    audioSynth.playSwitchClick(willJoin);
+    setComponents((prev) => joinOrSeparateBranchCable(prev, compId));
+  };
+
+  // Volver a instalar el resistor en el cable de la rama
+  const handleRestoreBranchResistor = (compId: string, defaultOhms = 20) => {
+    audioSynth.playSwitchClick(true);
+    setComponents((prev) => restoreBranchResistor(prev, compId, defaultOhms));
+  };
+
   // Alternar entre Resistencia Cerámica y Bombilla Incandescente (Objetivo B: máx 15.0W)
   const toggleBranchBulbType = (branchId: 'R1' | 'R2' | 'R3') => {
     const compId = branchId === 'R1' ? 'res-1' : branchId === 'R2' ? 'res-2' : 'res-3';
@@ -355,6 +383,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
     updateComponentById(compId, {
       type: nextType,
       label: nextType === 'bulb' ? `Bombilla ${branchId}` : branchId,
+      resistance: currentComp.resistance > 0 ? currentComp.resistance : 20,
       maxPower: nextType === 'bulb' ? MAX_RATED_POWER_WATTS : undefined,
       faultState: 'ON',
     });
@@ -370,9 +399,9 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
   }, [externalResistorSync]);
 
   const [recordedPoints, setRecordedPoints] = useState<Array<{ current: number; voltage: number }>>([
-    { current: 0.01, voltage: 4.7 },
-    { current: 0.02, voltage: 9.4 },
-    { current: 0.03, voltage: 14.1 },
+    { current: 0.08, voltage: 8.0 },
+    { current: 0.16, voltage: 16.0 },
+    { current: 0.24, voltage: 24.0 },
   ]);
 
   const [newCompType] = useState<ComponentType>('resistor');
@@ -484,6 +513,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
     setTopology(nextTop);
     setDiagnosisMission(null);
     setPoeFeedback(null);
+    setRevealAllBranches(true);
     setComponents((prev) => {
       const prevSw = prev.find((c) => c.id === 'sw-1');
       const built = buildTopologyComponents3D({
@@ -512,6 +542,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
     const mission = generateFaultDiagnosisMission(targetTop);
     setTopology(mission.topology);
     setDiagnosisMission(mission);
+    setShowBlackBoxModal(true);
     setPoeFeedback(null);
     setIsPowered(true);
     setRevealAllBranches(false);
@@ -804,6 +835,39 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
             0,
             -28
           );
+        } else if (comp.type === 'wire' && comp.id.startsWith('res-')) {
+          const isCableOpen = comp.faultState === 'OPEN';
+          if (isCableOpen) {
+            // Borrar el tramo central para mostrar las dos puntas del cable separadas
+            ctx.fillStyle = '#070B14';
+            ctx.fillRect(-26, -14, 52, 28);
+            ctx.strokeStyle = '#F59E0B';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 3]);
+            ctx.strokeRect(-26, -12, 52, 24);
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#F97316';
+            ctx.beginPath();
+            ctx.arc(-16, 0, 5, 0, Math.PI * 2);
+            ctx.arc(16, 0, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#FDE047';
+            ctx.font = 'bold 9.5px "JetBrains Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('✂️ CABLE SUELTO (CLIC P/ UNIR)', 0, -18);
+          } else {
+            ctx.fillStyle = '#059669';
+            ctx.strokeStyle = '#34D399';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.roundRect(-22, -9, 44, 18, 6);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = '#A7F3D0';
+            ctx.font = 'bold 9.5px "JetBrains Mono", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('🔗 CABLE UNIDO (0 Ω)', 0, -15);
+          }
         }
 
         ctx.restore();
@@ -880,6 +944,21 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
         return;
       }
     }
+
+    // Permitir unir o separar el cable haciendo clic directamente sobre el punto medio en el Esquemático 2D
+    for (const comp of components) {
+      if (comp.type === 'wire' && comp.id.startsWith('res-')) {
+        const posA = NODE_POSITIONS[comp.nodeA];
+        const posB = NODE_POSITIONS[comp.nodeB];
+        if (!posA || !posB) continue;
+        const mx = (posA.x + posB.x) / 2;
+        const my = (posA.y + posB.y) / 2;
+        if (Math.hypot(clickX - mx, clickY - my) <= 34) {
+          handleToggleJoinBranchCable(comp.id);
+          return;
+        }
+      }
+    }
   };
 
   const updateSelectedComponent = (patch: Partial<CircuitComponent>) => {
@@ -916,8 +995,8 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
   };
 
   const handleRecordPoint = () => {
-    const v = Math.abs(multimeterVoltage);
-    const i = solution.totalCurrent;
+    const v = Math.abs(multimeterVoltage) > 0.01 ? Math.abs(multimeterVoltage) : topologyResult.sourceVoltage;
+    const i = topologyResult.totalCurrent;
     setRecordedPoints((prev) => [
       ...prev,
       { current: Number(i.toFixed(4)), voltage: Number(v.toFixed(2)) },
@@ -945,7 +1024,9 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
   const loadPreset = (preset: 'ohm' | 'divider' | 'parallel' | 'blackbox' | 'mixed') => {
     const next = createCircuitPreset(preset);
     setDiagnosisMission(null);
+    setShowBlackBoxModal(false);
     setPoeFeedback(null);
+    setRevealAllBranches(true);
     setComponents(next);
     setSelectedId(next[1]?.id || next[0]?.id || '');
     if (preset === 'parallel') setTopology('parallel');
@@ -974,6 +1055,8 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
   // Configura automáticamente la mesa 3D con los datos exactos de la pregunta del cuestionario
   const handleSimulateQuizQuestion = (questionId: number) => {
     setDiagnosisMission(null);
+    setShowBlackBoxModal(false);
+    setRevealAllBranches(true);
     setIsPowered(true);
     if (questionId === 1) {
       setComponents(
@@ -1006,7 +1089,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
         })
       );
       setTopology('series');
-      setQuizSimNotice('Simulando Pregunta 2 en Mesa 3D: Circuito Serie con R₁=10Ω, R₂=20Ω, R₃=30Ω. ¡Mide cada rama con las sondas para comprobar que I_k es idéntica!');
+      setQuizSimNotice('Simulando Pregunta 2 en Mesa 3D: Circuito Serie con R₁=10Ω, R₂=20Ω, R₃=30Ω. ¡Observa en la tabla y gráficas que I_k es idéntica!');
     } else if (questionId === 3) {
       setComponents(
         buildTopologyComponents3D({
@@ -1086,7 +1169,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
         })
       );
       setTopology('series');
-      setQuizSimNotice('Simulando Pregunta 7: Prueba subir el Voltaje de 10 V a 20 V en el slider y observa cómo la Potencia P_T se multiplica por 4.');
+      setQuizSimNotice('Simulando Pregunta 7: Prueba subir el Voltaje de 10 V a 20 V en el slider y observa cómo la Potencia P_T se multiplica por 4 en las gráficas.');
     } else if (questionId === 9) {
       setEiaBandMode(4);
       setR1(470);
@@ -1098,17 +1181,17 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
       setRcElapsed(Number(tau.toFixed(2)));
       setQuizSimNotice('Simulando Pregunta 10: Modo RC + LED 3D activado en t = 1τ (63.2% del voltaje de la fuente).');
     } else {
-      setQuizSimNotice('Observa en el Multímetro Digital cómo se cumple ∑ ΔV = 0 (Ley de Voltajes de Kirchhoff).');
+      setQuizSimNotice('Observa en el Multímetro Digital y las gráficas cómo se cumple ∑ ΔV = 0 (Ley de Voltajes de Kirchhoff).');
     }
   };
 
   return (
-    <div className="space-y-4 quantum-hero-enter">
-      {/* Cabecera Compacta de Cabina de Laboratorio (Cockpit Header) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl bg-[#0D1322] border border-slate-800/90">
+    <div className="space-y-6 quantum-hero-enter">
+      {/* Cabecera de Cabina de Laboratorio (Cockpit Header) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-[#0D1322] border border-slate-800/90">
         <div>
           <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-400">
-            CABINA DE EXPERIMENTACIÓN ACTIVA · LEY DE OHM, JOULE &amp; DIAGNÓSTICO POE
+            CONSOLA DE INGENIERÍA ELÉCTRICA · MNA DINÁMICO, TELEMETRÍA Y GRÁFICAS EN TIEMPO REAL
           </span>
           <h2 className="text-lg sm:text-xl font-bold text-white">{t.circuitTitle}</h2>
         </div>
@@ -1159,7 +1242,13 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
           {/* Botón Directo a Misión Caja Negra (Objetivo C) */}
           <button
             type="button"
-            onClick={() => handleStartDiagnosisMission()}
+            onClick={() => {
+              if (diagnosisMission && showBlackBoxModal) {
+                setShowBlackBoxModal(false);
+              } else {
+                handleStartDiagnosisMission();
+              }
+            }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-colors cursor-pointer ${
               diagnosisMission
                 ? 'bg-purple-500 text-slate-950 border-purple-300'
@@ -1348,20 +1437,20 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
         </div>
       )}
 
-      {/* OBJETIVO D: CABINA DE LABORATORIO UNIFICADA (COCKPIT LAYOUT SIN SCROLL EXCESIVO) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-        {/* Columna Izquierda (7 Cols): Banco de Trabajo 3D/2D + Barra de Sondas y Multímetro en Vivo */}
-        <div className="lg:col-span-7 space-y-3">
+      {/* CONSOLA DIVIDIDA PRINCIPAL: IZQUIERDA (MESA 3D + ZONA 2 MULTÍMETRO Y TABLA ANALÍTICA) | DERECHA (ZONA 1 CONTROLES DC + ZONA 3 GRÁFICAS INTERACTIVAS EN VIVO) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Columna Izquierda (7 Cols): Banco de Trabajo 3D/2D + ZONA 2 (Multímetro Digital LCD, Sondas, LVK/LCK y Tabla por Rama) */}
+        <div className="lg:col-span-7 space-y-5">
           <div className="rounded-xl bg-[#0D1322] border border-slate-800 overflow-hidden">
             {/* Canvas Top Toolbar */}
-            <div className="px-3.5 py-2.5 bg-[#090D16] border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+            <div className="px-4 py-3 bg-[#090D16] border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-slate-400">{t.flowModeLabel}:</span>
                 <div className="flex items-center gap-1 p-0.5 rounded-lg bg-[#07090E] border border-slate-800">
                   <button
                     type="button"
                     onClick={() => setFlowMode('electrons')}
-                    className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${
+                    className={`px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${
                       flowMode === 'electrons'
                         ? 'bg-sky-500 text-slate-950 font-semibold'
                         : 'text-slate-400 hover:text-white'
@@ -1372,7 +1461,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setFlowMode('conventional')}
-                    className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${
+                    className={`px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${
                       flowMode === 'conventional'
                         ? 'bg-rose-500 text-white font-semibold'
                         : 'text-slate-400 hover:text-white'
@@ -1415,7 +1504,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                     }`}
                   >
                     <Box className="w-3.5 h-3.5" />
-                    <span>Mesa 3D</span>
+                    <span>Mesa 3D (WebGL)</span>
                   </button>
                   <button
                     type="button"
@@ -1439,10 +1528,12 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                     setIsPowered(true);
                     setIsFuseBlown(false);
                     setDiagnosisMission(null);
+                    setShowBlackBoxModal(false);
+                    setRevealAllBranches(true);
                     setMeasuredBranches({ R1: false, R2: false, R3: false });
                     loadPreset('ohm');
                   }}
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-700 text-xs text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-700 text-xs text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   <span>{t.resetSim}</span>
@@ -1451,7 +1542,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
             </div>
 
             {/* Interactive 3D WebGL Workbench or 2D Schematic Canvas */}
-            <div className="relative w-full h-[290px] sm:h-[360px] md:h-[400px] bg-[#070B14]">
+            <div className="relative w-full h-[300px] sm:h-[380px] md:h-[420px] bg-[#070B14]">
               {viewDimension === '3d' && (
                 <div className="hidden sm:flex absolute bottom-2.5 left-2.5 right-2.5 z-10 pointer-events-none flex-wrap items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-[#050811]/90 border border-slate-800/90 text-[11px] font-mono text-slate-300">
                   <span>
@@ -1516,63 +1607,126 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
               )}
             </div>
 
-            {/* Barra Inferior de Sondas Interactivas y Presets Rápidos */}
-            <div className="px-3.5 py-2.5 bg-[#090D16] border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[11px] font-mono text-slate-400">Punta activa al tocar nodo:</span>
-                <button
-                  type="button"
-                  onClick={() => setActiveProbeTip('red')}
-                  className={`px-2 py-1 rounded text-[11px] font-mono font-bold border transition-colors cursor-pointer ${
-                    activeProbeTip === 'red'
-                      ? 'bg-rose-500 text-white border-rose-300'
-                      : 'bg-slate-900 text-rose-300 border-slate-700'
-                  }`}
-                >
-                  🔴 Sonda Roja V+ ({probeRedNode.toUpperCase()})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveProbeTip('black')}
-                  className={`px-2 py-1 rounded text-[11px] font-mono font-bold border transition-colors cursor-pointer ${
-                    activeProbeTip === 'black'
-                      ? 'bg-sky-500 text-slate-950 border-sky-300'
-                      : 'bg-slate-900 text-sky-300 border-slate-700'
-                  }`}
-                >
-                  ⚫ Sonda Negra COM ({probeBlackNode.toUpperCase()})
-                </button>
+            {/* Barra de Presets Rápidos, Puntas de Sonda y Selección de Componentes */}
+            <div className="px-4 py-3 bg-[#090D16] border-t border-slate-800 space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-xs text-slate-400 mr-1">Presets:</span>
+                  <button
+                    type="button"
+                    onClick={() => loadPreset('divider')}
+                    className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-cyan-300 cursor-pointer"
+                  >
+                    {t.presetDivider}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => loadPreset('parallel')}
+                    className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-purple-300 cursor-pointer"
+                  >
+                    {t.presetParallel}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => loadPreset('mixed')}
+                    className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-amber-300 cursor-pointer"
+                  >
+                    Mixto 3D
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => loadPreset('blackbox')}
+                    className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-emerald-300 cursor-pointer"
+                  >
+                    {t.presetBlackBox}
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] font-mono text-slate-400">Medir rama con sondas:</span>
+                  {[
+                    { id: 'bat-1', label: '🔋 Fuente' },
+                    { id: 'res-1', label: '📏 R₁' },
+                    { id: 'res-2', label: '📏 R₂' },
+                    { id: 'res-3', label: '📏 R₃' },
+                  ].map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleQuickProbeComponent(item.id)}
+                      className="px-2 py-1 rounded bg-slate-800 hover:bg-cyan-500 hover:text-slate-950 text-[11px] font-mono text-cyan-300 border border-slate-700 transition-colors cursor-pointer"
+                    >
+                      🎯 {item.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[11px] font-mono text-slate-400">Medir rama:</span>
-                {[
-                  { id: 'res-1', label: 'R₁' },
-                  { id: 'res-2', label: 'R₂' },
-                  { id: 'res-3', label: 'R₃' },
-                  { id: 'bat-1', label: 'Fuente' },
-                ].map((item) => (
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/70">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[11px] font-mono text-slate-400">Punta activa al tocar poste:</span>
                   <button
-                    key={item.id}
                     type="button"
-                    onClick={() => handleQuickProbeComponent(item.id)}
-                    className="px-2 py-1 rounded bg-slate-800 hover:bg-cyan-500 hover:text-slate-950 text-[11px] font-mono text-cyan-300 border border-slate-700 transition-colors cursor-pointer"
+                    onClick={() => setActiveProbeTip('red')}
+                    className={`px-2.5 py-1 rounded text-[11px] font-mono font-bold border transition-colors cursor-pointer ${
+                      activeProbeTip === 'red'
+                        ? 'bg-rose-500 text-white border-rose-300'
+                        : 'bg-slate-900 text-rose-300 border-slate-700'
+                    }`}
                   >
-                    🎯 {item.label}
+                    🔴 Sonda Roja V+ ({probeRedNode.toUpperCase()})
                   </button>
-                ))}
+                  <button
+                    type="button"
+                    onClick={() => setActiveProbeTip('black')}
+                    className={`px-2.5 py-1 rounded text-[11px] font-mono font-bold border transition-colors cursor-pointer ${
+                      activeProbeTip === 'black'
+                        ? 'bg-sky-500 text-slate-950 border-sky-300'
+                        : 'bg-slate-900 text-sky-300 border-slate-700'
+                    }`}
+                  >
+                    ⚫ Sonda Negra COM ({probeBlackNode.toUpperCase()})
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {components.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setSelectedId(c.id)}
+                      className={`px-2 py-0.5 rounded text-[10px] font-mono transition-colors cursor-pointer ${
+                        c.id === selectedComponent?.id
+                          ? 'bg-cyan-500 text-slate-950 font-bold'
+                          : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Barra Compacta del Multímetro Digital en Tiempo Real (Siempre Visible debajo del Canvas) */}
-          <div className="p-3.5 rounded-xl bg-[#0D1322] border border-slate-800 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+          {/* ZONA 2: MULTÍMETRO DIGITAL LCD, SONDAS (V⎓ / Ω / A⎓), LEYES DE KIRCHHOFF (LVK / LCK) Y TABLA ANALÍTICA POR RAMA */}
+          <div className="p-4 sm:p-5 rounded-xl bg-[#0D1322] border border-slate-800 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Gauge className="w-4 h-4 text-cyan-400 shrink-0" />
-                <span className="text-xs font-bold text-white">
-                  Multímetro Digital de Sondas ({probeRedNode.toUpperCase()} → {probeBlackNode.toUpperCase()})
-                </span>
+                <div>
+                  <h3 className="text-xs sm:text-sm font-bold text-white">
+                    ZONA 2 · Multímetro Digital LCD, Sondas ({probeRedNode.toUpperCase()} → {probeBlackNode.toUpperCase()}) y Leyes de Kirchhoff
+                  </h3>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[10px] font-mono">
+                    <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-500/40 text-emerald-300">
+                      ● LVK: ∑ ΔV = 0
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-cyan-950 border border-cyan-500/40 text-cyan-300">
+                      ● LCK: ∑ I_ent = ∑ I_sal
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* Perilla Selectora del Multímetro: V⎓ / Ω / A⎓ (Objetivo A.3) */}
@@ -1605,11 +1759,11 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
               </div>
             </div>
 
-            {/* Display Digital + Telemetría General */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-              <div className="p-2.5 rounded-lg bg-[#050811] border-2 border-cyan-500/50">
+            {/* 4 Pantallas LCD de Telemetría Principal */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+              <div className="p-2.5 sm:p-3 rounded-lg bg-[#050811] border-2 border-cyan-500/50">
                 <span className="text-[10px] font-mono text-cyan-300 block uppercase truncate">
-                  LECTURA SONDAS ({multimeterMode === 'V' ? 'V⎓' : multimeterMode === 'OHM' ? 'Ω' : 'A⎓'})
+                  SONDAS ({multimeterMode === 'V' ? 'V⎓' : multimeterMode === 'OHM' ? 'Ω' : 'A⎓'})
                 </span>
                 <div className="mt-1 flex items-baseline gap-1">
                   <span
@@ -1628,13 +1782,13 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                 </div>
               </div>
 
-              <div className="p-2.5 rounded-lg bg-[#050811] border border-slate-800">
+              <div className="p-2.5 sm:p-3 rounded-lg bg-[#050811] border border-slate-800">
                 <span className="text-[10px] font-mono text-slate-400 block uppercase truncate">
                   RESISTENCIA EQ (R_eq)
                 </span>
                 <div className="mt-1 flex items-baseline gap-1">
                   <span className="text-lg sm:text-2xl font-mono font-bold text-cyan-300 tabular-nums">
-                    {diagnosisMission
+                    {diagnosisMission && !revealAllBranches
                       ? '???'
                       : Number.isFinite(topologyResult.equivalentResistance)
                       ? topologyResult.equivalentResistance.toFixed(2)
@@ -1644,7 +1798,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                 </div>
               </div>
 
-              <div className="p-2.5 rounded-lg bg-[#050811] border border-slate-800">
+              <div className="p-2.5 sm:p-3 rounded-lg bg-[#050811] border border-slate-800">
                 <span className="text-[10px] font-mono text-slate-400 block uppercase truncate">
                   CORRIENTE TOTAL (I_T)
                 </span>
@@ -1659,7 +1813,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                 </div>
               </div>
 
-              <div className="p-2.5 rounded-lg bg-[#050811] border border-slate-800">
+              <div className="p-2.5 sm:p-3 rounded-lg bg-[#050811] border border-slate-800">
                 <span className="text-[10px] font-mono text-slate-400 block uppercase truncate">
                   POTENCIA JOULE (P_T)
                 </span>
@@ -1686,487 +1840,446 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                 )}
               </div>
             )}
+
+            {/* Banner Diagnóstico Analítico LVK / LCK en Vivo */}
+            <div
+              className={`p-3 rounded-lg border text-xs font-mono space-y-1 ${
+                topologyResult.isShortCircuitFault
+                  ? 'bg-rose-950/70 border-rose-500/50 text-rose-200'
+                  : !isPowered || topologyResult.isOpenCircuitFault
+                  ? 'bg-amber-950/60 border-amber-500/40 text-amber-200'
+                  : 'bg-[#070A12] border-slate-800 text-cyan-200'
+              }`}
+            >
+              <div className="font-bold">
+                {lang === 'es' ? topologyResult.diagnosticMessageEs : topologyResult.diagnosticMessageEn}
+              </div>
+              <div className="text-[11px] text-slate-300 flex flex-wrap items-center justify-between gap-2">
+                <span>{topologyResult.kvlEquationText}</span>
+                <span className="text-cyan-400">{topologyResult.kclEquationText}</span>
+              </div>
+            </div>
+
+            {/* Selectores de Nodos para Sondas + Modo de Visibilidad de Tabla */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-end text-xs">
+              <div>
+                <label htmlFor="probe-red" className="block text-[11px] text-rose-400 font-mono mb-1">
+                  🔴 Sonda 3D Roja (Positivo V+)
+                </label>
+                <select
+                  id="probe-red"
+                  value={probeRedNode}
+                  onChange={(e) => setProbeRedNode(e.target.value)}
+                  className="w-full rounded bg-[#07090E] border border-slate-700 px-2.5 py-1.5 text-xs font-mono text-slate-200"
+                >
+                  {Object.keys(NODE_POSITIONS).map((n) => (
+                    <option key={n} value={n}>
+                      Nodo {n.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="probe-black" className="block text-[11px] text-sky-400 font-mono mb-1">
+                  ⚫ Sonda 3D Negra (Tierra COM)
+                </label>
+                <select
+                  id="probe-black"
+                  value={probeBlackNode}
+                  onChange={(e) => setProbeBlackNode(e.target.value)}
+                  className="w-full rounded bg-[#07090E] border border-slate-700 px-2.5 py-1.5 text-xs font-mono text-slate-200"
+                >
+                  {Object.keys(NODE_POSITIONS).map((n) => (
+                    <option key={n} value={n}>
+                      Nodo {n.toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRevealAllBranches((v) => !v)}
+                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-cyan-300 border border-slate-700 cursor-pointer h-[34px]"
+              >
+                {revealAllBranches ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                <span>{revealAllBranches ? 'Modo Práctica: Ocultar no medidas' : 'Mostrar todas las ramas'}</span>
+              </button>
+            </div>
+
+            {/* Tabla Analítica Completa por Rama (R1, R2, R3) */}
+            <div className="overflow-x-auto rounded-lg border border-slate-800">
+              <table className="w-full text-left text-xs font-mono">
+                <thead className="bg-[#090D16] text-slate-400 border-b border-slate-800">
+                  <tr>
+                    <th className="py-2 px-3">Rama</th>
+                    <th className="py-2 px-3">Valor R</th>
+                    <th className="py-2 px-3">Caída V_k</th>
+                    <th className="py-2 px-3">Corriente I_k</th>
+                    <th className="py-2 px-3">Potencia P_k</th>
+                    <th className="py-2 px-3">Estado / Sonda</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/70 bg-[#070A12]">
+                  {topologyResult.branches.map((b) => {
+                    const isRevealed = revealAllBranches || measuredBranches[b.branchId];
+                    const compId =
+                      b.branchId === 'R1' ? 'res-1' : b.branchId === 'R2' ? 'res-2' : 'res-3';
+                    const compObj = components.find((c) => c.id === compId);
+                    const isProbedNow =
+                      compObj &&
+                      ((probeRedNode === compObj.nodeA && probeBlackNode === compObj.nodeB) ||
+                        (probeRedNode === compObj.nodeB && probeBlackNode === compObj.nodeA));
+
+                    return (
+                      <tr
+                        key={b.branchId}
+                        className={isProbedNow ? 'bg-cyan-950/30' : undefined}
+                      >
+                        <td className="py-2 px-3 font-bold text-cyan-300">
+                          {b.componentType === 'bulb'
+                            ? `💡 ${b.branchId}`
+                            : b.componentType === 'wire'
+                            ? `🔗 Cable ${b.branchId}`
+                            : `📏 ${b.branchId}`}
+                          {isProbedNow && (
+                            <span className="ml-1.5 px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[9px]">
+                              SONDA
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-slate-200">
+                          {diagnosisMission && !isRevealed
+                            ? '??? Ω'
+                            : b.componentType === 'wire'
+                            ? b.faultState === 'OPEN'
+                              ? '∞ (Cable suelto)'
+                              : '0 Ω (Unido)'
+                            : `${b.nominalOhms} Ω`}
+                        </td>
+                        <td className="py-2 px-3 text-amber-300">
+                          {isRevealed ? `${b.voltageDrop.toFixed(2)} V` : '🔒 Medir'}
+                        </td>
+                        <td className="py-2 px-3 text-sky-300">
+                          {isRevealed ? `${b.current.toFixed(3)} A` : '🔒 Medir'}
+                        </td>
+                        <td className="py-2 px-3 text-emerald-300">
+                          {isRevealed ? `${b.power.toFixed(2)} W` : '🔒 Medir'}
+                        </td>
+                        <td className="py-2 px-3 flex items-center gap-1.5">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              b.isBurnedOut
+                                ? 'bg-rose-500/30 text-rose-300'
+                                : b.componentType === 'wire'
+                                ? b.faultState === 'OPEN'
+                                  ? 'bg-amber-500/20 text-amber-300'
+                                  : 'bg-emerald-500/20 text-emerald-300'
+                                : b.faultState === 'ON'
+                                ? 'bg-emerald-500/20 text-emerald-300'
+                                : b.faultState === 'OPEN'
+                                ? 'bg-amber-500/20 text-amber-300'
+                                : 'bg-rose-500/20 text-rose-300'
+                            }`}
+                          >
+                            {b.isBurnedOut
+                              ? 'FUNDIDA'
+                              : b.componentType === 'wire'
+                              ? b.faultState === 'OPEN'
+                                ? 'CABLE SUELTO'
+                                : 'CABLE UNIDO'
+                              : b.faultState}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleQuickProbeComponent(compId)}
+                            className="px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/50 text-cyan-300 text-[10px] font-bold hover:bg-cyan-500 hover:text-slate-950 transition-colors cursor-pointer"
+                          >
+                            Medir
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
-        {/* Columna Derecha (5 Cols): Cabina Instrumental Unificada con Pestañas (Cockpit Tabs) */}
-        <div className="lg:col-span-5 rounded-xl bg-[#0D1322] border border-slate-800 overflow-hidden">
-          {/* Pestañas de Cabina (Evitan el Scroll Vertical Excesivo - Objetivo D) */}
-          <div
-            role="tablist"
-            aria-label="Paneles de instrumentación del laboratorio"
-            className="grid grid-cols-2 sm:grid-cols-4 bg-[#07090E] border-b border-slate-800 p-1 gap-1"
-          >
+        {/* Columna Derecha (5 Cols): ZONA 1 (Banco de Control DC, Bombillas 15W, Fallas, Caja Negra) + ZONA 3 (OSCILOSCOPIO MULTICANAL Y GRÁFICAS DINÁMICAS 60 FPS) */}
+        <div className="lg:col-span-5 space-y-5">
+          {/* ZONA 1: CONTROLES DC, BOMBILLAS TÉRMICAS (15W) Y SIMULACIÓN DE FALLAS */}
+          <div className="p-5 rounded-xl bg-[#0D1322] border border-slate-800 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <div className="flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-cyan-400" />
+                <h3 className="text-xs sm:text-sm font-bold text-white">
+                  ZONA 1 · Banco de Control DC, Bombillas Térmicas (15W) y Fallas
+                </h3>
+              </div>
+              <span className="text-[11px] font-mono text-cyan-400 uppercase">{topology}</span>
+            </div>
+
+            {/* Source Voltage Slider (0 - 48 V) */}
+            <div>
+              <div className="flex justify-between text-xs mb-1">
+                <label htmlFor="quantum-v-slider" className="text-slate-300 font-medium">
+                  Voltaje Fuente DC de Sobremesa (0 – 48 V)
+                </label>
+                <span className="font-mono font-bold text-amber-400 tabular-nums">
+                  {sourceVoltage.toFixed(1)} V
+                </span>
+              </div>
+              <input
+                id="quantum-v-slider"
+                type="range"
+                min={0}
+                max={48}
+                step={0.5}
+                value={sourceVoltage}
+                onChange={(e) => setSourceVoltage(parseFloat(e.target.value))}
+                className="w-full accent-amber-400 cursor-pointer"
+              />
+            </div>
+
+            {/* Ramas R1, R2, R3 con Botón de Bombilla Incandescente (Objetivo B) y Modos de Falla */}
             {(
               [
-                { id: 'controls', label: '🎛️ Control & 💡' },
-                { id: 'multimeter', label: '📟 Sondas & Tabla' },
-                { id: 'diagnosis', label: '🕵️ Caja Negra' },
-                { id: 'oscilloscope', label: '📈 Gráficas & Test' },
-              ] as Array<{ id: CockpitTabId; label: string }>
-            ).map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={cockpitTab === tab.id}
-                onClick={() => setCockpitTab(tab.id)}
-                className={`py-2 px-2 rounded-lg text-[11px] font-mono font-bold transition-colors cursor-pointer truncate ${
-                  cockpitTab === tab.id
-                    ? 'bg-cyan-500 text-slate-950 shadow-sm'
-                    : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+                {
+                  id: 'R1' as const,
+                  compId: 'res-1',
+                  val: r1,
+                  setVal: setR1,
+                  fault: f1,
+                  setFault: setF1,
+                  compType: typeR1,
+                  branchData: topologyResult.branches[0],
+                },
+                {
+                  id: 'R2' as const,
+                  compId: 'res-2',
+                  val: r2,
+                  setVal: setR2,
+                  fault: f2,
+                  setFault: setF2,
+                  compType: typeR2,
+                  branchData: topologyResult.branches[1],
+                },
+                {
+                  id: 'R3' as const,
+                  compId: 'res-3',
+                  val: r3,
+                  setVal: setR3,
+                  fault: f3,
+                  setFault: setF3,
+                  compType: typeR3,
+                  branchData: topologyResult.branches[2],
+                },
+              ]
+            ).map((branch) => {
+              const powerW = branch.branchData?.power ?? 0;
+              const isBurned = branch.branchData?.isBurnedOut ?? false;
+              const thermalPct = Math.min(100, (powerW / MAX_RATED_POWER_WATTS) * 100);
 
-          <div className="p-4 space-y-4">
-            {/* TAB 1: CONTROLES DC, SUSTITUCIÓN POR BOMBILLAS INCANDESCENTES (15W) Y FALLAS */}
-            {cockpitTab === 'controls' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <div className="flex items-center gap-2">
-                    <Sliders className="w-4 h-4 text-cyan-400" />
-                    <h3 className="text-xs sm:text-sm font-bold text-white">
-                      Banco DC, Bombillas Térmicas (15W) y Fallas
-                    </h3>
-                  </div>
-                  <span className="text-[11px] font-mono text-cyan-400 uppercase">{topology}</span>
-                </div>
+              return (
+                <div
+                  key={branch.id}
+                  className="p-3 rounded-lg bg-[#07090E] border border-slate-800/90 space-y-2"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <label
+                        htmlFor={`slider-${branch.id}`}
+                        className="text-xs font-mono font-bold text-cyan-300"
+                      >
+                        {branch.compType === 'wire'
+                          ? branch.fault === 'OPEN'
+                            ? `✂️ Cable ${branch.id} (Sin Resistor · Suelto)`
+                            : `🔗 Cable ${branch.id} (Unido Directo · 0 Ω)`
+                          : branch.compType === 'bulb'
+                          ? `💡 Bombilla ${branch.id}: ${diagnosisMission ? '??? Ω' : `${branch.val} Ω`}`
+                          : `Resistencia ${branch.id}: ${diagnosisMission ? '??? Ω' : `${branch.val} Ω`}`}
+                      </label>
 
-                {/* Source Voltage Slider (0 - 48 V) */}
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <label htmlFor="quantum-v-slider" className="text-slate-300 font-medium">
-                      Voltaje Fuente DC (0 – 48 V)
-                    </label>
-                    <span className="font-mono font-bold text-amber-400 tabular-nums">
-                      {sourceVoltage.toFixed(1)} V
-                    </span>
-                  </div>
-                  <input
-                    id="quantum-v-slider"
-                    type="range"
-                    min={0}
-                    max={48}
-                    step={0.5}
-                    value={sourceVoltage}
-                    onChange={(e) => setSourceVoltage(parseFloat(e.target.value))}
-                    className="w-full accent-amber-400 cursor-pointer"
-                  />
-                </div>
+                      {branch.compType !== 'wire' && (
+                        <button
+                          type="button"
+                          data-testid={`toggle-bulb-${branch.id}`}
+                          onClick={() => toggleBranchBulbType(branch.id)}
+                          title="Sustituir entre Resistencia Cerámica y Bombilla Incandescente (Máx 15.0W)"
+                          className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
+                            branch.compType === 'bulb'
+                              ? 'bg-amber-400/20 border-amber-400 text-amber-300'
+                              : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          <Lightbulb className="w-3 h-3" />
+                          <span>{branch.compType === 'bulb' ? 'Bombilla 15W' : 'Usar Bombilla'}</span>
+                        </button>
+                      )}
 
-                {/* Ramas R1, R2, R3 con Botón de Bombilla Incandescente (Objetivo B) */}
-                {(
-                  [
-                    {
-                      id: 'R1' as const,
-                      compId: 'res-1',
-                      val: r1,
-                      setVal: setR1,
-                      fault: f1,
-                      setFault: setF1,
-                      compType: typeR1,
-                      branchData: topologyResult.branches[0],
-                    },
-                    {
-                      id: 'R2' as const,
-                      compId: 'res-2',
-                      val: r2,
-                      setVal: setR2,
-                      fault: f2,
-                      setFault: setF2,
-                      compType: typeR2,
-                      branchData: topologyResult.branches[1],
-                    },
-                    {
-                      id: 'R3' as const,
-                      compId: 'res-3',
-                      val: r3,
-                      setVal: setR3,
-                      fault: f3,
-                      setFault: setF3,
-                      compType: typeR3,
-                      branchData: topologyResult.branches[2],
-                    },
-                  ]
-                ).map((branch) => {
-                  const powerW = branch.branchData?.power ?? 0;
-                  const isBurned = branch.branchData?.isBurnedOut ?? false;
-                  const thermalPct = Math.min(100, (powerW / MAX_RATED_POWER_WATTS) * 100);
+                      {!diagnosisMission && branch.compType !== 'wire' && (
+                        <button
+                          type="button"
+                          data-testid={`delete-resistor-${branch.id}`}
+                          onClick={() => handleRemoveBranchResistor(branch.compId)}
+                          title="Quitar el resistor dejando el cable de corriente para poder unirlo manualmente"
+                          className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-950/70 hover:bg-rose-600 hover:text-white border border-rose-500/50 text-rose-300 transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Quitar R</span>
+                        </button>
+                      )}
+                    </div>
 
-                  return (
-                    <div
-                      key={branch.id}
-                      className="p-3 rounded-lg bg-[#07090E] border border-slate-800/90 space-y-2"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <label
-                            htmlFor={`slider-${branch.id}`}
-                            className="text-xs font-mono font-bold text-cyan-300"
-                          >
-                            {branch.compType === 'bulb' ? `💡 Bombilla ${branch.id}` : `📏 ${branch.id}`}:{' '}
-                            {diagnosisMission ? '??? Ω' : `${branch.val} Ω`}
-                          </label>
+                    {!diagnosisMission && branch.compType !== 'wire' && (
+                      <div className="flex items-center gap-1">
+                        {(
+                          [
+                            { state: 'ON', label: 'ON' },
+                            { state: 'OPEN', label: 'ABRIR' },
+                            { state: 'SHORT', label: 'CORTO' },
+                          ] as Array<{ state: BranchFaultState; label: string }>
+                        ).map((btn) => (
                           <button
+                            key={btn.state}
                             type="button"
-                            data-testid={`toggle-bulb-${branch.id}`}
-                            onClick={() => toggleBranchBulbType(branch.id)}
-                            title="Sustituir entre Resistencia Cerámica y Bombilla Incandescente (Máx 15.0W)"
-                            className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
-                              branch.compType === 'bulb'
-                                ? 'bg-amber-400/20 border-amber-400 text-amber-300'
-                                : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                            onClick={() => branch.setFault(btn.state)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-colors cursor-pointer ${
+                              branch.fault === btn.state
+                                ? btn.state === 'ON'
+                                  ? 'bg-emerald-500 text-slate-950'
+                                  : btn.state === 'OPEN'
+                                  ? 'bg-amber-500 text-slate-950'
+                                  : 'bg-rose-500 text-white'
+                                : 'bg-slate-800 text-slate-400 hover:text-white'
                             }`}
                           >
-                            <Lightbulb className="w-3 h-3" />
-                            <span>{branch.compType === 'bulb' ? 'Bombilla 15W' : 'Usar Bombilla'}</span>
+                            {btn.label}
                           </button>
-                        </div>
-
-                        {!diagnosisMission && (
-                          <div className="flex items-center gap-1">
-                            {(
-                              [
-                                { state: 'ON', label: 'ON' },
-                                { state: 'OPEN', label: 'ABRIR' },
-                                { state: 'SHORT', label: 'CORTO' },
-                              ] as Array<{ state: BranchFaultState; label: string }>
-                            ).map((btn) => (
-                              <button
-                                key={btn.state}
-                                type="button"
-                                onClick={() => branch.setFault(btn.state)}
-                                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-colors cursor-pointer ${
-                                  branch.fault === btn.state
-                                    ? btn.state === 'ON'
-                                      ? 'bg-emerald-500 text-slate-950'
-                                      : btn.state === 'OPEN'
-                                      ? 'bg-amber-500 text-slate-950'
-                                      : 'bg-rose-500 text-white'
-                                    : 'bg-slate-800 text-slate-400 hover:text-white'
-                                }`}
-                              >
-                                {btn.label}
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                        ))}
                       </div>
-
-                      {!diagnosisMission && (
-                        <input
-                          id={`slider-${branch.id}`}
-                          type="range"
-                          min={1}
-                          max={100}
-                          step={1}
-                          value={Math.min(100, branch.val)}
-                          onChange={(e) => branch.setVal(parseInt(e.target.value, 10))}
-                          className="w-full accent-cyan-400 cursor-pointer"
-                        />
-                      )}
-
-                      {/* Barra de Respuesta Térmica y Luminosa para Bombillas Incandescentes (Objetivo B) */}
-                      {branch.compType === 'bulb' && (
-                        <div className="pt-1 space-y-1">
-                          <div className="flex items-center justify-between text-[10px] font-mono">
-                            <span className={isBurned ? 'text-rose-400 font-bold' : 'text-amber-300'}>
-                              {isBurned
-                                ? '🔥 Filamento roto por sobrecalentamiento (> 15.0 W)'
-                                : `Potencia Térmica P = I²·R: ${powerW.toFixed(2)} W / ${MAX_RATED_POWER_WATTS.toFixed(1)} W`}
-                            </span>
-                            <span className="text-slate-400">
-                              Brillo: {Math.round((branch.branchData?.brightness ?? 0) * 100)}%
-                            </span>
-                          </div>
-                          <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                            <div
-                              className={`h-full transition-all ${
-                                isBurned
-                                  ? 'bg-rose-500'
-                                  : thermalPct > 80
-                                  ? 'bg-amber-400'
-                                  : 'bg-yellow-300'
-                              }`}
-                              style={{ width: `${isBurned ? 100 : thermalPct}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {/* Controles Opcionales RC + LED 3D */}
-                {rcModeActive && (
-                  <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/40 space-y-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono font-bold text-emerald-300 flex items-center gap-1.5">
-                        <Cpu className="w-4 h-4" />
-                        <span>Transitorio RC + Diodo LED 3D</span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setRcCharging((c) => !c)}
-                        className="px-2 py-0.5 rounded bg-emerald-500 text-slate-950 font-mono font-bold text-[10px] cursor-pointer"
-                      >
-                        {rcCharging ? 'CARGA' : 'DESCARGA'}
-                      </button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 font-mono text-[11px]">
-                      <div>
-                        <span className="text-slate-400 block">Constante τ = R·C:</span>
-                        <span className="text-white font-bold">{rcState.tauSeconds.toFixed(2)} s</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block">Voltaje V_C(t):</span>
-                        <span className="text-cyan-300 font-bold">{rcState.capacitorVoltage.toFixed(2)} V</span>
-                      </div>
-                    </div>
-                    <input
-                      id="rc-time-slider"
-                      type="range"
-                      min={0}
-                      max={Math.max(2, rcState.tauSeconds * 5)}
-                      step={0.1}
-                      value={rcElapsed}
-                      onChange={(e) => setRcElapsed(parseFloat(e.target.value))}
-                      className="w-full accent-emerald-400 cursor-pointer"
-                    />
-                  </div>
-                )}
-
-                {/* Inspector Individual MNA */}
-                {selectedComponent && !diagnosisMission && (
-                  <div className="p-3 rounded-xl bg-[#07090E] border border-slate-800 space-y-2">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-white">
-                        {t.selectedCompTitle}: {selectedComponent.label}
-                      </span>
-                      <div className="flex items-center gap-2 font-mono">
-                        <button
-                          type="button"
-                          onClick={handleAddComponent}
-                          className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                          <span>Nodo</span>
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="Eliminar componente"
-                          onClick={() => {
-                            if (components.length <= 2) return;
-                            setComponents((prev) => prev.filter((c) => c.id !== selectedComponent.id));
-                          }}
-                          className="text-rose-400 hover:text-rose-300 flex items-center gap-1 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                    {(selectedComponent.type === 'resistor' || selectedComponent.type === 'bulb') && (
-                      <input
-                        id="resistance-slider"
-                        type="range"
-                        min={1}
-                        max={1000}
-                        step={1}
-                        value={selectedComponent.resistance}
-                        onChange={(e) =>
-                          updateSelectedComponent({ resistance: parseInt(e.target.value, 10) })
-                        }
-                        className="w-full accent-cyan-400 cursor-pointer"
-                      />
                     )}
                   </div>
-                )}
-              </div>
-            )}
 
-            {/* TAB 2: MULTÍMETRO DE SONDAS INTERACTIVAS Y TABLA CON REVELACIÓN POR MEDICIÓN (OBJETIVO A) */}
-            {cockpitTab === 'multimeter' && (
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
-                  <div>
-                    <h3 className="text-xs sm:text-sm font-bold text-white">
-                      Medición Experimental con Sondas (V⎓ / Ω / A⎓)
-                    </h3>
-                    <p className="text-[11px] text-slate-400">
-                      Coloca las puntas Roja y Negra en los bornes de cada rama para desbloquear sus lecturas.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setRevealAllBranches((v) => !v)}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-cyan-300 border border-slate-700 cursor-pointer"
-                  >
-                    {revealAllBranches ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                    <span>{revealAllBranches ? 'Ocultar no medidas' : 'Modo Docente: Ver todo'}</span>
-                  </button>
+                  {/* Si el usuario eliminó el resistor, el cable permanece en el circuito y solo el usuario puede unirlo o reinstalar el resistor */}
+                  {branch.compType === 'wire' ? (
+                    <div className="p-2.5 rounded-lg bg-[#0B1220] border border-cyan-500/30 space-y-2">
+                      <p className="text-[11px] font-mono text-slate-300 leading-relaxed">
+                        {branch.fault === 'OPEN'
+                          ? '🔌 Resistor retirado. El cable de corriente quedó suelto en la mesa; únelo manualmente para que pase la corriente y el circuito siga funcionando.'
+                          : '⚡ Cable de corriente unido directamente por el usuario. La corriente fluye por este tramo sin dejar el circuito inservible.'}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          data-testid={`join-cable-${branch.id}`}
+                          onClick={() => handleToggleJoinBranchCable(branch.compId)}
+                          className={`flex-1 py-1.5 px-3 rounded-lg text-[11px] font-mono font-bold transition-colors cursor-pointer ${
+                            branch.fault === 'OPEN'
+                              ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
+                              : 'bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400 text-amber-200'
+                          }`}
+                        >
+                          {branch.fault === 'OPEN'
+                            ? '🔗 Unir Cable de Corriente'
+                            : '✂️ Separar Puntas del Cable'}
+                        </button>
+                        <button
+                          type="button"
+                          data-testid={`restore-resistor-${branch.id}`}
+                          onClick={() =>
+                            handleRestoreBranchResistor(
+                              branch.compId,
+                              branch.id === 'R1' ? 20 : branch.id === 'R2' ? 30 : 50
+                            )
+                          }
+                          className="py-1.5 px-3 rounded-lg bg-cyan-500/20 hover:bg-cyan-500 hover:text-slate-950 border border-cyan-400/60 text-cyan-300 text-[11px] font-mono font-bold transition-colors cursor-pointer"
+                        >
+                          ➕ Restaurar Resistor {branch.id}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    !diagnosisMission && (
+                      <input
+                        id={`slider-${branch.id}`}
+                        type="range"
+                        min={1}
+                        max={100}
+                        step={1}
+                        value={Math.min(100, branch.val)}
+                        onChange={(e) => branch.setVal(parseInt(e.target.value, 10))}
+                        className="w-full accent-cyan-400 cursor-pointer"
+                      />
+                    )
+                  )}
+
+                  {/* Barra de Respuesta Térmica y Luminosa para Bombillas Incandescentes (Objetivo B) */}
+                  {branch.compType === 'bulb' && (
+                    <div className="pt-1 space-y-1">
+                      <div className="flex items-center justify-between text-[10px] font-mono">
+                        <span className={isBurned ? 'text-rose-400 font-bold' : 'text-amber-300'}>
+                          {isBurned
+                            ? '🔥 Filamento roto por sobrecalentamiento (> 15.0 W)'
+                            : `Potencia Térmica P = I²·R: ${powerW.toFixed(2)} W / ${MAX_RATED_POWER_WATTS.toFixed(1)} W`}
+                        </span>
+                        <span className="text-slate-400">
+                          Brillo: {Math.round((branch.branchData?.brightness ?? 0) * 100)}%
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                        <div
+                          className={`h-full transition-all ${
+                            isBurned
+                              ? 'bg-rose-500'
+                              : thermalPct > 80
+                              ? 'bg-amber-400'
+                              : 'bg-yellow-300'
+                          }`}
+                          style={{ width: `${isBurned ? 100 : thermalPct}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
+              );
+            })}
 
-                {/* Selectores explícitos de Nodo para Sonda Roja y Negra */}
-                <div className="grid grid-cols-2 gap-3 text-xs">
+            {/* Panel Activo de Misión "Caja Negra" (Objetivo C - Ciclo POE) */}
+            {(diagnosisMission || showBlackBoxModal) && (
+              <div className="p-3.5 rounded-xl bg-purple-950/30 border border-purple-500/50 space-y-3 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-purple-500/30 pb-2">
                   <div>
-                    <label htmlFor="probe-red" className="block text-[11px] text-rose-400 font-mono mb-1">
-                      🔴 Sonda Roja (Positivo V+)
-                    </label>
-                    <select
-                      id="probe-red"
-                      value={probeRedNode}
-                      onChange={(e) => setProbeRedNode(e.target.value)}
-                      className="w-full rounded bg-[#07090E] border border-slate-700 px-2.5 py-1.5 text-xs font-mono text-slate-200"
-                    >
-                      {Object.keys(NODE_POSITIONS).map((n) => (
-                        <option key={n} value={n}>
-                          Nodo {n.toUpperCase()}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="probe-black" className="block text-[11px] text-sky-400 font-mono mb-1">
-                      ⚫ Sonda Negra (Tierra COM)
-                    </label>
-                    <select
-                      id="probe-black"
-                      value={probeBlackNode}
-                      onChange={(e) => setProbeBlackNode(e.target.value)}
-                      className="w-full rounded bg-[#07090E] border border-slate-700 px-2.5 py-1.5 text-xs font-mono text-slate-200"
-                    >
-                      {Object.keys(NODE_POSITIONS).map((n) => (
-                        <option key={n} value={n}>
-                          Nodo {n.toUpperCase()}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Tabla Analítica por Rama (Oculta lecturas hasta medir con las sondas - Objetivo A.2) */}
-                <div className="overflow-x-auto rounded-lg border border-slate-800">
-                  <table className="w-full text-left text-xs font-mono">
-                    <thead className="bg-[#090D16] text-slate-400 border-b border-slate-800">
-                      <tr>
-                        <th className="py-2 px-2.5">Rama</th>
-                        <th className="py-2 px-2.5">R</th>
-                        <th className="py-2 px-2.5">V_k</th>
-                        <th className="py-2 px-2.5">I_k</th>
-                        <th className="py-2 px-2.5">P_k</th>
-                        <th className="py-2 px-2.5">Acción</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/70 bg-[#070A12]">
-                      {topologyResult.branches.map((b) => {
-                        const isRevealed = revealAllBranches || measuredBranches[b.branchId];
-                        const compId =
-                          b.branchId === 'R1' ? 'res-1' : b.branchId === 'R2' ? 'res-2' : 'res-3';
-                        return (
-                          <tr key={b.branchId}>
-                            <td className="py-2 px-2.5 font-bold text-cyan-300">
-                              {b.componentType === 'bulb' ? `💡 ${b.branchId}` : b.branchId}
-                            </td>
-                            <td className="py-2 px-2.5 text-slate-200">
-                              {diagnosisMission && !isRevealed ? '??? Ω' : `${b.nominalOhms} Ω`}
-                            </td>
-                            <td className="py-2 px-2.5 text-amber-300">
-                              {isRevealed ? `${b.voltageDrop.toFixed(2)} V` : '🔒 Sonda'}
-                            </td>
-                            <td className="py-2 px-2.5 text-sky-300">
-                              {isRevealed ? `${b.current.toFixed(3)} A` : '🔒 Sonda'}
-                            </td>
-                            <td className="py-2 px-2.5 text-emerald-300">
-                              {isRevealed ? `${b.power.toFixed(2)} W` : '🔒 Sonda'}
-                            </td>
-                            <td className="py-2 px-2.5">
-                              <button
-                                type="button"
-                                onClick={() => handleQuickProbeComponent(compId)}
-                                className="px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/50 text-cyan-300 text-[10px] font-bold hover:bg-cyan-500 hover:text-slate-950 transition-colors cursor-pointer"
-                              >
-                                Medir {b.branchId}
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Explicación Didáctica de Modos del Multímetro */}
-                <div className="p-3 rounded-xl bg-[#070B14] border border-slate-800 text-[11px] text-slate-300 space-y-1.5">
-                  <p>
-                    <strong className="text-cyan-300">● Voltímetro DC (V⎓):</strong> Conéctalo en{' '}
-                    <strong>paralelo</strong> colocando las sondas en dos nodos distintos.
-                  </p>
-                  <p>
-                    <strong className="text-amber-300">● Óhmetro (Ω):</strong> Solo mide resistencia con la{' '}
-                    <strong>FUENTE: OFF</strong> para no dañar el circuito interno con tensión externa.
-                  </p>
-                  <p>
-                    <strong className="text-rose-400">● Amperímetro (A⎓):</strong> Mide la corriente que circula por una rama. ¡Si lo conectas en paralelo directo con la fuente activa quemarás el fusible por cortocircuito!
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* TAB 3: MODO DESAFÍO "CAJA NEGRA" - DIAGNÓSTICO DE CIRCUITO AVERIADO (CICLO POE - OBJETIVO C) */}
-            {cockpitTab === 'diagnosis' && (
-              <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
-                  <div>
-                    <span className="text-[10px] font-mono uppercase text-purple-400 block">
+                    <span className="text-[10px] font-mono uppercase text-purple-300 block">
                       CICLO PREDECIR · OBSERVAR · EXPLICAR (POE)
                     </span>
-                    <h3 className="text-sm font-bold text-white">
-                      Diagnóstico de Circuito Averiado (Caja Negra)
-                    </h3>
+                    <h4 className="text-xs font-bold text-white">
+                      🕵️ Diagnóstico de Circuito Averiado (Caja Negra)
+                    </h4>
                   </div>
                   <button
                     type="button"
                     data-testid="start-poe-mission-btn"
                     onClick={() => handleStartDiagnosisMission()}
-                    className="px-3 py-1 rounded-lg bg-purple-500 hover:bg-purple-400 text-slate-950 font-mono font-bold text-xs transition-colors cursor-pointer"
+                    className="px-2.5 py-1 rounded-lg bg-purple-500 hover:bg-purple-400 text-slate-950 font-mono font-bold text-[11px] transition-colors cursor-pointer"
                   >
-                    🎲 Generar Avería Oculta
+                    🎲 Nueva Avería
                   </button>
                 </div>
 
-                {!diagnosisMission ? (
-                  <div className="p-4 rounded-xl bg-[#07090E] border border-slate-800 text-xs text-slate-300 space-y-3">
-                    <p>
-                      En este modo el laboratorio inyecta aleatoriamente una <strong>falla oculta</strong> en una de las ramas (<span className="font-mono">R₁, R₂, R₃</span>) y oculta los códigos de colores y valores nominales.
-                    </p>
-                    <p className="text-slate-400">
-                      Deberás usar el <strong>Multímetro con Sondas (V⎓, Ω con fuente apagada y A⎓)</strong> para inspeccionar los nodos, deducir qué componente falla y justificar físicamente tu diagnóstico antes de repararlo.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => handleStartDiagnosisMission()}
-                      className="w-full py-2 rounded-lg bg-purple-500 hover:bg-purple-400 text-slate-950 font-mono font-bold text-xs transition-colors cursor-pointer"
-                    >
-                      Iniciar Misión de Diagnóstico Ahora
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-3 text-xs">
-                    <div className="p-3 rounded-lg bg-purple-950/40 border border-purple-500/40 text-purple-100 space-y-1">
-                      <span className="font-mono font-bold text-purple-300 block">
+                {diagnosisMission && (
+                  <div className="space-y-2.5">
+                    <div className="p-2.5 rounded-lg bg-[#07090E] border border-purple-500/40 text-purple-100">
+                      <span className="font-mono font-bold text-purple-300 block text-[11px]">
                         📋 Síntoma Reportado ({diagnosisMission.topology.toUpperCase()}):
                       </span>
-                      <p className="text-[11px] leading-relaxed">{diagnosisMission.symptomEs}</p>
+                      <p className="text-[11px] leading-relaxed mt-0.5">{diagnosisMission.symptomEs}</p>
                     </div>
 
-                    {/* Paso 1 POE: Hipótesis / Predicción */}
                     <div>
                       <label className="block text-[11px] font-mono text-cyan-300 mb-1">
-                        1. PREDECIR / OBSERVAR (Usa las sondas en R₁, R₂ y R₃):
+                        1. PREDECIR / OBSERVAR:
                       </label>
                       <input
                         type="text"
@@ -2176,8 +2289,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                       />
                     </div>
 
-                    {/* Paso 2 POE: Identificar Componente y Tipo de Falla */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>
                         <label
                           htmlFor="poe-branch-select"
@@ -2191,9 +2303,9 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                           onChange={(e) => setPoeSelectedBranch(e.target.value as 'R1' | 'R2' | 'R3')}
                           className="w-full rounded-lg bg-[#07090E] border border-slate-700 px-2.5 py-1.5 text-xs font-mono text-white"
                         >
-                          <option value="R1">Rama R₁ (Nodos N1-N2 / N0)</option>
-                          <option value="R2">Rama R₂ (Nodos N2-N3 / N4)</option>
-                          <option value="R3">Rama R₃ (Nodos N3-N5)</option>
+                          <option value="R1">Rama R₁</option>
+                          <option value="R2">Rama R₂</option>
+                          <option value="R3">Rama R₃</option>
                         </select>
                       </div>
 
@@ -2212,14 +2324,11 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                         >
                           <option value="OPEN_FILAMENT">Circuito Abierto (R → ∞ / OL)</option>
                           <option value="SHORT_BYPASS">Cortocircuito Interno (R ≈ 0 Ω)</option>
-                          <option value="ALTERED_HIGH_RESISTANCE">
-                            Resistencia Degradada / Alterada (×4 Ω)
-                          </option>
+                          <option value="ALTERED_HIGH_RESISTANCE">Resistencia Alterada (×4 Ω)</option>
                         </select>
                       </div>
                     </div>
 
-                    {/* Paso 3 POE: Justificación Física Constructivista */}
                     <div>
                       <span className="block text-[11px] font-mono text-emerald-300 mb-1">
                         4. EXPLICAR (Justificación con Ley de Ohm y Kirchhoff):
@@ -2230,7 +2339,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                             key={idx}
                             type="button"
                             onClick={() => setPoeSelectedJustification(idx)}
-                            className={`w-full p-2.5 rounded-lg border text-left text-[11px] leading-relaxed transition-colors cursor-pointer ${
+                            className={`w-full p-2 rounded-lg border text-left text-[11px] leading-relaxed transition-colors cursor-pointer ${
                               poeSelectedJustification === idx
                                 ? 'bg-cyan-950/80 border-cyan-400 text-cyan-100 font-semibold'
                                 : 'bg-[#07090E] border-slate-800 text-slate-300 hover:border-slate-700'
@@ -2247,7 +2356,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
 
                     {poeFeedback && (
                       <div
-                        className={`p-3 rounded-xl border text-xs space-y-1 ${
+                        className={`p-2.5 rounded-xl border text-xs space-y-1 ${
                           poeFeedback.passed
                             ? 'bg-emerald-950/60 border-emerald-500 text-emerald-100'
                             : 'bg-amber-950/60 border-amber-500 text-amber-100'
@@ -2274,7 +2383,9 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                         type="button"
                         onClick={() => {
                           setDiagnosisMission(null);
+                          setShowBlackBoxModal(false);
                           setPoeFeedback(null);
+                          setRevealAllBranches(true);
                           loadPreset('ohm');
                         }}
                         className="py-2 px-3 rounded-lg border border-slate-700 text-xs text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
@@ -2287,194 +2398,754 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
               </div>
             )}
 
-            {/* TAB 4: OSCILOSCOPIO DUAL (V vs I / I vs R) Y EVALUACIÓN DE 10 PREGUNTAS */}
-            {cockpitTab === 'oscilloscope' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
-                    <Activity className="w-4 h-4 text-cyan-400" />
-                    <span>Osciloscopio Dual (Pendiente R = {regression.slopeResistance.toFixed(1)} Ω)</span>
-                  </h3>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={handleRecordPoint}
-                      className="px-2 py-1 rounded bg-cyan-500 text-slate-950 font-mono font-bold text-[10px] cursor-pointer"
-                    >
-                      + Punto ({recordedPoints.length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRecordedPoints([])}
-                      className="px-2 py-1 rounded border border-slate-700 text-[10px] text-slate-300 cursor-pointer"
-                    >
-                      Limpiar
-                    </button>
+            {/* Controles Opcionales RC + LED 3D */}
+            {rcModeActive && (
+              <div className="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/40 space-y-2.5 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono font-bold text-emerald-300 flex items-center gap-1.5">
+                    <Cpu className="w-4 h-4" />
+                    <span>Transitorio RC + Diodo LED 3D</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setRcCharging((c) => !c)}
+                    className="px-2.5 py-0.5 rounded bg-emerald-500 text-slate-950 font-mono font-bold text-[10px] cursor-pointer"
+                  >
+                    {rcCharging ? 'Modo: CARGA' : 'Modo: DESCARGA'}
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2 font-mono text-[11px]">
+                  <div>
+                    <span className="text-slate-400 block">Constante τ = R·C:</span>
+                    <span className="text-white font-bold">{rcState.tauSeconds.toFixed(2)} s</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block">Voltaje Capacitor V_C(t):</span>
+                    <span className="text-cyan-300 font-bold">{rcState.capacitorVoltage.toFixed(2)} V</span>
                   </div>
                 </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div className="p-2 rounded-lg bg-[#07090E] border border-slate-800">
-                    <span className="text-[10px] font-mono text-cyan-300 block mb-1">
-                      1. Linealidad V vs. I (Ley de Ohm)
-                    </span>
-                    <svg viewBox="0 0 220 120" className="w-full h-24">
-                      <line x1="28" y1="10" x2="28" y2="102" stroke="#334155" strokeWidth="1" />
-                      <line x1="28" y1="102" x2="205" y2="102" stroke="#334155" strokeWidth="1" />
-                      <line
-                        x1="28"
-                        y1="102"
-                        x2="195"
-                        y2="18"
-                        stroke="#06B6D4"
-                        strokeWidth="2"
-                        strokeDasharray="3 2"
-                      />
-                      {(() => {
-                        const normV = Math.min(1, topologyResult.sourceVoltage / 48);
-                        const cx = 28 + normV * 165;
-                        const cy = 102 - normV * 82;
-                        return (
-                          <circle cx={cx} cy={cy} r="5" fill="#F59E0B" stroke="#FFF" strokeWidth="1.5" />
-                        );
-                      })()}
-                    </svg>
+                <div>
+                  <div className="flex justify-between text-[11px] font-mono mb-1">
+                    <label htmlFor="rc-time-slider" className="text-slate-300">
+                      Instante t en curva exponencial:
+                    </label>
+                    <span className="text-emerald-300">{rcElapsed.toFixed(1)} s</span>
                   </div>
-
-                  <div className="p-2 rounded-lg bg-[#07090E] border border-slate-800">
-                    <span className="text-[10px] font-mono text-purple-300 block mb-1">
-                      2. Hipérbola I vs. R_eq (I = V / R)
-                    </span>
-                    <svg viewBox="0 0 220 120" className="w-full h-24">
-                      <line x1="28" y1="10" x2="28" y2="102" stroke="#334155" strokeWidth="1" />
-                      <line x1="28" y1="102" x2="205" y2="102" stroke="#334155" strokeWidth="1" />
-                      <path
-                        d="M 35 16 Q 55 86 200 98"
-                        fill="none"
-                        stroke="#A855F7"
-                        strokeWidth="2"
-                      />
-                      {(() => {
-                        const reqClamped = Number.isFinite(topologyResult.equivalentResistance)
-                          ? Math.min(150, Math.max(5, topologyResult.equivalentResistance))
-                          : 150;
-                        const normR = (reqClamped - 5) / 145;
-                        const cx = 35 + normR * 160;
-                        const cy = 98 - (1 - normR) ** 2.2 * 78;
-                        return (
-                          <circle cx={cx} cy={cy} r="5" fill="#22D3EE" stroke="#FFF" strokeWidth="1.5" />
-                        );
-                      })()}
-                    </svg>
-                  </div>
-                </div>
-
-                {/* Cuestionario Integrado en la Pestaña de Evaluación */}
-                <div className="p-3 rounded-xl bg-[#07090E] border border-slate-800 space-y-2.5">
-                  <div className="flex items-center justify-between text-xs font-mono">
-                    <span className="text-cyan-400 font-bold flex items-center gap-1">
-                      <HelpCircle className="w-3.5 h-3.5" />
-                      <span>Defensa Científica ({quizCorrectCount}/10)</span>
-                    </span>
-                    {currentQuestion && (
-                      <button
-                        type="button"
-                        onClick={() => handleSimulateQuizQuestion(currentQuestion.id)}
-                        className="px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/50 text-cyan-200 text-[10px] cursor-pointer"
-                      >
-                        🔬 Simular en 3D
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-1">
-                    {QUANTUM_DEFENSE_QUIZ.map((q, idx) => {
-                      const answered = quizAnswers[idx] !== undefined;
-                      const isCorrect = quizAnswers[idx] === q.correctIndex;
-                      return (
-                        <button
-                          key={q.id}
-                          type="button"
-                          onClick={() => setActiveQuizIdx(idx)}
-                          className={`w-6 h-6 rounded font-mono text-[10px] font-bold border transition-colors cursor-pointer ${
-                            activeQuizIdx === idx
-                              ? 'bg-cyan-500 text-slate-950 border-cyan-300'
-                              : answered
-                              ? isCorrect
-                                ? 'bg-emerald-950 border-emerald-500/50 text-emerald-300'
-                                : 'bg-rose-950 border-rose-500/50 text-rose-300'
-                              : 'bg-[#0D1322] border-slate-800 text-slate-400'
-                          }`}
-                        >
-                          {q.id}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {quizSimNotice && (
-                    <div className="p-2 rounded bg-cyan-950/60 border border-cyan-500/40 text-[10px] font-mono text-cyan-200">
-                      {quizSimNotice}
-                    </div>
-                  )}
-
-                  {currentQuestion && (
-                    <div className="space-y-2">
-                      <p className="text-xs font-semibold text-white">{currentQuestion.questionEs}</p>
-                      <div className="grid grid-cols-1 gap-1.5">
-                        {currentQuestion.optionsEs.map((opt, oIdx) => {
-                          const selected = quizAnswers[activeQuizIdx] === oIdx;
-                          const isRight = oIdx === currentQuestion.correctIndex;
-                          const hasAnswered = quizAnswers[activeQuizIdx] !== undefined;
-                          return (
-                            <button
-                              key={oIdx}
-                              type="button"
-                              onClick={() => {
-                                setQuizAnswers((prev) => ({ ...prev, [activeQuizIdx]: oIdx }));
-                                if (oIdx === currentQuestion.correctIndex) {
-                                  audioSynth.playSuccessChime();
-                                }
-                              }}
-                              className={`p-2 rounded-lg border text-left text-[11px] transition-colors cursor-pointer ${
-                                hasAnswered && isRight
-                                  ? 'bg-emerald-950/60 border-emerald-500 text-emerald-200 font-semibold'
-                                  : hasAnswered && selected && !isRight
-                                  ? 'bg-rose-950/60 border-rose-500 text-rose-200'
-                                  : 'bg-[#0D1322] border-slate-800 text-slate-200 hover:border-cyan-500/50'
-                              }`}
-                            >
-                              <span className="font-mono font-bold mr-1.5 text-cyan-400">
-                                {String.fromCharCode(65 + oIdx)}.
-                              </span>
-                              <span>{opt}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {quizAnswers[activeQuizIdx] !== undefined && (
-                        <div className="p-2 rounded bg-[#0D1322] border border-slate-800 text-[11px] text-slate-300 flex items-start gap-1.5">
-                          <BookOpen className="w-3.5 h-3.5 text-cyan-400 shrink-0 mt-0.5" />
-                          <span>{currentQuestion.explanationEs}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <input
+                    id="rc-time-slider"
+                    type="range"
+                    min={0}
+                    max={Math.max(2, rcState.tauSeconds * 5)}
+                    step={0.1}
+                    value={rcElapsed}
+                    onChange={(e) => setRcElapsed(parseFloat(e.target.value))}
+                    className="w-full accent-emerald-400 cursor-pointer"
+                  />
                 </div>
               </div>
             )}
+
+            {/* Inspector Individual MNA */}
+            {selectedComponent && !diagnosisMission && (
+              <div className="p-3 rounded-xl bg-[#07090E] border border-slate-800 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <span className="font-bold text-white">
+                    {t.selectedCompTitle}: {selectedComponent.label}
+                  </span>
+                  <div className="flex items-center gap-2 font-mono">
+                    <button
+                      type="button"
+                      onClick={handleAddComponent}
+                      className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Nodo</span>
+                    </button>
+                    {selectedComponent.type === 'wire' && selectedComponent.id.startsWith('res-') ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleJoinBranchCable(selectedComponent.id)}
+                          className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400 text-emerald-300 text-[11px] font-bold cursor-pointer"
+                        >
+                          {selectedComponent.faultState === 'OPEN'
+                            ? '🔗 Unir Cable'
+                            : '✂️ Separar Cable'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRestoreBranchResistor(selectedComponent.id, 20)}
+                          className="px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400 text-cyan-300 text-[11px] font-bold cursor-pointer"
+                        >
+                          ➕ Poner Resistor
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        aria-label="Eliminar componente conservando cable"
+                        title="Retira el resistor conservando el cable de corriente para que puedas unirlo manualmente"
+                        onClick={() => {
+                          if (
+                            selectedComponent.id.startsWith('res-') ||
+                            selectedComponent.type === 'resistor' ||
+                            selectedComponent.type === 'bulb'
+                          ) {
+                            handleRemoveBranchResistor(selectedComponent.id);
+                          } else {
+                            if (components.length <= 2) return;
+                            setComponents((prev) =>
+                              prev.filter((c) => c.id !== selectedComponent.id)
+                            );
+                          }
+                        }}
+                        className="text-rose-400 hover:text-rose-300 flex items-center gap-1 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span className="text-[10px]">Quitar R (Dejar Cable)</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {(selectedComponent.type === 'resistor' || selectedComponent.type === 'bulb') && (
+                  <input
+                    id="resistance-slider"
+                    type="range"
+                    min={1}
+                    max={1000}
+                    step={1}
+                    value={selectedComponent.resistance}
+                    onChange={(e) =>
+                      updateSelectedComponent({ resistance: parseInt(e.target.value, 10) })
+                    }
+                    className="w-full accent-cyan-400 cursor-pointer"
+                  />
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ZONA 3: CENTRO DE GRÁFICAS DINÁMICAS E INTERACTIVAS A 60 FPS (SIEMPRE VISIBLE Y EN VIVO) */}
+          <div
+            data-testid="circuit-interactive-graphs"
+            className="p-5 rounded-xl bg-[#0D1322] border border-slate-800 space-y-4"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+                  <Activity className="w-4 h-4 text-cyan-400" />
+                  <span>ZONA 3 · Osciloscopio Multicanal y Gráficas Dinámicas en Vivo</span>
+                </h3>
+                <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                  Pendiente R_reg = {regression.slopeResistance.toFixed(1)} Ω · R_eq actual ={' '}
+                  {Number.isFinite(topologyResult.equivalentResistance)
+                    ? `${topologyResult.equivalentResistance.toFixed(1)} Ω`
+                    : '∞'}{' '}
+                  · P_T = {topologyResult.totalPower.toFixed(2)} W
+                </p>
+              </div>
+
+              {/* Filtro de Vista de Gráficas */}
+              <div className="flex items-center gap-1 p-1 rounded-lg bg-[#07090E] border border-slate-800 text-[10px] font-mono">
+                {(
+                  [
+                    { id: 'all', label: 'Todas (4)' },
+                    { id: 'vi', label: 'V vs I' },
+                    { id: 'ir', label: 'I vs R' },
+                    { id: 'power', label: 'Potencia & LVK' },
+                  ] as const
+                ).map((gTab) => (
+                  <button
+                    key={gTab.id}
+                    type="button"
+                    onClick={() => setActiveGraphMode(gTab.id)}
+                    className={`px-2 py-0.5 rounded transition-colors cursor-pointer ${
+                      activeGraphMode === gTab.id
+                        ? 'bg-cyan-500 text-slate-950 font-bold'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {gTab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* GRÁFICA 1: Linealidad V vs. I (Ley de Ohm + Puntos Experimentales Registrados) */}
+              {(activeGraphMode === 'all' || activeGraphMode === 'vi') && (
+                <div
+                  className={`p-3 rounded-lg bg-[#07090E] border border-slate-800 ${
+                    activeGraphMode === 'vi' ? 'sm:col-span-2' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-mono text-cyan-300 font-bold">
+                      1. Linealidad I vs. V (Pendiente = 1/R_eq)
+                    </span>
+                    <span className="text-[10px] font-mono text-amber-300">
+                      ({topologyResult.sourceVoltage.toFixed(1)}V, {topologyResult.totalCurrent.toFixed(2)}A)
+                    </span>
+                  </div>
+                  <svg viewBox="0 0 230 135" className="w-full h-32">
+                    {/* Cuadrícula */}
+                    {[35, 60, 85, 110].map((gy) => (
+                      <line key={gy} x1="30" y1={gy} x2="215" y2={gy} stroke="#1E293B" strokeWidth="1" />
+                    ))}
+                    {[65, 105, 145, 185].map((gx) => (
+                      <line key={gx} x1={gx} y1="14" x2={gx} y2="112" stroke="#1E293B" strokeWidth="1" />
+                    ))}
+                    <line x1="30" y1="12" x2="30" y2="112" stroke="#475569" strokeWidth="1.5" />
+                    <line x1="30" y1="112" x2="215" y2="112" stroke="#475569" strokeWidth="1.5" />
+                    <text x="6" y="22" fill="#94A3B8" fontSize="8" fontFamily="monospace">
+                      I(A)
+                    </text>
+                    <text x="172" y="126" fill="#94A3B8" fontSize="8" fontFamily="monospace">
+                      V (0–48V)
+                    </text>
+
+                    {/* Recta de Ley de Ohm dinámica cuya pendiente se adapta a R_eq */}
+                    {(() => {
+                      const req = Number.isFinite(topologyResult.equivalentResistance)
+                        ? Math.max(2, topologyResult.equivalentResistance)
+                        : 1000;
+                      const iAt48V = 48 / req;
+                      const maxPlotI = Math.max(2.5, iAt48V, topologyResult.totalCurrent * 1.25);
+                      const endY = Math.max(16, 112 - (iAt48V / maxPlotI) * 94);
+                      const normV = Math.min(1, topologyResult.sourceVoltage / 48);
+                      const curX = 30 + normV * 180;
+                      const curY = Math.max(
+                        16,
+                        112 - (topologyResult.totalCurrent / maxPlotI) * 94
+                      );
+
+                      return (
+                        <g>
+                          <line
+                            x1="30"
+                            y1="112"
+                            x2="210"
+                            y2={endY}
+                            stroke="#06B6D4"
+                            strokeWidth="2"
+                            strokeDasharray="4 2"
+                          />
+                          {/* Nube de Puntos Experimentales Registrados */}
+                          {recordedPoints.map((pt, idx) => {
+                            const px = 30 + Math.min(1, pt.voltage / 48) * 180;
+                            const py = Math.max(
+                              16,
+                              Math.min(112, 112 - (pt.current / maxPlotI) * 94)
+                            );
+                            return (
+                              <circle
+                                key={idx}
+                                cx={px}
+                                cy={py}
+                                r="3.2"
+                                fill="#22D3EE"
+                                stroke="#083344"
+                                strokeWidth="1"
+                              />
+                            );
+                          })}
+                          {/* Guías punteadas al eje X e Y */}
+                          <line
+                            x1={curX}
+                            y1={curY}
+                            x2={curX}
+                            y2="112"
+                            stroke="#F59E0B"
+                            strokeWidth="1"
+                            strokeDasharray="2 2"
+                          />
+                          <line
+                            x1="30"
+                            y1={curY}
+                            x2={curX}
+                            y2={curY}
+                            stroke="#F59E0B"
+                            strokeWidth="1"
+                            strokeDasharray="2 2"
+                          />
+                          {/* Punto de Operación en Vivo */}
+                          <circle
+                            cx={curX}
+                            cy={curY}
+                            r="5.5"
+                            fill="#F59E0B"
+                            stroke="#FFFFFF"
+                            strokeWidth="1.5"
+                          />
+                          <text
+                            x={Math.min(148, Math.max(34, curX - 24))}
+                            y={Math.max(22, curY - 9)}
+                            fill="#FEF08A"
+                            fontSize="8.5"
+                            fontFamily="monospace"
+                            fontWeight="bold"
+                          >
+                            ({topologyResult.sourceVoltage.toFixed(0)}V,{' '}
+                            {topologyResult.totalCurrent.toFixed(2)}A)
+                          </text>
+                        </g>
+                      );
+                    })()}
+                  </svg>
+                </div>
+              )}
+
+              {/* GRÁFICA 2: Hipérbola I vs. R_eq (I = V / R_eq) */}
+              {(activeGraphMode === 'all' || activeGraphMode === 'ir') && (
+                <div
+                  className={`p-3 rounded-lg bg-[#07090E] border border-slate-800 ${
+                    activeGraphMode === 'ir' ? 'sm:col-span-2' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-mono text-purple-300 font-bold">
+                      2. Hipérbola I vs. R_eq (I = V / R)
+                    </span>
+                    <span className="text-[10px] font-mono text-cyan-300">
+                      R_eq ={' '}
+                      {Number.isFinite(topologyResult.equivalentResistance)
+                        ? `${topologyResult.equivalentResistance.toFixed(1)}Ω`
+                        : '∞'}
+                    </span>
+                  </div>
+                  <svg viewBox="0 0 230 135" className="w-full h-32">
+                    {[35, 60, 85, 110].map((gy) => (
+                      <line key={gy} x1="30" y1={gy} x2="215" y2={gy} stroke="#1E293B" strokeWidth="1" />
+                    ))}
+                    {[65, 105, 145, 185].map((gx) => (
+                      <line key={gx} x1={gx} y1="14" x2={gx} y2="112" stroke="#1E293B" strokeWidth="1" />
+                    ))}
+                    <line x1="30" y1="12" x2="30" y2="112" stroke="#475569" strokeWidth="1.5" />
+                    <line x1="30" y1="112" x2="215" y2="112" stroke="#475569" strokeWidth="1.5" />
+                    <text x="6" y="22" fill="#94A3B8" fontSize="8" fontFamily="monospace">
+                      I(A)
+                    </text>
+                    <text x="168" y="126" fill="#94A3B8" fontSize="8" fontFamily="monospace">
+                      R_eq (Ω)
+                    </text>
+
+                    {/* Curva Hiperbólica Real generada con puntos de I = V / R */}
+                    {(() => {
+                      const vRef = Math.max(1, topologyResult.sourceVoltage);
+                      const iMaxRef = Math.max(1.5, vRef / 5);
+                      const pts: string[] = [];
+                      for (let rSample = 5; rSample <= 150; rSample += 5) {
+                        const x = 35 + ((rSample - 5) / 145) * 175;
+                        const iVal = vRef / rSample;
+                        const y = Math.max(16, Math.min(110, 110 - (iVal / iMaxRef) * 90));
+                        pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+                      }
+                      const reqClamped = Number.isFinite(topologyResult.equivalentResistance)
+                        ? Math.min(150, Math.max(5, topologyResult.equivalentResistance))
+                        : 150;
+                      const cx = 35 + ((reqClamped - 5) / 145) * 175;
+                      const cy = Math.max(
+                        16,
+                        Math.min(110, 110 - (topologyResult.totalCurrent / iMaxRef) * 90)
+                      );
+
+                      return (
+                        <g>
+                          <polyline
+                            fill="none"
+                            stroke="#A855F7"
+                            strokeWidth="2.2"
+                            points={pts.join(' ')}
+                          />
+                          <line
+                            x1={cx}
+                            y1={cy}
+                            x2={cx}
+                            y2="112"
+                            stroke="#22D3EE"
+                            strokeWidth="1"
+                            strokeDasharray="2 2"
+                          />
+                          <circle
+                            cx={cx}
+                            cy={cy}
+                            r="5.5"
+                            fill="#22D3EE"
+                            stroke="#FFFFFF"
+                            strokeWidth="1.5"
+                          />
+                          <text
+                            x={Math.min(140, Math.max(34, cx - 22))}
+                            y={Math.max(22, cy - 9)}
+                            fill="#67E8F9"
+                            fontSize="8.5"
+                            fontFamily="monospace"
+                            fontWeight="bold"
+                          >
+                            (
+                            {Number.isFinite(topologyResult.equivalentResistance)
+                              ? `${topologyResult.equivalentResistance.toFixed(0)}Ω`
+                              : '∞'}
+                            , {topologyResult.totalCurrent.toFixed(2)}A)
+                          </text>
+                        </g>
+                      );
+                    })()}
+                  </svg>
+                </div>
+              )}
+
+              {/* GRÁFICA 3: Espectro Térmico de Potencia Joule (P₁, P₂, P₃ vs Límite 15W) */}
+              {(activeGraphMode === 'all' || activeGraphMode === 'power') && (
+                <div className="p-3 rounded-lg bg-[#07090E] border border-slate-800">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-mono text-emerald-300 font-bold">
+                      3. Potencia Térmica P_k = I²·R (Límite 15W)
+                    </span>
+                    <span className="text-[10px] font-mono text-amber-300">
+                      P_T = {topologyResult.totalPower.toFixed(1)}W
+                    </span>
+                  </div>
+                  <svg viewBox="0 0 230 135" className="w-full h-32">
+                    <line x1="30" y1="12" x2="30" y2="110" stroke="#475569" strokeWidth="1.5" />
+                    <line x1="30" y1="110" x2="215" y2="110" stroke="#475569" strokeWidth="1.5" />
+                    {/* Línea de Umbral de Fusión de Bombilla (15.0 W) */}
+                    <line
+                      x1="30"
+                      y1="32"
+                      x2="215"
+                      y2="32"
+                      stroke="#EF4444"
+                      strokeWidth="1.2"
+                      strokeDasharray="3 2"
+                    />
+                    <text x="142" y="28" fill="#FCA5A5" fontSize="7.5" fontFamily="monospace">
+                      Máx Bombilla 15W
+                    </text>
+
+                    {topologyResult.branches.map((b, idx) => {
+                      const maxScaleW = Math.max(20, topologyResult.totalPower, 18);
+                      const barH = Math.min(92, (b.power / maxScaleW) * 92);
+                      const bx = 48 + idx * 56;
+                      const by = 110 - barH;
+                      const barColor =
+                        b.power > MAX_RATED_POWER_WATTS
+                          ? '#EF4444'
+                          : idx === 0
+                          ? '#22D3EE'
+                          : idx === 1
+                          ? '#F59E0B'
+                          : '#10B981';
+                      return (
+                        <g key={b.branchId}>
+                          <rect
+                            x={bx}
+                            y={by}
+                            width="34"
+                            height={Math.max(2, barH)}
+                            rx="3"
+                            fill={barColor}
+                            opacity="0.88"
+                          />
+                          <text
+                            x={bx + 17}
+                            y={Math.max(20, by - 4)}
+                            textAnchor="middle"
+                            fill="#F8FAFC"
+                            fontSize="8"
+                            fontFamily="monospace"
+                            fontWeight="bold"
+                          >
+                            {b.power.toFixed(1)}W
+                          </text>
+                          <text
+                            x={bx + 17}
+                            y="123"
+                            textAnchor="middle"
+                            fill="#CBD5E1"
+                            fontSize="8.5"
+                            fontFamily="monospace"
+                          >
+                            {b.branchId}
+                          </text>
+                        </g>
+                      );
+                    })}
+                  </svg>
+                </div>
+              )}
+
+              {/* GRÁFICA 4: Balance de Tensiones de Kirchhoff (LVK: ΔV₁, ΔV₂, ΔV₃ vs V_fuente) o Curva Exponencial RC */}
+              {(activeGraphMode === 'all' || activeGraphMode === 'power' || activeGraphMode === 'rc') && (
+                <div className="p-3 rounded-lg bg-[#07090E] border border-slate-800">
+                  {rcModeActive ? (
+                    <>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-mono text-emerald-300 font-bold">
+                          4. Curva Exponencial RC V_C(t)
+                        </span>
+                        <span className="text-[10px] font-mono text-cyan-300">
+                          τ = {rcState.tauSeconds.toFixed(2)}s
+                        </span>
+                      </div>
+                      <svg viewBox="0 0 230 135" className="w-full h-32">
+                        <line x1="30" y1="12" x2="30" y2="110" stroke="#475569" strokeWidth="1.5" />
+                        <line x1="30" y1="110" x2="215" y2="110" stroke="#475569" strokeWidth="1.5" />
+                        {(() => {
+                          const maxT = Math.max(2, rcState.tauSeconds * 5);
+                          const v0 = Math.max(1, sourceVoltage);
+                          const pts: string[] = [];
+                          for (let i = 0; i <= 30; i++) {
+                            const tSample = (i / 30) * maxT;
+                            const vc = rcCharging
+                              ? v0 * (1 - Math.exp(-tSample / Math.max(0.05, rcState.tauSeconds)))
+                              : v0 * Math.exp(-tSample / Math.max(0.05, rcState.tauSeconds));
+                            const x = 30 + (i / 30) * 180;
+                            const y = 110 - (vc / v0) * 90;
+                            pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+                          }
+                          const curX = 30 + Math.min(1, rcElapsed / maxT) * 180;
+                          const curY = 110 - (rcState.capacitorVoltage / v0) * 90;
+                          return (
+                            <g>
+                              <polyline
+                                fill="none"
+                                stroke="#10B981"
+                                strokeWidth="2.2"
+                                points={pts.join(' ')}
+                              />
+                              <circle cx={curX} cy={curY} r="5" fill="#F59E0B" stroke="#FFF" strokeWidth="1.5" />
+                              <text x="40" y="24" fill="#A7F3D0" fontSize="8" fontFamily="monospace">
+                                V_C({rcElapsed.toFixed(1)}s) = {rcState.capacitorVoltage.toFixed(1)}V
+                              </text>
+                            </g>
+                          );
+                        })()}
+                      </svg>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-mono text-amber-300 font-bold">
+                          4. Perfil de Voltajes LVK (ΔV_k vs V_F)
+                        </span>
+                        <span className="text-[10px] font-mono text-cyan-300">
+                          V_F = {topologyResult.sourceVoltage.toFixed(1)}V
+                        </span>
+                      </div>
+                      <svg viewBox="0 0 230 135" className="w-full h-32">
+                        <line x1="30" y1="12" x2="30" y2="110" stroke="#475569" strokeWidth="1.5" />
+                        <line x1="30" y1="110" x2="215" y2="110" stroke="#475569" strokeWidth="1.5" />
+                        {[
+                          { label: 'Fuente', v: topologyResult.sourceVoltage, color: '#F59E0B' },
+                          { label: 'ΔV₁', v: topologyResult.branches[0]?.voltageDrop ?? 0, color: '#22D3EE' },
+                          { label: 'ΔV₂', v: topologyResult.branches[1]?.voltageDrop ?? 0, color: '#A855F7' },
+                          { label: 'ΔV₃', v: topologyResult.branches[2]?.voltageDrop ?? 0, color: '#10B981' },
+                        ].map((item, idx) => {
+                          const maxV = Math.max(12, topologyResult.sourceVoltage, 48);
+                          const barH = Math.min(90, (item.v / maxV) * 90);
+                          const bx = 40 + idx * 44;
+                          const by = 110 - barH;
+                          return (
+                            <g key={item.label}>
+                              <rect
+                                x={bx}
+                                y={by}
+                                width="28"
+                                height={Math.max(2, barH)}
+                                rx="3"
+                                fill={item.color}
+                                opacity="0.88"
+                              />
+                              <text
+                                x={bx + 14}
+                                y={Math.max(20, by - 4)}
+                                textAnchor="middle"
+                                fill="#F8FAFC"
+                                fontSize="7.5"
+                                fontFamily="monospace"
+                                fontWeight="bold"
+                              >
+                                {item.v.toFixed(1)}V
+                              </text>
+                              <text
+                                x={bx + 14}
+                                y="123"
+                                textAnchor="middle"
+                                fill="#CBD5E1"
+                                fontSize="8"
+                                fontFamily="monospace"
+                              >
+                                {item.label}
+                              </text>
+                            </g>
+                          );
+                        })}
+                      </svg>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Botones de Registro Experimental de Puntos (V, I) y Bitácora de Mediciones */}
+            <div className="space-y-2 pt-1 border-t border-slate-800/80">
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={handleRecordPoint}
+                  className="flex-1 py-1.5 px-3 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-mono font-bold text-xs transition-colors cursor-pointer"
+                >
+                  + Registrar Punto Experimental ({recordedPoints.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecordedPoints([])}
+                  className="py-1.5 px-3 rounded-lg border border-slate-700 hover:bg-slate-800 text-xs font-mono text-slate-300 transition-colors cursor-pointer"
+                >
+                  Limpiar
+                </button>
+              </div>
+
+              {recordedPoints.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[10px] font-mono text-slate-400">Puntos (V, I):</span>
+                  {recordedPoints.slice(-5).map((pt, i) => (
+                    <span
+                      key={i}
+                      className="px-2 py-0.5 rounded bg-[#07090E] border border-slate-800 text-[10px] font-mono text-cyan-300"
+                    >
+                      {pt.voltage.toFixed(1)}V → {pt.current.toFixed(2)}A
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Resumen Pedagógico Compacto de Leyes de Kirchhoff al Pie */}
-      <ScrollReveal direction="up" delayMs={60}>
-        <div className="p-3.5 rounded-xl bg-[#0D1322] border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
-          <span className="text-cyan-300">
-            {lang === 'es' ? topologyResult.diagnosticMessageEs : topologyResult.diagnosticMessageEn}
-          </span>
-          <span className="text-slate-400">{topologyResult.kvlEquationText}</span>
-        </div>
+      {/* ZONA 4: MÓDULO DE EVALUACIÓN Y DEFENSA CIENTÍFICA (10 PREGUNTAS INTERACTIVAS) */}
+      <ScrollReveal direction="up" delayMs={80}>
+        <section className="p-6 rounded-2xl bg-[#0D1322] border border-slate-800 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-3">
+            <div className="flex items-center gap-2.5">
+              <HelpCircle className="w-5 h-5 text-cyan-400" />
+              <div>
+                <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-400 block">
+                  ZONA 4 · MÓDULO DE EVALUACIÓN Y DEFENSA ANTE JURADO (10 PREGUNTAS)
+                </span>
+                <h3 className="text-base font-bold text-white">
+                  Cuestionario Interactivo de Electrodinámica, Topologías y Diagnóstico de Fallas
+                </h3>
+              </div>
+            </div>
+            <div className="px-3 py-1.5 rounded-lg bg-[#07090E] border border-slate-800 text-xs font-mono">
+              <span className="text-slate-400">Aciertos: </span>
+              <span className="font-bold text-emerald-400">{quizCorrectCount} / 10</span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {QUANTUM_DEFENSE_QUIZ.map((q, idx) => {
+              const answered = quizAnswers[idx] !== undefined;
+              const isCorrect = quizAnswers[idx] === q.correctIndex;
+              return (
+                <button
+                  key={q.id}
+                  type="button"
+                  onClick={() => setActiveQuizIdx(idx)}
+                  className={`w-8 h-8 rounded-lg font-mono text-xs font-bold border transition-colors cursor-pointer ${
+                    activeQuizIdx === idx
+                      ? 'bg-cyan-500 text-slate-950 border-cyan-300'
+                      : answered
+                      ? isCorrect
+                        ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
+                        : 'bg-rose-950/80 border-rose-500/50 text-rose-300'
+                      : 'bg-[#07090E] border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {q.id}
+                </button>
+              );
+            })}
+          </div>
+
+          {currentQuestion && (
+            <div className="p-4 rounded-xl bg-[#07090E] border border-slate-800 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-cyan-400">
+                <span>
+                  PREGUNTA {currentQuestion.id} DE 10 · {currentQuestion.category.toUpperCase()}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleSimulateQuizQuestion(currentQuestion.id)}
+                  className="px-3 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500 hover:text-slate-950 border border-cyan-400/60 text-cyan-200 font-mono font-bold text-[11px] transition-colors cursor-pointer"
+                >
+                  🔬 Simular este ejercicio en la Mesa 3D
+                </button>
+              </div>
+
+              {quizSimNotice && (
+                <div className="p-2.5 rounded-lg bg-cyan-950/50 border border-cyan-500/40 text-xs font-mono text-cyan-200 flex items-center justify-between gap-2">
+                  <span>{quizSimNotice}</span>
+                  <button
+                    type="button"
+                    onClick={() => setQuizSimNotice(null)}
+                    className="text-[10px] text-slate-400 hover:text-white cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              <p className="text-sm font-semibold text-white">{currentQuestion.questionEs}</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                {currentQuestion.optionsEs.map((opt, oIdx) => {
+                  const selected = quizAnswers[activeQuizIdx] === oIdx;
+                  const isRight = oIdx === currentQuestion.correctIndex;
+                  const hasAnswered = quizAnswers[activeQuizIdx] !== undefined;
+
+                  return (
+                    <button
+                      key={oIdx}
+                      type="button"
+                      onClick={() => {
+                        setQuizAnswers((prev) => ({ ...prev, [activeQuizIdx]: oIdx }));
+                        if (oIdx === currentQuestion.correctIndex) {
+                          audioSynth.playSuccessChime();
+                        }
+                      }}
+                      className={`p-3 rounded-lg border text-left text-xs transition-colors cursor-pointer ${
+                        hasAnswered && isRight
+                          ? 'bg-emerald-950/60 border-emerald-500 text-emerald-200 font-semibold'
+                          : hasAnswered && selected && !isRight
+                          ? 'bg-rose-950/60 border-rose-500 text-rose-200'
+                          : 'bg-[#0D1322] border-slate-800 text-slate-200 hover:border-cyan-500/50'
+                      }`}
+                    >
+                      <span className="font-mono font-bold mr-2 text-cyan-400">
+                        {String.fromCharCode(65 + oIdx)}.
+                      </span>
+                      <span>{opt}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {quizAnswers[activeQuizIdx] !== undefined && (
+                <div className="p-3 rounded-lg bg-[#0D1322] border border-slate-800 text-xs text-slate-300 flex items-start gap-2">
+                  <BookOpen className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                  <span>
+                    <strong className="text-cyan-300">Justificación Física: </strong>
+                    {currentQuestion.explanationEs}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
       </ScrollReveal>
     </div>
   );

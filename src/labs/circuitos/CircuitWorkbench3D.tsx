@@ -449,14 +449,24 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
         const isSelected = comp.id === selId;
 
         // Dos tramos de cable flexibles: pA -> mid y mid -> pB
+        // Si el componente es un cable donde se eliminó un resistor (type === 'wire' y faultState === 'OPEN'),
+        // dejamos una separación física visible en el centro para que el usuario pueda unir las puntas manualmente.
+        const isSeparatedCable = comp.type === 'wire' && comp.faultState === 'OPEN';
         const createLeadSegment = (from: THREE.Vector3, to: THREE.Vector3) => {
           const segDir = new THREE.Vector3().subVectors(to, from);
           const segLen = Math.max(0.1, segDir.length());
           const segMid = new THREE.Vector3().addVectors(from, to).multiplyScalar(0.5);
-          const wireGeo = new THREE.CylinderGeometry(0.085, 0.085, segLen, 10);
+          const wireGeo = new THREE.CylinderGeometry(0.095, 0.095, segLen, 12);
           wireGeo.rotateX(Math.PI / 2);
           const wireMat = new THREE.MeshStandardMaterial({
-            color: isSelected ? 0x22d3ee : 0x475569,
+            color:
+              comp.type === 'wire' && comp.id.startsWith('res-')
+                ? comp.faultState === 'OPEN'
+                  ? 0xf59e0b
+                  : 0x10b981
+                : isSelected
+                ? 0x22d3ee
+                : 0x475569,
             metalness: 0.78,
             roughness: 0.28,
           });
@@ -468,10 +478,71 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
           interactableMeshes.push(segMesh);
         };
 
-        createLeadSegment(pA, mid);
-        createLeadSegment(mid, pB);
+        if (isSeparatedCable) {
+          const gapEndA = new THREE.Vector3().lerpVectors(pA, mid, 0.76);
+          const gapStartB = new THREE.Vector3().lerpVectors(mid, pB, 0.24);
+          createLeadSegment(pA, gapEndA);
+          createLeadSegment(gapStartB, pB);
+        } else {
+          createLeadSegment(pA, mid);
+          createLeadSegment(mid, pB);
+        }
 
-        if (comp.type === 'battery') {
+        if (comp.type === 'wire' && comp.id.startsWith('res-')) {
+          const isOpen = comp.faultState === 'OPEN';
+          // Puntas de cobre pelado y conector de empalme interactivo 3D
+          const copperTipMat = new THREE.MeshStandardMaterial({
+            color: isOpen ? 0xf59e0b : 0x10b981,
+            emissive: isOpen ? 0xd97706 : 0x059669,
+            emissiveIntensity: 0.75,
+            metalness: 0.85,
+            roughness: 0.2,
+          });
+
+          if (isOpen) {
+            const tipL = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.16, 0.16, 0.55, 16).rotateX(Math.PI / 2),
+              copperTipMat
+            );
+            tipL.position.z = -0.65;
+            const tipR = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.16, 0.16, 0.55, 16).rotateX(Math.PI / 2),
+              copperTipMat
+            );
+            tipR.position.z = 0.65;
+            const joinRing = new THREE.Mesh(
+              new THREE.TorusGeometry(0.42, 0.08, 12, 24),
+              new THREE.MeshStandardMaterial({
+                color: 0x22d3ee,
+                emissive: 0x06b6d4,
+                emissiveIntensity: 0.9,
+              })
+            );
+            [tipL, tipR, joinRing].forEach((m) => {
+              m.userData = {
+                compId: comp.id,
+                compType: comp.type,
+                compLabel: comp.label,
+                isCableSplice3D: true,
+              };
+              compGroup.add(m);
+              interactableMeshes.push(m);
+            });
+          } else {
+            const spliceSleeve = new THREE.Mesh(
+              new THREE.CylinderGeometry(0.24, 0.24, 1.4, 20).rotateX(Math.PI / 2),
+              copperTipMat
+            );
+            spliceSleeve.userData = {
+              compId: comp.id,
+              compType: comp.type,
+              compLabel: comp.label,
+              isCableSplice3D: true,
+            };
+            compGroup.add(spliceSleeve);
+            interactableMeshes.push(spliceSleeve);
+          }
+        } else if (comp.type === 'battery') {
           const batBody = new THREE.Mesh(
             new THREE.CylinderGeometry(0.75, 0.75, 2.8, 24).rotateX(Math.PI / 2),
             new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.3, metalness: 0.5 })
@@ -724,6 +795,18 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
           propsRef.current.onSelectComponent(compId);
           if (compType === 'switch') {
             propsRef.current.onToggleSwitch(compId);
+          } else if (compType === 'wire' && compId.startsWith('res-')) {
+            // Si el usuario hace clic sobre el cable en 3D donde eliminó el resistor,
+            // une o separa manualmente las puntas del cable de corriente.
+            const compObj = propsRef.current.components.find((c) => c.id === compId);
+            if (compObj) {
+              const nextFault = compObj.faultState === 'OPEN' ? 'ON' : 'OPEN';
+              const baseName = compId === 'res-1' ? 'R1' : compId === 'res-2' ? 'R2' : 'R3';
+              propsRef.current.onUpdateComponent?.(compId, {
+                faultState: nextFault,
+                label: nextFault === 'ON' ? `Cable ${baseName} (Unido)` : `Cable ${baseName} (Suelto)`,
+              });
+            }
           } else if (
             (compType === 'resistor' || compType === 'bulb') &&
             !propsRef.current.maskNominalValues
@@ -1010,9 +1093,23 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
                 }`}
               >
                 <span className="font-bold text-cyan-300">
-                  {b.componentType === 'bulb' ? `💡 ${b.branchId}` : b.branchId}
+                  {b.componentType === 'bulb'
+                    ? `💡 ${b.branchId}`
+                    : b.componentType === 'wire'
+                    ? b.faultState === 'OPEN'
+                      ? `✂️ Cable ${b.branchId}`
+                      : `🔗 Cable ${b.branchId}`
+                    : b.branchId}
                 </span>{' '}
-                ({maskNominalValues ? '??? Ω' : `${b.nominalOhms}Ω`}):{' '}
+                (
+                {maskNominalValues
+                  ? '??? Ω'
+                  : b.componentType === 'wire'
+                  ? b.faultState === 'OPEN'
+                    ? 'Suelto'
+                    : 'Unido 0Ω'
+                  : `${b.nominalOhms}Ω`}
+                ):{' '}
                 {isRevealed ? (
                   <>
                     <span>{b.voltageDrop.toFixed(1)}V</span> · <span>{b.current.toFixed(2)}A</span> ·{' '}
@@ -1026,7 +1123,12 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
                     [🔥 FILAMENTO FUNDIDO &gt;15W]
                   </span>
                 )}
-                {!maskNominalValues && !b.isBurnedOut && b.faultState !== 'ON' && (
+                {!maskNominalValues && !b.isBurnedOut && b.componentType === 'wire' && (
+                  <span className="ml-1 font-bold uppercase text-cyan-300">
+                    [{b.faultState === 'OPEN' ? 'CLIC PARA UNIR CABLE' : 'CABLE UNIDO DIRECTO'}]
+                  </span>
+                )}
+                {!maskNominalValues && !b.isBurnedOut && b.componentType !== 'wire' && b.faultState !== 'ON' && (
                   <span className="ml-1 font-bold uppercase text-amber-300">
                     [{b.faultState === 'OPEN' ? 'CORTADA / ABIERTA' : 'PUENTEADA / CORTO'}]
                   </span>

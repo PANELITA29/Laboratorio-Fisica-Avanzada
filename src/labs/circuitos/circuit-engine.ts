@@ -283,10 +283,34 @@ export function solveCircuit(
       : nodes[0];
 
   const getComponentEffectiveResistance = (comp: CircuitComponent): number => {
-    if (comp.type === 'wire' || comp.type === 'switch') return 1e-4;
+    if (comp.type === 'switch') return 1e-4;
     if (comp.type === 'battery') return 1e-4;
     if (comp.faultState === 'SHORT') return 1e-4;
     if (comp.type === 'bulb' && comp.isIndicator) return 1e-4;
+    if (comp.type === 'wire') {
+      // Si es un cable de rama unido por el usuario tras eliminar un resistor (res-1, res-2, res-3),
+      // comprobamos si existen otros resistores/bombillas activos que limiten la corriente.
+      // Si el cable unido queda directo entre los rieles de la fuente, actúa con la impedancia
+      // propia del conductor de cobre (1.0 Ω) para permitir el paso de corriente sin apagar el circuito.
+      if (comp.id.startsWith('res-')) {
+        const otherActiveLoads = components.filter(
+          (c) =>
+            c.id !== comp.id &&
+            (c.type === 'resistor' || (c.type === 'bulb' && !c.isIndicator)) &&
+            c.faultState !== 'OPEN' &&
+            !c.isBurnedOut
+        );
+        const connectsAcrossRails =
+          (comp.nodeA === 'n1' && comp.nodeB === 'n4') ||
+          (comp.nodeA === 'n2' && comp.nodeB === 'n4') ||
+          (comp.nodeA === 'n3' && comp.nodeB === 'n5') ||
+          (comp.nodeA === 'n1' && comp.nodeB === 'n0');
+        if (connectsAcrossRails || otherActiveLoads.length === 0) {
+          return 1.0;
+        }
+      }
+      return 1e-4;
+    }
     return Math.max(0.01, comp.resistance);
   };
 
@@ -687,8 +711,13 @@ export function analyzeWorkbenchCircuit(
     const st = mna.componentStates[comp.id];
     const isBurned = st?.isBurnedOut ?? !!comp.isBurnedOut;
     const fault: BranchFaultState = isBurned ? 'OPEN' : comp.faultState ?? 'ON';
+    const isWireBranch = comp.type === 'wire';
     const effOhms =
-      fault === 'OPEN' ? Infinity : fault === 'SHORT' ? 0 : comp.resistance;
+      fault === 'OPEN'
+        ? Infinity
+        : fault === 'SHORT' || isWireBranch
+        ? 0
+        : comp.resistance;
 
     return {
       branchId,
@@ -696,7 +725,7 @@ export function analyzeWorkbenchCircuit(
       componentType: comp.type,
       nodeA: comp.nodeA,
       nodeB: comp.nodeB,
-      nominalOhms: comp.resistance,
+      nominalOhms: isWireBranch ? 0 : comp.resistance,
       effectiveOhms: effOhms,
       faultState: fault,
       voltageDrop: st ? Math.abs(st.voltageDrop) : 0,
@@ -773,14 +802,14 @@ export function analyzeWorkbenchCircuit(
     diagnosticMessageEn = `FILAMENT BURNED OUT BY THERMAL OVERLOAD (P > ${MAX_RATED_POWER_WATTS.toFixed(1)} W)! The overloaded bulb automatically opened its branch (OPEN fault).`;
   } else if (iTotal < 1e-5) {
     diagnosticMessageEs =
-      'CIRCUITO ABIERTO TOTAL (R_eq = ∞): Trayectoria principal interrumpida (I_T = 0.000 A). Los electrones se detienen por completo y toda la tensión de la fuente cae en la abertura.';
+      'CIRCUITO ABIERTO TOTAL (R_eq = ∞): Trayectoria principal interrumpida (I_T = 0.000 A). Si eliminaste un resistor, pulsa "🔗 Unir Cable" para cerrar el paso de corriente.';
     diagnosticMessageEn =
-      'TOTAL OPEN CIRCUIT (R_eq = ∞): Main path interrupted (I_T = 0.000 A). Electrons stop completely and full source voltage drops across the open break.';
+      'TOTAL OPEN CIRCUIT (R_eq = ∞): Main path interrupted (I_T = 0.000 A). Join the open cable to restore current flow.';
   } else if (anyOpen) {
     diagnosticMessageEs =
-      'RAMA DESCONECTADA / ABIERTA (I_rama = 0.000 A): El motor nodal MNA recalculó las ramas activas restantes de forma independiente según la Ley de Nodos de Kirchhoff (LCK).';
+      'RAMA CON CABLE DESCONECTADO / ABIERTA (I_rama = 0.000 A): Puedes unir manualmente el cable de esa rama ("🔗 Unir Cable") o reinstalar su resistor.';
     diagnosticMessageEn =
-      'OPEN / DISCONNECTED BRANCH (I_branch = 0.000 A): The MNA nodal solver independently recalculated the remaining active branches via Kirchhoff’s Current Law (KCL).';
+      'OPEN / DISCONNECTED BRANCH (I_branch = 0.000 A): You can manually join the branch cable or reinstall its resistor.';
   }
 
   return {
@@ -802,6 +831,73 @@ export function analyzeWorkbenchCircuit(
     branches: [b1, b2, b3],
     nodePotentials: mna.nodeVoltages,
   };
+}
+
+/**
+ * Elimina el resistor/bombilla de una rama SIN eliminar el cable de corriente:
+ * deja las dos puntas del cable separadas (type: 'wire', faultState: 'OPEN')
+ * para que solo el usuario decida cuándo volver a unir el cable o reinstalar el resistor.
+ */
+export function removeResistorKeepCable(
+  components: CircuitComponent[],
+  compId: string
+): CircuitComponent[] {
+  return components.map((c) => {
+    if (c.id !== compId) return c;
+    const baseName = c.id === 'res-1' ? 'R1' : c.id === 'res-2' ? 'R2' : c.id === 'res-3' ? 'R3' : c.label;
+    return {
+      ...c,
+      type: 'wire',
+      label: `Cable ${baseName} (Suelto)`,
+      faultState: 'OPEN',
+      isBurnedOut: false,
+    };
+  });
+}
+
+/**
+ * Permite al usuario unir (join = true -> faultState: 'ON') o separar (join = false -> faultState: 'OPEN')
+ * manualmente las puntas del cable de corriente donde antes había un resistor, manteniendo el circuito funcional.
+ */
+export function joinOrSeparateBranchCable(
+  components: CircuitComponent[],
+  compId: string,
+  join?: boolean
+): CircuitComponent[] {
+  return components.map((c) => {
+    if (c.id !== compId) return c;
+    const shouldJoin = join !== undefined ? join : c.faultState === 'OPEN';
+    const baseName = c.id === 'res-1' ? 'R1' : c.id === 'res-2' ? 'R2' : c.id === 'res-3' ? 'R3' : c.label;
+    return {
+      ...c,
+      type: 'wire',
+      label: shouldJoin ? `Cable ${baseName} (Unido)` : `Cable ${baseName} (Suelto)`,
+      faultState: shouldJoin ? 'ON' : 'OPEN',
+      isBurnedOut: false,
+    };
+  });
+}
+
+/**
+ * Reinstala un resistor en el cable de la rama indicada con su valor en Ohmios.
+ */
+export function restoreBranchResistor(
+  components: CircuitComponent[],
+  compId: string,
+  ohms?: number
+): CircuitComponent[] {
+  return components.map((c) => {
+    if (c.id !== compId) return c;
+    const baseName = c.id === 'res-1' ? 'R1' : c.id === 'res-2' ? 'R2' : c.id === 'res-3' ? 'R3' : c.label;
+    return {
+      ...c,
+      type: 'resistor',
+      label: baseName,
+      resistance: ohms ?? (c.resistance > 0 ? c.resistance : 20),
+      faultState: 'ON',
+      isBurnedOut: false,
+    };
+  });
 }
 
 /**
@@ -932,11 +1028,11 @@ export function evaluateMultimeterMeasurement(params: {
           measuredBranchId,
           isValidConnection: true,
           triggersFuseBlow: false,
-          warningMessageEs: `Lectura OL (Overload / R → ∞) en ${matchedBranch.branchId}: la rama o el filamento está ABIERTO.`,
+          warningMessageEs: `Lectura OL (Overload / R → ∞) en ${matchedBranch.branchId}: el cable o filamento está ABIERTO.`,
           statusKind: 'warning',
         });
       }
-      if (matchedBranch.faultState === 'SHORT') {
+      if (matchedBranch.faultState === 'SHORT' || matchedBranch.componentType === 'wire') {
         return makeResult({
           mode: 'OHM',
           displayValue: '0.00',
@@ -945,8 +1041,11 @@ export function evaluateMultimeterMeasurement(params: {
           measuredBranchId,
           isValidConnection: true,
           triggersFuseBlow: false,
-          warningMessageEs: `Lectura 0.00 Ω en ${matchedBranch.branchId}: se detecta un CORTOCIRCUITO directo entre sus bornes.`,
-          statusKind: 'error',
+          warningMessageEs:
+            matchedBranch.componentType === 'wire'
+              ? `Lectura 0.00 Ω en ${matchedBranch.branchId}: cable de corriente unido directamente (continuidad perfecta).`
+              : `Lectura 0.00 Ω en ${matchedBranch.branchId}: se detecta un CORTOCIRCUITO directo entre sus bornes.`,
+          statusKind: matchedBranch.componentType === 'wire' ? 'ok' : 'error',
         });
       }
       return makeResult({
@@ -1052,7 +1151,7 @@ export function evaluateMultimeterMeasurement(params: {
 
 /**
  * Construye el grafo nodal inicial de componentes 3D para una topología dada
- * permitiendo que cada rama (R1, R2, R3) sea resistencia o bombilla incandescente (15.0W máx).
+ * permitiendo que cada rama (R1, R2, R3) sea resistencia, bombilla incandescente (15.0W máx) o cable ('wire').
  */
 export function buildTopologyComponents3D(params: {
   topology: CircuitTopology;
@@ -1064,7 +1163,7 @@ export function buildTopologyComponents3D(params: {
   f2: BranchFaultState;
   f3: BranchFaultState;
   isPowered: boolean;
-  branchTypes?: Partial<Record<'R1' | 'R2' | 'R3', 'resistor' | 'bulb'>>;
+  branchTypes?: Partial<Record<'R1' | 'R2' | 'R3', 'resistor' | 'bulb' | 'wire'>>;
 }): CircuitComponent[] {
   const { topology, sourceVoltage, r1, r2, r3, f1, f2, f3, isPowered, branchTypes } = params;
   const t1 = branchTypes?.R1 ?? 'resistor';
@@ -1074,7 +1173,7 @@ export function buildTopologyComponents3D(params: {
   const makeBranch = (
     id: string,
     branchKey: 'R1' | 'R2' | 'R3',
-    cType: 'resistor' | 'bulb',
+    cType: 'resistor' | 'bulb' | 'wire',
     suffix: string,
     nodeA: string,
     nodeB: string,
@@ -1083,7 +1182,12 @@ export function buildTopologyComponents3D(params: {
   ): CircuitComponent => ({
     id,
     type: cType,
-    label: cType === 'bulb' ? `Bombilla ${branchKey}${suffix}` : `${branchKey}${suffix}`,
+    label:
+      cType === 'bulb'
+        ? `Bombilla ${branchKey}${suffix}`
+        : cType === 'wire'
+        ? `Cable ${branchKey} (${fault === 'OPEN' ? 'Suelto' : 'Unido'})`
+        : `${branchKey}${suffix}`,
     nodeA,
     nodeB,
     resistance: ohms,
