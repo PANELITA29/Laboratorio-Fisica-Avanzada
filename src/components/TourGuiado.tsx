@@ -1,22 +1,25 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Sparkles, ChevronRight, ChevronLeft, X, Compass } from 'lucide-react';
+import { Compass, X, ChevronRight, ChevronLeft, Sparkles, SkipForward } from 'lucide-react';
 import { Language } from '../assets/js/i18n';
 
 export interface TourStep {
-  /** Selector CSS del elemento clave a resaltar con borde pulsante, ej: '[data-tour="circuits-multimeter"]' */
+  /** Selector CSS del elemento a resaltar con borde pulsante (ej. '[data-tour="circuits-multimeter"]') */
   targetSelector: string;
-  /** Etiqueta corta de la herramienta (ej: 'HERRAMIENTA 1 · COMPONENTES 3D') */
+  /** Título breve del paso en español */
+  titleEs: string;
+  /** Título breve del paso en inglés */
+  titleEn: string;
+  /** Explicación concisa para reducir la curva de aprendizaje en español */
+  descriptionEs: string;
+  /** Explicación concisa en inglés */
+  descriptionEn: string;
+  /** Etiqueta de categoría o número de herramienta */
   badgeEs: string;
   badgeEn: string;
-  /** Título de la herramienta resaltada */
-  titleEs: string;
-  titleEn: string;
-  /** Explicación breve y accionable para reducir la curva de aprendizaje */
-  descriptionEs: string;
-  descriptionEn: string;
 }
 
 interface TourGuiadoProps {
+  /** Identificador único del laboratorio ('circuits' | 'space' | 'mechanics') */
   labId: 'circuits' | 'space' | 'mechanics';
   lang: Language;
   steps: TourStep[];
@@ -24,111 +27,131 @@ interface TourGuiadoProps {
 
 const STORAGE_PREFIX = 'quantumlabs_tour_seen_v1_';
 
+interface HighlightRect {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Componente pedagógico 'TourGuiado':
+ * - Se activa automáticamente al cargar por primera vez la aplicación / cada laboratorio (persistido en localStorage).
+ * - Utiliza una capa superpuesta semitransparente (backdrop con recorte spotlight) para resaltar secuencialmente
+ *   el Multímetro, el Área de Componentes y el Panel de Control.
+ * - Incluye un botón explícito de 'Saltar tour' para cerrar el recorrido en cualquier momento.
+ */
 export const TourGuiado: React.FC<TourGuiadoProps> = ({ labId, lang, steps }) => {
   const storageKey = `${STORAGE_PREFIX}${labId}`;
 
-  const [isActive, setIsActive] = useState<boolean>(false);
-  const [currentStepIdx, setCurrentStepIdx] = useState<number>(0);
-  const [targetRect, setTargetRect] = useState<{
-    top: number;
-    left: number;
-    width: number;
-    height: number;
-  } | null>(null);
-
-  // Activar automáticamente la primera vez que se carga cada laboratorio
-  useEffect(() => {
+  const [isActive, setIsActive] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
     try {
-      const alreadySeen = window.localStorage.getItem(storageKey);
-      if (!alreadySeen) {
-        setCurrentStepIdx(0);
-        setIsActive(true);
-      } else {
-        setIsActive(false);
-      }
+      return window.localStorage.getItem(storageKey) !== 'true';
     } catch {
-      setCurrentStepIdx(0);
-      setIsActive(true);
+      return true;
     }
-  }, [storageKey]);
+  });
+
+  const [currentStepIdx, setCurrentStepIdx] = useState<number>(0);
+  const [targetRect, setTargetRect] = useState<HighlightRect | null>(null);
+  const [viewportSize, setViewportSize] = useState<{ w: number; h: number }>({
+    w: typeof window !== 'undefined' ? window.innerWidth : 1280,
+    h: typeof window !== 'undefined' ? window.innerHeight : 800,
+  });
 
   const currentStep = steps[currentStepIdx] || steps[0];
 
-  // Sincronizar la clase de borde pulsante sobre el nodo objetivo y calcular su rectángulo en pantalla
-  const updateHighlightRect = useCallback(() => {
-    if (!isActive || !currentStep) {
-      setTargetRect(null);
-      return;
-    }
-
-    const el = document.querySelector(currentStep.targetSelector) as HTMLElement | null;
-    if (!el) {
-      setTargetRect(null);
-      return;
-    }
-
-    const rect = el.getBoundingClientRect();
-    setTargetRect({
-      top: rect.top,
-      left: rect.left,
-      width: rect.width,
-      height: rect.height,
+  const clearAllHighlightedNodes = useCallback(() => {
+    if (typeof document === 'undefined') return;
+    document.querySelectorAll('.tour-guiado-pulse-target').forEach((el) => {
+      el.classList.remove('tour-guiado-pulse-target');
     });
-  }, [isActive, currentStep]);
+  }, []);
 
-  // Aplicar la clase CSS `.tour-guiado-pulse-target` directamente al elemento activo y hacer scroll suave
-  useEffect(() => {
-    // Limpiar cualquier clase previa
-    document.querySelectorAll('.tour-guiado-pulse-target').forEach((node) => {
-      node.classList.remove('tour-guiado-pulse-target');
-    });
+  const updateTargetPosition = useCallback(
+    (shouldScrollIntoView: boolean) => {
+      if (typeof document === 'undefined' || !isActive || !currentStep) {
+        setTargetRect(null);
+        return;
+      }
 
-    if (!isActive || !currentStep) {
-      setTargetRect(null);
-      return;
-    }
-
-    const el = document.querySelector(currentStep.targetSelector) as HTMLElement | null;
-    if (!el) {
-      setTargetRect(null);
-      return;
-    }
-
-    el.classList.add('tour-guiado-pulse-target');
-
-    // Desplazar suavemente hacia la herramienta resaltada si no está visible en el viewport
-    const rect = el.getBoundingClientRect();
-    const isVisible =
-      rect.top >= 60 && rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) - 60;
-    if (!isVisible) {
-      el.scrollIntoView({
-        behavior: 'smooth',
-        block: currentStepIdx === 0 ? 'start' : 'center',
+      setViewportSize({
+        w: window.innerWidth,
+        h: window.innerHeight,
       });
+
+      const targetEl = document.querySelector(currentStep.targetSelector) as HTMLElement | null;
+      clearAllHighlightedNodes();
+
+      if (!targetEl) {
+        setTargetRect(null);
+        return;
+      }
+
+      targetEl.classList.add('tour-guiado-pulse-target');
+
+      if (shouldScrollIntoView) {
+        const rectBefore = targetEl.getBoundingClientRect();
+        const isOutOfViewport =
+          rectBefore.top < 70 || rectBefore.bottom > window.innerHeight - 100;
+        if (isOutOfViewport) {
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }
+
+      const rect = targetEl.getBoundingClientRect();
+      setTargetRect({
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+      });
+    },
+    [isActive, currentStep, clearAllHighlightedNodes]
+  );
+
+  // Al cambiar de paso o activar el tour, desplazarse suavemente y resaltar el elemento objetivo
+  useEffect(() => {
+    if (!isActive) {
+      clearAllHighlightedNodes();
+      setTargetRect(null);
+      return;
     }
 
-    const timer = window.setTimeout(updateHighlightRect, 120);
-    updateHighlightRect();
+    updateTargetPosition(true);
+    const t1 = window.setTimeout(() => updateTargetPosition(false), 260);
+    const t2 = window.setTimeout(() => updateTargetPosition(false), 550);
 
-    window.addEventListener('scroll', updateHighlightRect, { passive: true });
-    window.addEventListener('resize', updateHighlightRect, { passive: true });
+    const handleViewportChange = () => updateTargetPosition(false);
+    window.addEventListener('scroll', handleViewportChange, { passive: true });
+    window.addEventListener('resize', handleViewportChange, { passive: true });
 
     return () => {
-      window.clearTimeout(timer);
-      window.removeEventListener('scroll', updateHighlightRect);
-      window.removeEventListener('resize', updateHighlightRect);
-      el.classList.remove('tour-guiado-pulse-target');
+      clearTimeout(t1);
+      clearTimeout(t2);
+      window.removeEventListener('scroll', handleViewportChange);
+      window.removeEventListener('resize', handleViewportChange);
     };
-  }, [isActive, currentStep, currentStepIdx, updateHighlightRect]);
+  }, [isActive, currentStepIdx, updateTargetPosition, clearAllHighlightedNodes]);
 
-  const handleCloseTour = () => {
+  // Limpieza al desmontar el componente
+  useEffect(() => {
+    return () => {
+      clearAllHighlightedNodes();
+    };
+  }, [clearAllHighlightedNodes]);
+
+  const handleCloseTour = useCallback(() => {
+    setIsActive(false);
+    clearAllHighlightedNodes();
+    setTargetRect(null);
     try {
       window.localStorage.setItem(storageKey, 'true');
     } catch {
-      // ignore storage errors
+      // Ignorar errores de almacenamiento privado
     }
-    setIsActive(false);
-  };
+  }, [clearAllHighlightedNodes, storageKey]);
 
   const handleRestartTour = () => {
     setCurrentStepIdx(0);
@@ -148,6 +171,23 @@ export const TourGuiado: React.FC<TourGuiadoProps> = ({ labId, lang, steps }) =>
       setCurrentStepIdx((prev) => prev - 1);
     }
   };
+
+  // Cálculo del recorte (spotlight cutout) para la capa superpuesta semitransparente
+  const pad = 6;
+  const hasValidRect = Boolean(targetRect && targetRect.width > 0 && targetRect.height > 0);
+  const cutoutLeft = hasValidRect && targetRect ? Math.max(4, targetRect.left - pad) : 0;
+  const cutoutTop = hasValidRect && targetRect ? Math.max(4, targetRect.top - pad) : 0;
+  const cutoutWidth =
+    hasValidRect && targetRect
+      ? Math.min(viewportSize.w - cutoutLeft - 4, targetRect.width + pad * 2)
+      : 0;
+  const cutoutHeight = hasValidRect && targetRect ? targetRect.height + pad * 2 : 0;
+  const cutoutRight = cutoutLeft + cutoutWidth;
+  const cutoutBottom = cutoutTop + cutoutHeight;
+
+  const overlayClipPath = hasValidRect
+    ? `polygon(0% 0%, 0% 100%, ${cutoutLeft}px 100%, ${cutoutLeft}px ${cutoutTop}px, ${cutoutRight}px ${cutoutTop}px, ${cutoutRight}px ${cutoutBottom}px, ${cutoutLeft}px ${cutoutBottom}px, ${cutoutLeft}px 100%, 100% 100%, 100% 0%)`
+    : undefined;
 
   return (
     <>
@@ -171,22 +211,30 @@ export const TourGuiado: React.FC<TourGuiadoProps> = ({ labId, lang, steps }) =>
         <span>{lang === 'es' ? '🎯 Tour Guiado' : '🎯 Guided Tour'}</span>
       </button>
 
-      {/* Marco Pulsante Flotante + Tarjeta Interactiva del Tour Guiado */}
+      {/* Capa Superpuesta Semitransparente + Marco Pulsante + Tarjeta del Tour Guiado */}
       {isActive && currentStep && (
         <>
+          {/* Capa superpuesta semitransparente con ventana recortada sobre la herramienta activa */}
+          <div
+            data-testid="tour-guiado-overlay"
+            aria-hidden="true"
+            className="fixed inset-0 z-40 bg-slate-950/75 backdrop-blur-[1.5px] pointer-events-none transition-all duration-200"
+            style={overlayClipPath ? { clipPath: overlayClipPath } : undefined}
+          />
+
           {/* Anillo de Resaltado con Borde Pulsante sobre la herramienta activa */}
-          {targetRect && targetRect.width > 0 && targetRect.height > 0 && (
+          {hasValidRect && (
             <div
               data-testid="tour-guiado-spotlight"
               aria-hidden="true"
               className="fixed pointer-events-none z-40 rounded-2xl border-2 border-cyan-400 transition-all duration-200"
               style={{
-                top: `${Math.max(4, targetRect.top - 6)}px`,
-                left: `${Math.max(4, targetRect.left - 6)}px`,
-                width: `${Math.min(window.innerWidth - 8, targetRect.width + 12)}px`,
-                height: `${targetRect.height + 12}px`,
+                top: `${cutoutTop}px`,
+                left: `${cutoutLeft}px`,
+                width: `${cutoutWidth}px`,
+                height: `${cutoutHeight}px`,
                 boxShadow:
-                  '0 0 0 3px rgba(34, 211, 238, 0.45), 0 0 32px 6px rgba(34, 211, 238, 0.55)',
+                  '0 0 0 4px rgba(34, 211, 238, 0.45), 0 0 36px 8px rgba(34, 211, 238, 0.6)',
               }}
             >
               {/* Etiqueta flotante en la esquina superior del borde pulsante */}
@@ -203,7 +251,7 @@ export const TourGuiado: React.FC<TourGuiadoProps> = ({ labId, lang, steps }) =>
             aria-modal="false"
             aria-label={lang === 'es' ? 'Tour Guiado del Laboratorio' : 'Laboratory Guided Tour'}
             data-testid="tour-guiado-card"
-            className="fixed bottom-4 right-4 left-4 sm:left-auto sm:w-[400px] z-50 rounded-2xl bg-[#070B14]/98 border-2 border-cyan-400 p-4 shadow-[0_0_40px_rgba(8,145,178,0.55)] text-slate-100 space-y-3"
+            className="fixed bottom-4 right-4 left-4 sm:left-auto sm:w-[420px] z-50 rounded-2xl bg-[#070B14]/98 border-2 border-cyan-400 p-4 shadow-[0_0_45px_rgba(8,145,178,0.65)] text-slate-100 space-y-3"
           >
             {/* Cabecera del paso */}
             <div className="flex items-start justify-between gap-2">
@@ -266,15 +314,16 @@ export const TourGuiado: React.FC<TourGuiadoProps> = ({ labId, lang, steps }) =>
                 ))}
               </div>
 
-              {/* Controles Anterior / Omitir / Siguiente */}
+              {/* Controles Saltar tour / Anterior / Siguiente */}
               <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   data-testid="tour-guiado-skip"
                   onClick={handleCloseTour}
-                  className="px-2.5 py-1.5 rounded-lg text-[11px] font-mono text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors cursor-pointer"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-700 bg-slate-900/90 hover:bg-slate-800 text-[11px] font-mono font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
                 >
-                  {lang === 'es' ? 'Omitir' : 'Skip'}
+                  <SkipForward className="w-3 h-3 text-cyan-400" />
+                  <span>{lang === 'es' ? 'Saltar tour' : 'Skip tour'}</span>
                 </button>
 
                 {currentStepIdx > 0 && (

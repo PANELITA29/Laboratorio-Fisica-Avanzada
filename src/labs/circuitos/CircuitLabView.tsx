@@ -59,48 +59,37 @@ import { TourGuiado, TourStep } from '../../components/TourGuiado';
 
 const CIRCUIT_TOUR_STEPS: TourStep[] = [
   {
+    targetSelector: '[data-tour="circuits-multimeter"]',
+    badgeEs: '1 · MULTÍMETRO DIGITAL',
+    badgeEn: '1 · DIGITAL MULTIMETER',
+    titleEs: 'El Multímetro Digital (V⎓ / Ω / A⎓)',
+    titleEn: 'Digital Multimeter (V⎓ / Ω / A⎓)',
+    descriptionEs:
+      'Alterna la perilla entre Voltímetro (paralelo), Óhmetro (con fuente en OFF) y Amperímetro (en serie), y coloca las sondas Roja (V+) y Negra (COM) para medir en tiempo real.',
+    descriptionEn:
+      'Switch the dial between Voltmeter (parallel), Ohmmeter (Power OFF), and Ammeter (series), and place the Red (V+) and Black (COM) probes to measure in real time.',
+  },
+  {
     targetSelector: '[data-tour="circuits-components-3d"]',
-    badgeEs: '1 · MESA 3D Y COMPONENTES',
-    badgeEn: '1 · 3D WORKBENCH & COMPONENTS',
-    titleEs: 'Mesa de Componentes 3D y Sondas Interactivas',
-    titleEn: '3D Component Workbench & Interactive Probes',
+    badgeEs: '2 · ÁREA DE COMPONENTES',
+    badgeEn: '2 · COMPONENTS AREA',
+    titleEs: 'Área de Componentes 3D y Sondas Interactivas',
+    titleEn: '3D Components Area & Interactive Probes',
     descriptionEs:
       'Arrastra las resistencias R₁–R₃ para variar sus ohmios, haz clic en los postes N0–N5 para colocar las sondas o une el cable manualmente si retiras un resistor.',
     descriptionEn:
       'Drag resistors R1–R3 to change ohms, click binding posts N0–N5 to place multimeter probes, or manually splice the wire if you remove a resistor.',
   },
   {
-    targetSelector: '[data-tour="circuits-multimeter"]',
-    badgeEs: '2 · MULTÍMETRO DIGITAL',
-    badgeEn: '2 · DIGITAL MULTIMETER',
-    titleEs: 'Multímetro Digital LCD (V⎓ / Ω / A⎓) y Kirchhoff',
-    titleEn: 'LCD Digital Multimeter (V⎓ / Ω / A⎓) & Kirchhoff',
-    descriptionEs:
-      'Alterna la perilla entre Voltímetro (paralelo), Óhmetro (con fuente en OFF) y Amperímetro (en serie), y verifica la tabla analítica por rama.',
-    descriptionEn:
-      'Switch the dial between Voltmeter (parallel), Ohmmeter (Power OFF), and Ammeter (series), and inspect the analytical branch table.',
-  },
-  {
     targetSelector: '[data-tour="circuits-control-panel"]',
-    badgeEs: '3 · PANEL DE CONTROL DC',
-    badgeEn: '3 · DC CONTROL PANEL',
-    titleEs: 'Banco de Control DC, Bombillas de 15W y Fallas',
-    titleEn: 'DC Control Bank, 15W Bulbs & Faults',
+    badgeEs: '3 · PANEL DE CONTROL',
+    badgeEn: '3 · CONTROL PANEL',
+    titleEs: 'Panel de Control DC, Bombillas de 15W y Fallas',
+    titleEn: 'DC Control Panel, 15W Bulbs & Faults',
     descriptionEs:
       'Regula la fuente (0–48 V), sustituye resistores por bombillas incandescentes (que se funden a >15W), quita resistores dejando el cable listo para unir o simula averías.',
     descriptionEn:
       'Adjust source voltage (0–48 V), swap resistors for 15W incandescent bulbs, remove resistors while keeping the wire ready to splice, or trigger faults.',
-  },
-  {
-    targetSelector: '[data-tour="circuits-graphs"]',
-    badgeEs: '4 · GRÁFICAS EN VIVO',
-    badgeEn: '4 · LIVE OSCILLOSCOPE GRAPHS',
-    titleEs: 'Osciloscopio Multicanal y Gráficas Dinámicas',
-    titleEn: 'Multichannel Oscilloscope & Live Graphs',
-    descriptionEs:
-      'Analiza en tiempo real la recta de la Ley de Ohm (I vs V), la hipérbola I vs R, el reparto de Kirchhoff y la parábola térmica de Joule (P = V²/R).',
-    descriptionEn:
-      'Analyze in real time the Ohm Law line (I vs V), I vs R hyperbola, Kirchhoff branch distribution, and Joule thermal parabola (P = V²/R).',
   },
 ];
 

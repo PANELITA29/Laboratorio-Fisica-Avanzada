@@ -46,9 +46,17 @@ export default function App() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const lab = params.get('lab');
+      if (lab === 'hub') return 'hub';
       if (lab === 'circuits' || lab === 'circuitos') return 'circuits';
       if (lab === 'space' || lab === 'espacio-3d') return 'space';
       if (lab === 'mechanics' || lab === 'mecanica-3d') return 'mechanics';
+      try {
+        if (window.localStorage.getItem('quantumlabs_tour_seen_v1_circuits') !== 'true') {
+          return 'circuits';
+        }
+      } catch {
+        return 'circuits';
+      }
     }
     return 'hub';
   });

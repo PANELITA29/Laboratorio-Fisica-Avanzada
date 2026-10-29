@@ -42,10 +42,22 @@ export const ScrollProgressBar: React.FC = () => {
  * Animación de entrada cinemática al abrir la web (QuantumLabs 3D Boot Sequence)
  */
 export const QuantumIntroSplash: React.FC = () => {
-  const [phase, setPhase] = useState<'entering' | 'fading' | 'done'>('entering');
+  const [phase, setPhase] = useState<'entering' | 'fading' | 'done'>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        if (window.localStorage.getItem('quantumlabs_tour_seen_v1_circuits') !== 'true') {
+          return 'done';
+        }
+      } catch {
+        return 'done';
+      }
+    }
+    return 'entering';
+  });
   const [progress, setProgress] = useState<number>(12);
 
   useEffect(() => {
+    if (phase === 'done') return;
     const t1 = window.setTimeout(() => setProgress(68), 220);
     const t2 = window.setTimeout(() => setProgress(100), 680);
     const t3 = window.setTimeout(() => setPhase('fading'), 1050);
@@ -57,7 +69,7 @@ export const QuantumIntroSplash: React.FC = () => {
       clearTimeout(t3);
       clearTimeout(t4);
     };
-  }, []);
+  }, [phase]);
 
   if (phase === 'done') return null;
 
