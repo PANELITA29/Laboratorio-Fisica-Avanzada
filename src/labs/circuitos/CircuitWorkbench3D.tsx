@@ -22,7 +22,12 @@ interface CircuitWorkbench3DProps {
   flowMode: 'electrons' | 'conventional';
   probeRedNode: string;
   probeBlackNode: string;
+  activeProbeTip?: 'red' | 'black';
+  measuredBranches?: Record<'R1' | 'R2' | 'R3', boolean>;
+  revealAllBranches?: boolean;
+  maskNominalValues?: boolean;
   onSelectComponent: (id: string) => void;
+  onSelectNode?: (nodeId: string) => void;
   onToggleSwitch: (id: string) => void;
   onTogglePowerSupply?: () => void;
   onUpdateComponent?: (id: string, patch: Partial<CircuitComponent>) => void;
@@ -50,7 +55,12 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
   flowMode,
   probeRedNode,
   probeBlackNode,
+  activeProbeTip = 'red',
+  measuredBranches = { R1: false, R2: false, R3: false },
+  revealAllBranches = false,
+  maskNominalValues = false,
   onSelectComponent,
+  onSelectNode,
   onToggleSwitch,
   onTogglePowerSupply,
   onUpdateComponent,
@@ -73,7 +83,12 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
     flowMode,
     probeRedNode,
     probeBlackNode,
+    activeProbeTip,
+    measuredBranches,
+    revealAllBranches,
+    maskNominalValues,
     onSelectComponent,
+    onSelectNode,
     onToggleSwitch,
     onTogglePowerSupply,
     onUpdateComponent,
@@ -90,7 +105,12 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
     flowMode,
     probeRedNode,
     probeBlackNode,
+    activeProbeTip,
+    measuredBranches,
+    revealAllBranches,
+    maskNominalValues,
     onSelectComponent,
+    onSelectNode,
     onToggleSwitch,
     onTogglePowerSupply,
     onUpdateComponent,
@@ -287,12 +307,13 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
     benchSupplyGroup.add(powerSwitchMesh);
     scene.add(benchSupplyGroup);
 
-    // Postes metálicos de los 6 nodos
+    // Postes metálicos interactivos de los 6 nodos (permiten colocar las sondas con un clic)
     const postGeo = new THREE.CylinderGeometry(0.32, 0.38, 1.1, 20);
     const ringGeo = new THREE.TorusGeometry(0.45, 0.08, 12, 24);
     ringGeo.rotateX(Math.PI / 2);
+    const nodePostMeshes: THREE.Object3D[] = [];
 
-    Object.entries(NODE_3D_COORDS).forEach(([, pos]) => {
+    Object.entries(NODE_3D_COORDS).forEach(([nodeId, pos]) => {
       const nodeGroup = new THREE.Group();
       nodeGroup.position.set(pos.x, 0, pos.z);
 
@@ -303,7 +324,9 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
       });
       const post = new THREE.Mesh(postGeo, postMat);
       post.position.y = 0.55;
+      post.userData = { isNodePost3D: true, nodeId };
       nodeGroup.add(post);
+      nodePostMeshes.push(post);
 
       const ringMat = new THREE.MeshStandardMaterial({
         color: 0x22d3ee,
@@ -313,7 +336,9 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
       });
       const ring = new THREE.Mesh(ringGeo, ringMat);
       ring.position.y = 0.06;
+      ring.userData = { isNodePost3D: true, nodeId };
       nodeGroup.add(ring);
+      nodePostMeshes.push(ring);
 
       scene.add(nodeGroup);
     });
@@ -375,7 +400,14 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
     }
 
     let particleCarriers: ParticleCarrier[] = [];
-    let bulbGlowMap: Record<string, { glassMat: THREE.MeshStandardMaterial; light: THREE.PointLight }> = {};
+    let bulbGlowMap: Record<
+      string,
+      {
+        glassMat: THREE.MeshStandardMaterial;
+        filamentMat: THREE.MeshStandardMaterial;
+        light: THREE.PointLight;
+      }
+    > = {};
     let interactableMeshes: THREE.Object3D[] = [];
     let lastStructureKey = '';
 
@@ -385,13 +417,14 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
       }
       particleCarriers = [];
       bulbGlowMap = {};
-      interactableMeshes = [powerSwitchMesh];
+      interactableMeshes = [powerSwitchMesh, ...nodePostMeshes];
 
       const {
         components: comps,
         selectedId: selId,
         flowMode: fMode,
         eiaBandMode: bandMode,
+        maskNominalValues: maskValues,
       } = propsRef.current;
 
       comps.forEach((comp) => {
@@ -415,7 +448,7 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
 
         const isSelected = comp.id === selId;
 
-        // Dos tramos de cable flexibles: pA -> mid y mid -> pB (se estiran al arrastrar con Raycasting)
+        // Dos tramos de cable flexibles: pA -> mid y mid -> pB
         const createLeadSegment = (from: THREE.Vector3, to: THREE.Vector3) => {
           const segDir = new THREE.Vector3().subVectors(to, from);
           const segLen = Math.max(0.1, segDir.length());
@@ -460,13 +493,19 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
             interactableMeshes.push(m);
           });
         } else if (comp.type === 'resistor') {
-          const isOpenFault = comp.faultState === 'OPEN';
-          const isShortFault = comp.faultState === 'SHORT';
+          const isOpenFault = !maskValues && comp.faultState === 'OPEN';
+          const isShortFault = !maskValues && comp.faultState === 'SHORT';
 
           const ceramicBody = new THREE.Mesh(
             new THREE.CylinderGeometry(0.56, 0.56, 2.65, 24).rotateX(Math.PI / 2),
             new THREE.MeshStandardMaterial({
-              color: isOpenFault ? 0x334155 : bandMode === 5 ? 0xbae6fd : 0xfef3c7,
+              color: maskValues
+                ? 0x3b0764
+                : isOpenFault
+                ? 0x334155
+                : bandMode === 5
+                ? 0xbae6fd
+                : 0xfef3c7,
               roughness: 0.5,
               metalness: 0.08,
               transparent: isOpenFault,
@@ -477,45 +516,46 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
           compGroup.add(ceramicBody);
           interactableMeshes.push(ceramicBody);
 
-          if (bandMode === 5) {
-            const bands5 = getResistorColorBands5(comp.resistance);
-            const zOff5 = [-0.9, -0.45, 0.0, 0.45, 0.9];
-            bands5.forEach((b, idx) => {
-              const bandRing = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.58, 0.58, 0.18, 24).rotateX(Math.PI / 2),
-                new THREE.MeshStandardMaterial({
-                  color: b.hex,
-                  roughness: 0.3,
-                  metalness: 0.1,
-                  transparent: isOpenFault,
-                  opacity: isOpenFault ? 0.35 : 1.0,
-                })
-              );
-              bandRing.position.z = zOff5[idx];
-              bandRing.userData = { compId: comp.id, compType: comp.type, compLabel: comp.label };
-              compGroup.add(bandRing);
-            });
-          } else {
-            const bands4 = getResistorColorBands(comp.resistance);
-            const zOff4 = [-0.8, -0.3, 0.2, 0.8];
-            bands4.forEach((b, idx) => {
-              const bandRing = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.58, 0.58, 0.22, 24).rotateX(Math.PI / 2),
-                new THREE.MeshStandardMaterial({
-                  color: b.hex,
-                  roughness: 0.3,
-                  metalness: 0.1,
-                  transparent: isOpenFault,
-                  opacity: isOpenFault ? 0.35 : 1.0,
-                })
-              );
-              bandRing.position.z = zOff4[idx];
-              bandRing.userData = { compId: comp.id, compType: comp.type, compLabel: comp.label };
-              compGroup.add(bandRing);
-            });
+          if (!maskValues) {
+            if (bandMode === 5) {
+              const bands5 = getResistorColorBands5(comp.resistance);
+              const zOff5 = [-0.9, -0.45, 0.0, 0.45, 0.9];
+              bands5.forEach((b, idx) => {
+                const bandRing = new THREE.Mesh(
+                  new THREE.CylinderGeometry(0.58, 0.58, 0.18, 24).rotateX(Math.PI / 2),
+                  new THREE.MeshStandardMaterial({
+                    color: b.hex,
+                    roughness: 0.3,
+                    metalness: 0.1,
+                    transparent: isOpenFault,
+                    opacity: isOpenFault ? 0.35 : 1.0,
+                  })
+                );
+                bandRing.position.z = zOff5[idx];
+                bandRing.userData = { compId: comp.id, compType: comp.type, compLabel: comp.label };
+                compGroup.add(bandRing);
+              });
+            } else {
+              const bands4 = getResistorColorBands(comp.resistance);
+              const zOff4 = [-0.8, -0.3, 0.2, 0.8];
+              bands4.forEach((b, idx) => {
+                const bandRing = new THREE.Mesh(
+                  new THREE.CylinderGeometry(0.58, 0.58, 0.22, 24).rotateX(Math.PI / 2),
+                  new THREE.MeshStandardMaterial({
+                    color: b.hex,
+                    roughness: 0.3,
+                    metalness: 0.1,
+                    transparent: isOpenFault,
+                    opacity: isOpenFault ? 0.35 : 1.0,
+                  })
+                );
+                bandRing.position.z = zOff4[idx];
+                bandRing.userData = { compId: comp.id, compType: comp.type, compLabel: comp.label };
+                compGroup.add(bandRing);
+              });
+            }
           }
 
-          // Indicador 3D de Circuito Abierto (ABRIR / Resistencia Cortada)
           if (isOpenFault) {
             const cutGapRing = new THREE.Mesh(
               new THREE.CylinderGeometry(0.68, 0.68, 0.55, 24).rotateX(Math.PI / 2),
@@ -530,7 +570,6 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
             compGroup.add(cutGapRing);
           }
 
-          // Indicador 3D de Puente de Cortocircuito (CORTO / Cable Jumper 0 Ω sobre la resistencia)
           if (isShortFault) {
             const jumperMat = new THREE.MeshStandardMaterial({
               color: 0xf43f5e,
@@ -557,6 +596,18 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
           );
           socketMesh.position.y = 0.35;
 
+          const filamentMat = new THREE.MeshStandardMaterial({
+            color: 0xfde047,
+            emissive: 0xf59e0b,
+            emissiveIntensity: 0.2,
+            roughness: 0.2,
+          });
+          const filamentMesh = new THREE.Mesh(
+            new THREE.TorusGeometry(0.32, 0.055, 12, 24),
+            filamentMat
+          );
+          filamentMesh.position.y = 1.35;
+
           const glassMat = new THREE.MeshStandardMaterial({
             color: 0xfef08a,
             emissive: 0xfacc15,
@@ -564,21 +615,21 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
             roughness: 0.15,
             metalness: 0.05,
             transparent: true,
-            opacity: 0.88,
+            opacity: 0.85,
           });
-          const globeMesh = new THREE.Mesh(new THREE.SphereGeometry(1.05, 24, 24), glassMat);
-          globeMesh.position.y = 1.45;
+          const globeMesh = new THREE.Mesh(new THREE.SphereGeometry(1.02, 24, 24), glassMat);
+          globeMesh.position.y = 1.42;
 
           const bulbLight = new THREE.PointLight(0xfde047, 0, 12);
           bulbLight.position.y = 1.6;
 
-          [socketMesh, globeMesh].forEach((m) => {
+          [socketMesh, filamentMesh, globeMesh].forEach((m) => {
             m.userData = { compId: comp.id, compType: comp.type, compLabel: comp.label };
             compGroup.add(m);
             interactableMeshes.push(m);
           });
           compGroup.add(bulbLight);
-          bulbGlowMap[comp.id] = { glassMat, light: bulbLight };
+          bulbGlowMap[comp.id] = { glassMat, filamentMat, light: bulbLight };
         } else if (comp.type === 'switch') {
           const baseBlock = new THREE.Mesh(
             new THREE.BoxGeometry(1.3, 0.35, 2.4),
@@ -639,9 +690,6 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
       });
     };
 
-    // Raycasting y Drag & Drop sobre plano horizontal THREE.Plane
-    // Al arrastrar una resistencia horizontalmente (dx) se ajusta dinámicamente su valor óhmico R_k;
-    // al jalarla hacia afuera de los postes (|dz| > 2.0) se desconecta físicamente (OPEN).
     const raycaster = new THREE.Raycaster();
     const pointer = new THREE.Vector2();
     const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.6);
@@ -667,12 +715,19 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
           propsRef.current.onTogglePowerSupply?.();
           return;
         }
+        if (uData.isNodePost3D && uData.nodeId) {
+          propsRef.current.onSelectNode?.(uData.nodeId);
+          return;
+        }
         const { compId, compType, compLabel } = uData;
         if (compId) {
           propsRef.current.onSelectComponent(compId);
           if (compType === 'switch') {
             propsRef.current.onToggleSwitch(compId);
-          } else if (compType === 'resistor' || compType === 'bulb') {
+          } else if (
+            (compType === 'resistor' || compType === 'bulb') &&
+            !propsRef.current.maskNominalValues
+          ) {
             draggingCompId = compId;
             controls.enabled = false;
             const compObj = propsRef.current.components.find((c) => c.id === compId);
@@ -701,10 +756,10 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
         const dx = Math.max(-3.2, Math.min(3.2, intersectPt.x - dragBaseMid.x));
         const dz = Math.max(-2.6, Math.min(2.6, intersectPt.z - dragBaseMid.z));
         customOffsetsRef.current[draggingCompId] = { dx, dz };
-        lastStructureKey = ''; // Forzar reconstrucción suave de los cables 3D
+        lastStructureKey = '';
 
         const compObj = propsRef.current.components.find((c) => c.id === draggingCompId);
-        if (compObj && compObj.type === 'resistor') {
+        if (compObj && (compObj.type === 'resistor' || compObj.type === 'bulb')) {
           const deltaX = intersectPt.x - dragStartPointerX;
           const nextOhms = Math.max(1, Math.min(100, Math.round(dragStartOhms + deltaX * 14)));
           const pulledOffPosts = Math.abs(dz) > 2.05;
@@ -774,9 +829,9 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
         flowMode: fMode,
         probeRedNode: rNode,
         probeBlackNode: bNode,
+        maskNominalValues: maskValues,
       } = propsRef.current;
 
-      // Actualizar display digital LED 7-segmentos de la fuente 3D
       updateBenchSupplyLED(
         topRes.sourceVoltage,
         topRes.totalCurrent,
@@ -790,7 +845,6 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
         topRes.isPowered && !topRes.isShortCircuitFault ? 0x059669 : 0x991b1b
       );
 
-      // Actualizar ensamblaje 3D RC + LED
       rcAssemblyGroup.visible = !!rcActive;
       if (rcActive) {
         ledDomeMat.color.setHex(ledBurned ? 0xef4444 : 0x10b981);
@@ -804,7 +858,7 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
             (c) =>
               `${c.id}:${c.type}:${c.resistance}:${c.isClosed}:${c.polarityInverted}:${c.faultState ?? 'ON'}`
           )
-          .join('|') + `|${selId}|${fMode}|${bandMode}`;
+          .join('|') + `|${selId}|${fMode}|${bandMode}|${maskValues}`;
       if (structKey !== lastStructureKey) {
         lastStructureKey = structKey;
         rebuild3DCircuitScene();
@@ -817,22 +871,44 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
 
       const masterSwitchComp = comps.find((c) => c.id === 'sw-1');
       const isMasterSwitchClosed = masterSwitchComp ? masterSwitchComp.isClosed !== false : true;
-      // Si hay cortocircuito físico real, la protección OCP de la fuente corta inmediatamente el suministro
       const ocpTripped = topRes.isShortCircuitFault;
       const circuitActive = topRes.isPowered && isMasterSwitchClosed && !ocpTripped;
 
+      const branchById: Record<string, (typeof topRes.branches)[number] | undefined> = {
+        'res-1': topRes.branches[0],
+        'res-2': topRes.branches[1],
+        'res-3': topRes.branches[2],
+      };
+
       Object.entries(bulbGlowMap).forEach(([cId, bulbObj]) => {
         const st = sol.componentStates[cId];
-        if (!circuitActive || st?.isBurnedOut || topRes.totalCurrent < 0.0005) {
-          // Vidrio oscuro apagado cuando hay cortocircuito, circuito abierto o fuente apagada
+        const bInfo = branchById[cId];
+        const isBurned = st?.isBurnedOut || bInfo?.isBurnedOut || false;
+        const powerWatts = bInfo ? bInfo.power : st?.power ?? 0;
+
+        if (isBurned) {
+          // Filamento fundido por superar 15.0 W: cristal ahumado oscuro y filamento apagado/rojo ceniza
+          bulbObj.glassMat.color.setHex(0x1f2937);
+          bulbObj.glassMat.emissive.setHex(0x7f1d1d);
+          bulbObj.glassMat.emissiveIntensity = 0.25;
+          bulbObj.filamentMat.color.setHex(0xef4444);
+          bulbObj.filamentMat.emissiveIntensity = 0.4;
+          bulbObj.light.intensity = 0;
+        } else if (!circuitActive || powerWatts < 0.01) {
           bulbObj.glassMat.color.setHex(0x1e293b);
           bulbObj.glassMat.emissiveIntensity = 0;
+          bulbObj.filamentMat.color.setHex(0x475569);
+          bulbObj.filamentMat.emissiveIntensity = 0;
           bulbObj.light.intensity = 0;
         } else {
-          const normBr = Math.min(1.5, Math.max(0.15, topRes.totalCurrent / 0.35));
+          // Brillo térmico proporcional a P = I² * R respecto a 15.0 W nominales
+          const normBr = Math.min(1.6, Math.max(0.15, powerWatts / 15.0));
           bulbObj.glassMat.color.setHex(0xfef08a);
-          bulbObj.glassMat.emissiveIntensity = normBr * 2.2;
-          bulbObj.light.intensity = normBr * 5.5;
+          bulbObj.glassMat.emissive.setHex(0xfacc15);
+          bulbObj.glassMat.emissiveIntensity = normBr * 2.5;
+          bulbObj.filamentMat.color.setHex(0xffffff);
+          bulbObj.filamentMat.emissiveIntensity = normBr * 3.5;
+          bulbObj.light.intensity = normBr * 6.0;
         }
       });
 
@@ -856,7 +932,7 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
           }
         }
 
-        if (compObj?.faultState === 'OPEN' || Math.abs(curr) < 0.0005) {
+        if (compObj?.faultState === 'OPEN' || st?.isBurnedOut || Math.abs(curr) < 0.0005) {
           pc.mesh.visible = false;
           return;
         }
@@ -918,27 +994,46 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
       {/* Floating 3D Telemetry Badges for R1, R2, R3 */}
       <div className="absolute top-3 left-3 right-3 pointer-events-none flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1.5">
-          {topologyResult.branches.map((b) => (
-            <div
-              key={b.branchId}
-              className={`px-2.5 py-1 rounded-md border text-[10px] font-mono ${
-                b.faultState === 'SHORT'
-                  ? 'bg-rose-950/90 border-rose-500 text-rose-200'
-                  : b.faultState === 'OPEN'
-                  ? 'bg-amber-950/90 border-amber-500 text-amber-200'
-                  : 'bg-[#090D16]/90 border-slate-700 text-slate-200'
-              }`}
-            >
-              <span className="font-bold text-cyan-300">{b.branchId}</span> ({b.nominalOhms}Ω):{' '}
-              <span>{b.voltageDrop.toFixed(1)}V</span> · <span>{b.current.toFixed(2)}A</span> ·{' '}
-              <span className="text-emerald-300">{b.power.toFixed(1)}W</span>
-              {b.faultState !== 'ON' && (
-                <span className="ml-1 font-bold uppercase text-amber-300">
-                  [{b.faultState === 'OPEN' ? 'CORTADA / ABIERTA' : 'PUENTEADA / CORTO'}]
-                </span>
-              )}
-            </div>
-          ))}
+          {topologyResult.branches.map((b) => {
+            const isRevealed = revealAllBranches || measuredBranches[b.branchId];
+            return (
+              <div
+                key={b.branchId}
+                className={`px-2.5 py-1 rounded-md border text-[10px] font-mono ${
+                  b.isBurnedOut
+                    ? 'bg-rose-950/95 border-rose-400 text-rose-200'
+                    : !maskNominalValues && b.faultState === 'SHORT'
+                    ? 'bg-rose-950/90 border-rose-500 text-rose-200'
+                    : !maskNominalValues && b.faultState === 'OPEN'
+                    ? 'bg-amber-950/90 border-amber-500 text-amber-200'
+                    : 'bg-[#090D16]/90 border-slate-700 text-slate-200'
+                }`}
+              >
+                <span className="font-bold text-cyan-300">
+                  {b.componentType === 'bulb' ? `💡 ${b.branchId}` : b.branchId}
+                </span>{' '}
+                ({maskNominalValues ? '??? Ω' : `${b.nominalOhms}Ω`}):{' '}
+                {isRevealed ? (
+                  <>
+                    <span>{b.voltageDrop.toFixed(1)}V</span> · <span>{b.current.toFixed(2)}A</span> ·{' '}
+                    <span className="text-emerald-300">{b.power.toFixed(1)}W</span>
+                  </>
+                ) : (
+                  <span className="text-amber-300">🔒 Mide con sondas</span>
+                )}
+                {b.isBurnedOut && (
+                  <span className="ml-1 font-bold uppercase text-rose-300">
+                    [🔥 FILAMENTO FUNDIDO &gt;15W]
+                  </span>
+                )}
+                {!maskNominalValues && !b.isBurnedOut && b.faultState !== 'ON' && (
+                  <span className="ml-1 font-bold uppercase text-amber-300">
+                    [{b.faultState === 'OPEN' ? 'CORTADA / ABIERTA' : 'PUENTEADA / CORTO'}]
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {draggedCompLabel && (
@@ -949,7 +1044,7 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
       </div>
 
       {/* Real-Time 3D Fault Status Overlay Banner at Bottom of 3D Viewport */}
-      {(topologyResult.isShortCircuitFault || topologyResult.isOpenCircuitFault) && (
+      {!maskNominalValues && (topologyResult.isShortCircuitFault || topologyResult.isOpenCircuitFault) && (
         <div className="absolute bottom-3 left-3 right-3 pointer-events-none">
           {topologyResult.isShortCircuitFault ? (
             <div
@@ -969,13 +1064,13 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
               className="px-3.5 py-2 rounded-lg bg-amber-950/95 border border-amber-500/80 text-amber-100 text-[11px] font-mono flex items-center justify-between gap-2 shadow-lg"
             >
               <span>
-                ✂️ RESISTENCIA CORTADA (CIRCUITO ABIERTO R → ∞):{' '}
+                ✂️ TRAYECTORIA ABIERTA (R → ∞):{' '}
                 {topologyResult.totalCurrent < 0.0005
-                  ? 'Trayectoria en serie interrumpida (I_T = 0.00 A). Electrones detenidos y bombilla apagada.'
-                  : 'Rama abierta sin paso de electrones (I_rama = 0.00 A); las demás ramas en paralelo siguen activas.'}
+                  ? 'Malla en serie interrumpida (I_T = 0.00 A). Electrones detenidos.'
+                  : 'Rama abierta sin paso de electrones (I_rama = 0.00 A); las demás ramas siguen activas.'}
               </span>
               <span className="px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-bold shrink-0">
-                {topologyResult.totalCurrent < 0.0005 ? 'FLUJO CERO (0 A)' : 'RAMA CORTADA'}
+                {topologyResult.totalCurrent < 0.0005 ? 'FLUJO CERO (0 A)' : 'RAMA ABIERTA'}
               </span>
             </div>
           )}
@@ -984,3 +1079,4 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
     </div>
   );
 };
+

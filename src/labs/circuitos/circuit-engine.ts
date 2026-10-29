@@ -76,6 +76,74 @@ const GOLD_BAND: ResistorColorBand = {
 const SOURCE_INTERNAL_IMPEDANCE = 0.5; // 0.5 Ω impedancia interna para cálculo de pico de cortocircuito
 
 /**
+ * Potencia máxima nominal estándar (en Vatios) para las bombillas incandescentes de rama.
+ * Si P = I² · R > MAX_RATED_POWER_WATTS (15.0 W), el filamento de tungsteno se funde
+ * automáticamente por sobrecalentamiento térmico y la rama pasa a falla OPEN (I = 0 A).
+ */
+export const MAX_RATED_POWER_WATTS = 15.0;
+
+/**
+ * Modos de la perilla selectora del Multímetro Digital Interactivo:
+ * - 'V': Voltímetro DC (V⎓), requiere medición en paralelo entre dos nodos distintos.
+ * - 'OHM': Óhmetro (Ω), requiere obligatoriamente que la fuente DC esté apagada (Power OFF).
+ * - 'A': Amperímetro DC (A⎓), mide corriente de rama; si se conecta en paralelo directo con la fuente activa, quema el fusible.
+ */
+export type MultimeterMode = 'V' | 'OHM' | 'A';
+
+export interface MultimeterEvaluation {
+  mode: MultimeterMode;
+  displayValue: string;
+  displayText: string;
+  unit: string;
+  numericValue: number | null;
+  measuredBranchId: 'R1' | 'R2' | 'R3' | null;
+  isValidConnection: boolean;
+  triggersFuseBlow: boolean;
+  warningMessageEs: string | null;
+  warningEs: string | null;
+  statusKind: 'ok' | 'warning' | 'error';
+}
+
+/**
+ * Modalidades de avería oculta para el Modo Desafío "Caja Negra: Diagnóstico de Circuito Averiado"
+ */
+export type HiddenFaultType = 'OPEN_FILAMENT' | 'SHORT_BYPASS' | 'ALTERED_HIGH_RESISTANCE';
+
+export interface FaultDiagnosisMission {
+  missionId: string;
+  topology: CircuitTopology;
+  sourceVoltage: number;
+  faultyBranchId: 'R1' | 'R2' | 'R3';
+  faultType: HiddenFaultType;
+  nominalOhms: Record<'R1' | 'R2' | 'R3', number>;
+  actualOhms: Record<'R1' | 'R2' | 'R3', number>;
+  alteredOhms?: number;
+  branchFaultStates: Record<'R1' | 'R2' | 'R3', BranchFaultState>;
+  symptomPromptEs: string;
+  symptomEs: string;
+  justificationOptionsEs: string[];
+  correctJustificationIndex: number;
+}
+
+export interface FaultDiagnosisAttempt {
+  selectedBranch: 'R1' | 'R2' | 'R3';
+  selectedFaultType: HiddenFaultType;
+  selectedJustificationIdx: number;
+}
+
+export interface FaultDiagnosisResult {
+  passed: boolean;
+  branchCorrect: boolean;
+  faultTypeCorrect: boolean;
+  justificationCorrect: boolean;
+  feedbackTitleEs: string;
+  feedbackDetailEs: string;
+  feedbackBodyEs: string;
+  poeExplanationEs: string;
+  poeNextStepEs: string;
+}
+
+/**
  * Calcula las 4 bandas de color para una resistencia dada en Ohmios (1 Ω a 99,000 Ω).
  */
 export function getResistorColorBands(
@@ -276,7 +344,9 @@ export function solveCircuit(
   );
   let nodeVoltages = solveOnce(burnedSet);
 
-  // Evaluar si alguna bombilla real (no testigo amperimétrico) supera su potencia máxima nominal
+  // Evaluar respuesta térmica de bombillas incandescentes:
+  // Si P = I² * R = ΔV² / R supera maxPower (por defecto MAX_RATED_POWER_WATTS = 15.0 W),
+  // el filamento se rompe por sobrecalentamiento y la bombilla entra en circuito abierto (OPEN).
   let newlyBurned = false;
   components.forEach((comp) => {
     if (comp.type === 'bulb' && !comp.isIndicator && !burnedSet.has(comp.id)) {
@@ -285,7 +355,7 @@ export function solveCircuit(
       const dv = Math.abs(vA - vB);
       const r = Math.max(0.1, comp.resistance);
       const p = (dv * dv) / r;
-      const maxP = comp.maxPower ?? 25;
+      const maxP = comp.maxPower ?? MAX_RATED_POWER_WATTS;
       if (p > maxP) {
         burnedSet.add(comp.id);
         newlyBurned = true;
@@ -408,12 +478,12 @@ export function solveCircuit(
       const power = isZeroImpedance ? 0 : current * current * rEff;
       totalPower += power;
 
-      const maxP = comp.maxPower ?? 25;
+      const maxP = comp.maxPower ?? MAX_RATED_POWER_WATTS;
       const brightness =
         comp.type === 'bulb'
           ? comp.isIndicator
             ? Math.min(1, Math.abs(current) / 0.35)
-            : Math.min(1, power / (maxP * 0.65))
+            : Math.min(1, power / maxP)
           : 0;
 
       componentStates[comp.id] = {
@@ -436,7 +506,9 @@ export function solveCircuit(
 
   const equivalentResistance =
     totalCurrent > 1e-6 ? nominalSourceVoltage / totalCurrent : Infinity;
-  const anyOpenBranch = components.some((c) => c.faultState === 'OPEN');
+  const anyOpenBranch = components.some(
+    (c) => c.faultState === 'OPEN' || burnedSet.has(c.id)
+  );
   const isOpenCircuitFault = anyOpenBranch || totalCurrent === 0;
 
   return {
@@ -509,6 +581,7 @@ export function calculateOhmRegressionSlope(
 export interface BranchAnalyticalRow {
   branchId: 'R1' | 'R2' | 'R3';
   componentId: string;
+  componentType: ComponentType;
   nodeA: string;
   nodeB: string;
   nominalOhms: number;
@@ -517,6 +590,8 @@ export interface BranchAnalyticalRow {
   voltageDrop: number;
   current: number;
   power: number;
+  isBurnedOut: boolean;
+  brightness: number;
 }
 
 export interface TopologyAnalysisResult {
@@ -541,22 +616,22 @@ export interface TopologyAnalysisResult {
 
 /**
  * Infiere dinámicamente la topología efectiva del grafo de componentes (Serie, Paralelo o Mixto)
- * inspeccionando las conexiones nodales reales de las resistencias en el banco de trabajo.
+ * inspeccionando las conexiones nodales reales de las ramas en el banco de trabajo.
  */
 export function inferCircuitTopology(
   components: CircuitComponent[],
   fallback: CircuitTopology = 'series'
 ): CircuitTopology {
-  const resistors = components.filter((c) => c.type === 'resistor');
-  if (resistors.length < 2) return fallback;
+  const branchComps = components.filter(
+    (c) => c.id === 'res-1' || c.id === 'res-2' || c.id === 'res-3'
+  );
+  if (branchComps.length < 2) return fallback;
 
-  // Contar cuántas resistencias comparten exactamente el mismo par de nodos o buses paralelos
-  const r1 = resistors[0];
-  const r2 = resistors[1];
-  const r3 = resistors[2];
+  const r1 = branchComps[0];
+  const r2 = branchComps[1];
+  const r3 = branchComps[2];
 
   if (r1 && r2 && r3) {
-    // En Serie: n1->n2, n2->n3, n3->n5 (ninguna comparte ambos extremos)
     const r1Nodes = new Set([r1.nodeA, r1.nodeB]);
     const r2Nodes = new Set([r2.nodeA, r2.nodeB]);
     const shared12 = Array.from(r1Nodes).filter((n) => r2Nodes.has(n)).length;
@@ -570,8 +645,8 @@ export function inferCircuitTopology(
 
 /**
  * Analiza dinámicamente el circuito a partir del grafo real de componentes (`components`)
- * utilizando la solución nodal MNA (`solveCircuit`). Cada resistencia (R1, R2, R3) se evalúa
- * de forma independiente según los nodos a los que esté conectada y su valor óhmico actual.
+ * utilizando la solución nodal MNA (`solveCircuit`). Cada rama (R1, R2, R3 — ya sea resistencia o bombilla)
+ * se evalúa de forma independiente según los nodos a los que esté conectada y su estado térmico.
  */
 export function analyzeWorkbenchCircuit(
   components: CircuitComponent[],
@@ -581,17 +656,21 @@ export function analyzeWorkbenchCircuit(
   const mna = solveCircuit(components, { isPowered });
   const topology = inferCircuitTopology(components, topologyHint);
 
-  const resistors = components.filter((c) => c.type === 'resistor');
+  const passiveBranches = components.filter(
+    (c) => (c.type === 'resistor' || (c.type === 'bulb' && !c.isIndicator))
+  );
+
   const getBranchRow = (
     idx: number,
     branchId: 'R1' | 'R2' | 'R3'
   ): BranchAnalyticalRow => {
     const comp =
-      components.find((c) => c.id === `res-${idx + 1}`) || resistors[idx];
+      components.find((c) => c.id === `res-${idx + 1}`) || passiveBranches[idx];
     if (!comp) {
       return {
         branchId,
         componentId: `res-${idx + 1}`,
+        componentType: 'resistor',
         nodeA: 'n1',
         nodeB: 'n2',
         nominalOhms: 10,
@@ -600,17 +679,21 @@ export function analyzeWorkbenchCircuit(
         voltageDrop: 0,
         current: 0,
         power: 0,
+        isBurnedOut: false,
+        brightness: 0,
       };
     }
 
-    const fault: BranchFaultState = comp.faultState ?? 'ON';
     const st = mna.componentStates[comp.id];
+    const isBurned = st?.isBurnedOut ?? !!comp.isBurnedOut;
+    const fault: BranchFaultState = isBurned ? 'OPEN' : comp.faultState ?? 'ON';
     const effOhms =
       fault === 'OPEN' ? Infinity : fault === 'SHORT' ? 0 : comp.resistance;
 
     return {
       branchId,
       componentId: comp.id,
+      componentType: comp.type,
       nodeA: comp.nodeA,
       nodeB: comp.nodeB,
       nominalOhms: comp.resistance,
@@ -619,6 +702,8 @@ export function analyzeWorkbenchCircuit(
       voltageDrop: st ? Math.abs(st.voltageDrop) : 0,
       current: st ? Math.abs(st.current) : 0,
       power: st ? st.power : 0,
+      isBurnedOut: isBurned,
+      brightness: st ? st.brightness : 0,
     };
   };
 
@@ -647,9 +732,9 @@ export function analyzeWorkbenchCircuit(
       kvlEquationText: '∑ V_malla = 0.00 V (Circuito Desenergizado / SW Abierto)',
       kclEquationText: '∑ I_in = ∑ I_out = 0.000 A',
       diagnosticMessageEs:
-        'Fuente DC en estado OFF o Interruptor Maestro abierto. Cierra el interruptor o activa FUENTE: ON para energizar el banco.',
+        'Fuente DC en estado OFF o Interruptor Maestro abierto. Puedes usar el Óhmetro (Ω) de forma segura con el circuito apagado.',
       diagnosticMessageEn:
-        'DC power supply is OFF or Master Switch is open. Close the switch or toggle POWER: ON to energize the workbench.',
+        'DC power supply is OFF or Master Switch is open. You can safely use the Ohmmeter (Ω) while power is OFF.',
       branches: [b1, b2, b3],
       nodePotentials: mna.nodeVoltages,
     };
@@ -675,6 +760,7 @@ export function analyzeWorkbenchCircuit(
     : `I₁ (${b1.current.toFixed(3)}A) = I₂(${b2.current.toFixed(3)}A) + I₃(${b3.current.toFixed(3)}A) en Nodo Bifurcación`;
 
   const anyOpen = b1.faultState === 'OPEN' || b2.faultState === 'OPEN' || b3.faultState === 'OPEN';
+  const anyBurned = b1.isBurnedOut || b2.isBurnedOut || b3.isBurnedOut;
 
   let diagnosticMessageEs = `Cálculo MNA dinámico en tiempo real (${topology.toUpperCase()}): Ley de Ohm y Leyes de Kirchhoff (LVK / LCK) actualizadas independientemente.`;
   let diagnosticMessageEn = `Real-time dynamic MNA calculation (${topology.toUpperCase()}): Ohm’s Law and Kirchhoff’s Laws (KVL / KCL) updated independently.`;
@@ -682,6 +768,9 @@ export function analyzeWorkbenchCircuit(
   if (mna.isShortCircuitFault) {
     diagnosticMessageEs = `¡CORTOCIRCUITO FÍSICO REAL DETECTADO (Pico de falla: ${mna.shortCircuitPeakCurrent.toFixed(1)} A)! La protección electrónica OCP de la fuente DC cortó el suministro (V = 0.00 V, I = 0.000 A), deteniendo los electrones y apagando el circuito para evitar daño térmico.`;
     diagnosticMessageEn = `REAL PHYSICAL SHORT-CIRCUIT DETECTED (Fault surge: ${mna.shortCircuitPeakCurrent.toFixed(1)} A)! The DC supply OCP protection cut off power (V = 0.00 V, I = 0.000 A), stopping electrons and shutting down the circuit.`;
+  } else if (anyBurned) {
+    diagnosticMessageEs = `¡FILAMENTO FUNDIDO POR SOBRECALENTAMIENTO TÉRMICO (P > ${MAX_RATED_POWER_WATTS.toFixed(1)} W)! La bombilla sobrecargada abrió su rama automáticamente (falla OPEN). Reduce el voltaje o aumenta la resistencia antes de reemplazarla.`;
+    diagnosticMessageEn = `FILAMENT BURNED OUT BY THERMAL OVERLOAD (P > ${MAX_RATED_POWER_WATTS.toFixed(1)} W)! The overloaded bulb automatically opened its branch (OPEN fault).`;
   } else if (iTotal < 1e-5) {
     diagnosticMessageEs =
       'CIRCUITO ABIERTO TOTAL (R_eq = ∞): Trayectoria principal interrumpida (I_T = 0.000 A). Los electrones se detienen por completo y toda la tensión de la fuente cae en la abertura.';
@@ -716,8 +805,254 @@ export function analyzeWorkbenchCircuit(
 }
 
 /**
+ * Evalúa la lectura física del Multímetro Digital Interactivo según la posición de las
+ * puntas de prueba (probeRedNode, probeBlackNode) y la perilla selectora ('V' | 'OHM' | 'A').
+ */
+export function evaluateMultimeterMeasurement(params: {
+  mode: MultimeterMode;
+  probeRedNode: string;
+  probeBlackNode: string;
+  components: CircuitComponent[];
+  solution: CircuitSolution;
+  topologyResult: TopologyAnalysisResult;
+  isPowered: boolean;
+  isFuseBlown: boolean;
+}): MultimeterEvaluation {
+  const {
+    mode,
+    probeRedNode,
+    probeBlackNode,
+    components,
+    solution,
+    topologyResult,
+    isPowered,
+    isFuseBlown,
+  } = params;
+
+  const makeResult = (r: {
+    mode: MultimeterMode;
+    displayValue: string;
+    unit: string;
+    numericValue: number | null;
+    measuredBranchId: 'R1' | 'R2' | 'R3' | null;
+    isValidConnection: boolean;
+    triggersFuseBlow: boolean;
+    warningMessageEs: string | null;
+    statusKind: 'ok' | 'warning' | 'error';
+  }): MultimeterEvaluation => ({
+    ...r,
+    displayText: r.displayValue,
+    warningEs: r.warningMessageEs,
+  });
+
+  // Identificar si las dos puntas están colocadas exactamente sobre los terminales de R1, R2 o R3
+  const matchedBranch = topologyResult.branches.find(
+    (b) =>
+      (b.nodeA === probeRedNode && b.nodeB === probeBlackNode) ||
+      (b.nodeA === probeBlackNode && b.nodeB === probeRedNode)
+  );
+  const measuredBranchId = matchedBranch ? matchedBranch.branchId : null;
+
+  // 1. Modo VOLTÍMETRO DC (V⎓)
+  if (mode === 'V') {
+    if (probeRedNode === probeBlackNode) {
+      return makeResult({
+        mode: 'V',
+        displayValue: '0.00',
+        unit: 'VDC',
+        numericValue: 0,
+        measuredBranchId: null,
+        isValidConnection: false,
+        triggersFuseBlow: false,
+        warningMessageEs:
+          'Ambas sondas están en el mismo nodo equipotencial (ΔV = 0.00 V). Coloca las puntas en dos nodos distintos en paralelo con el componente a medir.',
+        statusKind: 'warning',
+      });
+    }
+
+    const vRed =
+      isPowered && !solution.isShortCircuitFault ? solution.nodeVoltages[probeRedNode] ?? 0 : 0;
+    const vBlack =
+      isPowered && !solution.isShortCircuitFault ? solution.nodeVoltages[probeBlackNode] ?? 0 : 0;
+    const dv = vRed - vBlack;
+
+    return makeResult({
+      mode: 'V',
+      displayValue: dv.toFixed(2),
+      unit: 'VDC',
+      numericValue: dv,
+      measuredBranchId,
+      isValidConnection: true,
+      triggersFuseBlow: false,
+      warningMessageEs: measuredBranchId
+        ? `Medición en paralelo correcta sobre la rama ${measuredBranchId}: |ΔV| = ${Math.abs(dv).toFixed(2)} V.`
+        : null,
+      statusKind: 'ok',
+    });
+  }
+
+  // 2. Modo ÓHMETRO (Ω) — Solo mide resistencia con la fuente apagada (isPowered === false)
+  if (mode === 'OHM') {
+    if (isPowered) {
+      return makeResult({
+        mode: 'OHM',
+        displayValue: 'ERR: ON',
+        unit: 'Ω',
+        numericValue: null,
+        measuredBranchId: null,
+        isValidConnection: false,
+        triggersFuseBlow: false,
+        warningMessageEs:
+          '¡Prohibido medir resistencia con el circuito energizado! Apaga primero la fuente (FUENTE: OFF) para que el Óhmetro inyecte su propia corriente de prueba sin dañarse.',
+        statusKind: 'error',
+      });
+    }
+
+    if (probeRedNode === probeBlackNode) {
+      return makeResult({
+        mode: 'OHM',
+        displayValue: '0.00',
+        unit: 'Ω',
+        numericValue: 0,
+        measuredBranchId: null,
+        isValidConnection: false,
+        triggersFuseBlow: false,
+        warningMessageEs: 'Sondas en contacto sobre el mismo nodo conductor (0.00 Ω).',
+        statusKind: 'warning',
+      });
+    }
+
+    if (matchedBranch) {
+      if (matchedBranch.faultState === 'OPEN' || matchedBranch.isBurnedOut) {
+        return makeResult({
+          mode: 'OHM',
+          displayValue: 'OL (∞)',
+          unit: 'Ω',
+          numericValue: Infinity,
+          measuredBranchId,
+          isValidConnection: true,
+          triggersFuseBlow: false,
+          warningMessageEs: `Lectura OL (Overload / R → ∞) en ${matchedBranch.branchId}: la rama o el filamento está ABIERTO.`,
+          statusKind: 'warning',
+        });
+      }
+      if (matchedBranch.faultState === 'SHORT') {
+        return makeResult({
+          mode: 'OHM',
+          displayValue: '0.00',
+          unit: 'Ω',
+          numericValue: 0,
+          measuredBranchId,
+          isValidConnection: true,
+          triggersFuseBlow: false,
+          warningMessageEs: `Lectura 0.00 Ω en ${matchedBranch.branchId}: se detecta un CORTOCIRCUITO directo entre sus bornes.`,
+          statusKind: 'error',
+        });
+      }
+      return makeResult({
+        mode: 'OHM',
+        displayValue: matchedBranch.nominalOhms.toFixed(1),
+        unit: 'Ω',
+        numericValue: matchedBranch.nominalOhms,
+        measuredBranchId,
+        isValidConnection: true,
+        triggersFuseBlow: false,
+        warningMessageEs: `Resistencia óhmica medida en frío sobre ${matchedBranch.branchId}: ${matchedBranch.nominalOhms.toFixed(1)} Ω.`,
+        statusKind: 'ok',
+      });
+    }
+
+    const passiveSol = solveCircuit(components, { isPowered: true });
+    const req = passiveSol.equivalentResistance;
+    return makeResult({
+      mode: 'OHM',
+      displayValue: Number.isFinite(req) && req > 0 ? req.toFixed(1) : 'OL (∞)',
+      unit: 'Ω',
+      numericValue: req,
+      measuredBranchId: null,
+      isValidConnection: true,
+      triggersFuseBlow: false,
+      warningMessageEs:
+        'Midiendo resistencia equivalente entre los nodos seleccionados con fuente apagada.',
+      statusKind: 'ok',
+    });
+  }
+
+  // 3. Modo AMPERÍMETRO DC (A⎓)
+  if (isFuseBlown) {
+    return makeResult({
+      mode: 'A',
+      displayValue: 'FUSE!',
+      unit: 'ADC',
+      numericValue: null,
+      measuredBranchId: null,
+      isValidConnection: false,
+      triggersFuseBlow: false,
+      warningMessageEs:
+        '¡Fusible del multímetro quemado! El amperímetro tiene resistencia interna nula y provocó un cortocircuito al conectarse en paralelo con la fuente. Pulsa "Reemplazar Fusible (10A)".',
+      statusKind: 'error',
+    });
+  }
+
+  // Detectar si el estudiante conectó el Amperímetro directamente en paralelo con la fuente activa
+  const bat = components.find((c) => c.type === 'battery');
+  const posNodes = new Set<string>(['n1']);
+  const negNodes = new Set<string>(['n0', 'n4']);
+  if (bat) {
+    posNodes.add(bat.nodeB);
+    negNodes.add(bat.nodeA);
+  }
+  const isAcrossSourceDirect =
+    isPowered &&
+    ((posNodes.has(probeRedNode) && negNodes.has(probeBlackNode) && !matchedBranch) ||
+      (posNodes.has(probeBlackNode) && negNodes.has(probeRedNode) && !matchedBranch));
+
+  if (isAcrossSourceDirect) {
+    return makeResult({
+      mode: 'A',
+      displayValue: 'FUSE!',
+      unit: 'ADC',
+      numericValue: null,
+      measuredBranchId: null,
+      isValidConnection: false,
+      triggersFuseBlow: true,
+      warningMessageEs:
+        '¡Fusible del multímetro quemado! El amperímetro tiene resistencia interna nula y provocó un cortocircuito al conectarlo en paralelo directo con la fuente.',
+      statusKind: 'error',
+    });
+  }
+
+  if (matchedBranch) {
+    return makeResult({
+      mode: 'A',
+      displayValue: matchedBranch.current.toFixed(3),
+      unit: 'ADC',
+      numericValue: matchedBranch.current,
+      measuredBranchId,
+      isValidConnection: true,
+      triggersFuseBlow: false,
+      warningMessageEs: `Corriente de rama medida en ${matchedBranch.branchId}: I = ${matchedBranch.current.toFixed(3)} A.`,
+      statusKind: 'ok',
+    });
+  }
+
+  return makeResult({
+    mode: 'A',
+    displayValue: topologyResult.totalCurrent.toFixed(3),
+    unit: 'ADC',
+    numericValue: topologyResult.totalCurrent,
+    measuredBranchId: null,
+    isValidConnection: true,
+    triggersFuseBlow: false,
+    warningMessageEs:
+      'Selecciona los bornes de una rama (R₁, R₂ o R₃) para intercalar la lectura amperimétrica de esa rama sin puentear la fuente.',
+    statusKind: 'ok',
+  });
+}
+
+/**
  * Construye el grafo nodal inicial de componentes 3D para una topología dada
- * manteniendo siempre independientes Fuente DC, R1, R2, R3, Bombilla Testigo e Interruptor Maestro.
+ * permitiendo que cada rama (R1, R2, R3) sea resistencia o bombilla incandescente (15.0W máx).
  */
 export function buildTopologyComponents3D(params: {
   topology: CircuitTopology;
@@ -729,17 +1064,42 @@ export function buildTopologyComponents3D(params: {
   f2: BranchFaultState;
   f3: BranchFaultState;
   isPowered: boolean;
+  branchTypes?: Partial<Record<'R1' | 'R2' | 'R3', 'resistor' | 'bulb'>>;
 }): CircuitComponent[] {
-  const { topology, sourceVoltage, r1, r2, r3, f1, f2, f3, isPowered } = params;
+  const { topology, sourceVoltage, r1, r2, r3, f1, f2, f3, isPowered, branchTypes } = params;
+  const t1 = branchTypes?.R1 ?? 'resistor';
+  const t2 = branchTypes?.R2 ?? 'resistor';
+  const t3 = branchTypes?.R3 ?? 'resistor';
+
+  const makeBranch = (
+    id: string,
+    branchKey: 'R1' | 'R2' | 'R3',
+    cType: 'resistor' | 'bulb',
+    suffix: string,
+    nodeA: string,
+    nodeB: string,
+    ohms: number,
+    fault: BranchFaultState
+  ): CircuitComponent => ({
+    id,
+    type: cType,
+    label: cType === 'bulb' ? `Bombilla ${branchKey}${suffix}` : `${branchKey}${suffix}`,
+    nodeA,
+    nodeB,
+    resistance: ohms,
+    maxPower: cType === 'bulb' ? MAX_RATED_POWER_WATTS : undefined,
+    isIndicator: false,
+    faultState: fault,
+  });
 
   if (topology === 'parallel') {
     return [
       { id: 'bat-1', type: 'battery', label: 'Fuente DC', nodeA: 'n0', nodeB: 'n1', voltage: sourceVoltage, resistance: 0 },
-      { id: 'res-1', type: 'resistor', label: 'R1 (Rama 1)', nodeA: 'n1', nodeB: 'n4', resistance: r1, faultState: f1 },
+      makeBranch('res-1', 'R1', t1, ' (Rama 1)', 'n1', 'n4', r1, f1),
       { id: 'wire-sup1', type: 'wire', label: 'Bus +', nodeA: 'n1', nodeB: 'n2', resistance: 0 },
-      { id: 'res-2', type: 'resistor', label: 'R2 (Rama 2)', nodeA: 'n2', nodeB: 'n4', resistance: r2, faultState: f2 },
+      makeBranch('res-2', 'R2', t2, ' (Rama 2)', 'n2', 'n4', r2, f2),
       { id: 'wire-sup2', type: 'wire', label: 'Bus +', nodeA: 'n2', nodeB: 'n3', resistance: 0 },
-      { id: 'res-3', type: 'resistor', label: 'R3 (Rama 3)', nodeA: 'n3', nodeB: 'n5', resistance: r3, faultState: f3 },
+      makeBranch('res-3', 'R3', t3, ' (Rama 3)', 'n3', 'n5', r3, f3),
       { id: 'bulb-1', type: 'bulb', label: 'Bombilla Testigo', nodeA: 'n5', nodeB: 'n4', resistance: 15, maxPower: 60, isIndicator: true },
       { id: 'sw-1', type: 'switch', label: 'SW Maestro', nodeA: 'n4', nodeB: 'n0', resistance: 0, isClosed: isPowered },
     ];
@@ -748,10 +1108,10 @@ export function buildTopologyComponents3D(params: {
   if (topology === 'mixed') {
     return [
       { id: 'bat-1', type: 'battery', label: 'Fuente DC', nodeA: 'n0', nodeB: 'n1', voltage: sourceVoltage, resistance: 0 },
-      { id: 'res-1', type: 'resistor', label: 'R1 (Serie)', nodeA: 'n1', nodeB: 'n2', resistance: r1, faultState: f1 },
-      { id: 'res-2', type: 'resistor', label: 'R2 (Paralelo)', nodeA: 'n2', nodeB: 'n4', resistance: r2, faultState: f2 },
+      makeBranch('res-1', 'R1', t1, ' (Serie)', 'n1', 'n2', r1, f1),
+      makeBranch('res-2', 'R2', t2, ' (Paralelo)', 'n2', 'n4', r2, f2),
       { id: 'wire-bif', type: 'wire', label: 'Nodo Bif.', nodeA: 'n2', nodeB: 'n3', resistance: 0 },
-      { id: 'res-3', type: 'resistor', label: 'R3 (Paralelo)', nodeA: 'n3', nodeB: 'n5', resistance: r3, faultState: f3 },
+      makeBranch('res-3', 'R3', t3, ' (Paralelo)', 'n3', 'n5', r3, f3),
       { id: 'bulb-1', type: 'bulb', label: 'Bombilla Testigo', nodeA: 'n5', nodeB: 'n4', resistance: 15, maxPower: 60, isIndicator: true },
       { id: 'sw-1', type: 'switch', label: 'SW Maestro', nodeA: 'n4', nodeB: 'n0', resistance: 0, isClosed: isPowered },
     ];
@@ -760,12 +1120,226 @@ export function buildTopologyComponents3D(params: {
   // Topología Serie: Fuente DC + R1 + R2 + R3 + Bombilla Testigo + Interruptor Maestro
   return [
     { id: 'bat-1', type: 'battery', label: 'Fuente DC', nodeA: 'n0', nodeB: 'n1', voltage: sourceVoltage, resistance: 0 },
-    { id: 'res-1', type: 'resistor', label: 'R1', nodeA: 'n1', nodeB: 'n2', resistance: r1, faultState: f1 },
-    { id: 'res-2', type: 'resistor', label: 'R2', nodeA: 'n2', nodeB: 'n3', resistance: r2, faultState: f2 },
-    { id: 'res-3', type: 'resistor', label: 'R3', nodeA: 'n3', nodeB: 'n5', resistance: r3, faultState: f3 },
+    makeBranch('res-1', 'R1', t1, '', 'n1', 'n2', r1, f1),
+    makeBranch('res-2', 'R2', t2, '', 'n2', 'n3', r2, f2),
+    makeBranch('res-3', 'R3', t3, '', 'n3', 'n5', r3, f3),
     { id: 'bulb-1', type: 'bulb', label: 'Bombilla Testigo', nodeA: 'n5', nodeB: 'n4', resistance: 15, maxPower: 60, isIndicator: true },
     { id: 'sw-1', type: 'switch', label: 'SW Maestro', nodeA: 'n4', nodeB: 'n0', resistance: 0, isClosed: isPowered },
   ];
+}
+
+/**
+ * Genera una misión de diagnóstico "Caja Negra: Circuito Averiado" (Objetivo C).
+ * Acepta una topología opcional o semilla numérica para pruebas deterministas.
+ */
+export function generateFaultDiagnosisMission(
+  topologyOrSeed?: CircuitTopology | number,
+  seedFraction?: number
+): FaultDiagnosisMission {
+  const presets: Array<{
+    topology: CircuitTopology;
+    sourceVoltage: number;
+    faultyBranchId: 'R1' | 'R2' | 'R3';
+    faultType: HiddenFaultType;
+    nominal: Record<'R1' | 'R2' | 'R3', number>;
+    symptomEs: string;
+  }> = [
+    {
+      topology: 'series',
+      sourceVoltage: 24,
+      faultyBranchId: 'R2',
+      faultType: 'OPEN_FILAMENT',
+      nominal: { R1: 20, R2: 30, R3: 30 },
+      symptomEs:
+        'Síntoma reportado: El circuito en SERIE (24 V) se apagó repentinamente y la corriente total cayó a 0.000 A, aunque la fuente DC está encendida.',
+    },
+    {
+      topology: 'parallel',
+      sourceVoltage: 18,
+      faultyBranchId: 'R3',
+      faultType: 'OPEN_FILAMENT',
+      nominal: { R1: 30, R2: 30, R3: 30 },
+      symptomEs:
+        'Síntoma reportado: En este banco en PARALELO (18 V, tres ramas nominales de 30 Ω), la corriente total medida en la fuente es menor de la esperada (1.20 A en vez de 1.80 A).',
+    },
+    {
+      topology: 'series',
+      sourceVoltage: 20,
+      faultyBranchId: 'R1',
+      faultType: 'ALTERED_HIGH_RESISTANCE',
+      nominal: { R1: 20, R2: 20, R3: 20 },
+      symptomEs:
+        'Síntoma reportado: Tres ramas nominalmente idénticas (20 Ω c/u) están en SERIE con 20 V, pero una de ellas absorbe mucha más tensión que las otras dos por degradación térmica.',
+    },
+    {
+      topology: 'mixed',
+      sourceVoltage: 24,
+      faultyBranchId: 'R2',
+      faultType: 'OPEN_FILAMENT',
+      nominal: { R1: 20, R2: 40, R3: 40 },
+      symptomEs:
+        'Síntoma reportado: En el circuito MIXTO (R₁=20Ω en serie con R₂=40Ω ∥ R₃=40Ω a 24 V), la resistencia equivalente subió de 40 Ω a 60 Ω.',
+    },
+    {
+      topology: 'parallel',
+      sourceVoltage: 12,
+      faultyBranchId: 'R1',
+      faultType: 'SHORT_BYPASS',
+      nominal: { R1: 25, R2: 25, R3: 50 },
+      symptomEs:
+        'Síntoma reportado: La fuente DC disparó inmediatamente su protección OCP contra sobrecorriente al energizar el banco en PARALELO. Usa el Óhmetro (con FUENTE: OFF) para hallar la rama en corto.',
+    },
+  ];
+
+  let pool = presets;
+  if (typeof topologyOrSeed === 'string') {
+    const filtered = presets.filter((p) => p.topology === topologyOrSeed);
+    if (filtered.length > 0) pool = filtered;
+  }
+
+  let idx = 0;
+  if (typeof topologyOrSeed === 'number') {
+    idx = Math.abs(Math.floor(topologyOrSeed)) % pool.length;
+  } else if (typeof seedFraction === 'number') {
+    idx = Math.min(pool.length - 1, Math.max(0, Math.floor(seedFraction * pool.length)));
+  } else {
+    idx = Math.floor(Math.random() * pool.length);
+  }
+  const chosen = pool[idx];
+
+  const actualOhms: Record<'R1' | 'R2' | 'R3', number> = { ...chosen.nominal };
+  const branchFaultStates: Record<'R1' | 'R2' | 'R3', BranchFaultState> = {
+    R1: 'ON',
+    R2: 'ON',
+    R3: 'ON',
+  };
+  let alteredOhms: number | undefined;
+
+  if (chosen.faultType === 'OPEN_FILAMENT') {
+    branchFaultStates[chosen.faultyBranchId] = 'OPEN';
+  } else if (chosen.faultType === 'SHORT_BYPASS') {
+    branchFaultStates[chosen.faultyBranchId] = 'SHORT';
+    actualOhms[chosen.faultyBranchId] = 0;
+  } else if (chosen.faultType === 'ALTERED_HIGH_RESISTANCE') {
+    alteredOhms = chosen.nominal[chosen.faultyBranchId] * 3;
+    actualOhms[chosen.faultyBranchId] = alteredOhms;
+  }
+
+  const justificationOptionsEs = [
+    'La rama presenta discontinuidad física (R → ∞ / OL en Óhmetro); interrumpe el paso de corriente (I_rama = 0 A) y, si está en serie, concentra el 100% de la FEM en sus bornes.',
+    'La rama sufre un puente de impedancia nula (R ≈ 0.00 Ω en Óhmetro con fuente apagada), provocando sobrecorriente y disparo de protección OCP.',
+    'La rama sufrió degradación térmica incrementando su resistencia óhmica real muy por encima del valor nominal, absorbiendo una caída de potencial ΔV = I·R desproporcionada.',
+  ];
+
+  const correctJustificationIndex =
+    chosen.faultType === 'OPEN_FILAMENT'
+      ? 0
+      : chosen.faultType === 'SHORT_BYPASS'
+      ? 1
+      : 2;
+
+  return {
+    missionId: `mission-${idx}-${Date.now()}`,
+    topology: chosen.topology,
+    sourceVoltage: chosen.sourceVoltage,
+    faultyBranchId: chosen.faultyBranchId,
+    faultType: chosen.faultType,
+    nominalOhms: chosen.nominal,
+    actualOhms,
+    alteredOhms,
+    branchFaultStates,
+    symptomPromptEs: chosen.symptomEs,
+    symptomEs: chosen.symptomEs,
+    justificationOptionsEs,
+    correctJustificationIndex,
+  };
+}
+
+/**
+ * Evalúa constructivistamente el diagnóstico del estudiante (Ciclo Predecir - Observar - Explicar)
+ */
+export function validateFaultDiagnosisMission(
+  missionOrParams:
+    | FaultDiagnosisMission
+    | {
+        mission: FaultDiagnosisMission;
+        selectedBranchId: 'R1' | 'R2' | 'R3';
+        selectedFaultType: HiddenFaultType;
+        selectedJustificationIndex: number;
+      },
+  maybeAttempt?: FaultDiagnosisAttempt
+): FaultDiagnosisResult {
+  const mission = 'mission' in missionOrParams ? missionOrParams.mission : missionOrParams;
+  const selectedBranch =
+    'mission' in missionOrParams
+      ? missionOrParams.selectedBranchId
+      : maybeAttempt?.selectedBranch ?? 'R1';
+  const selectedFaultType =
+    'mission' in missionOrParams
+      ? missionOrParams.selectedFaultType
+      : maybeAttempt?.selectedFaultType ?? 'OPEN_FILAMENT';
+  const selectedJustificationIdx =
+    'mission' in missionOrParams
+      ? missionOrParams.selectedJustificationIndex
+      : maybeAttempt?.selectedJustificationIdx ?? 0;
+
+  const branchCorrect = selectedBranch === mission.faultyBranchId;
+  const faultTypeCorrect = selectedFaultType === mission.faultType;
+  const expectedJustificationIdx = mission.correctJustificationIndex;
+  const justificationCorrect = selectedJustificationIdx === expectedJustificationIdx;
+  const passed = branchCorrect && faultTypeCorrect && justificationCorrect;
+
+  const poeExplanationEs =
+    mission.faultType === 'OPEN_FILAMENT'
+      ? `Ciclo POE: En ${mission.faultyBranchId}, la discontinuidad física (R → ∞) impide el paso de portadores (I = 0 A). Con el Óhmetro en frío se observa "OL (∞)", y en serie aparece el 100% de los ${mission.sourceVoltage} V entre sus terminales abiertos por LVK.`
+      : mission.faultType === 'SHORT_BYPASS'
+      ? `Ciclo POE: La rama ${mission.faultyBranchId} presenta un puente de impedancia nula (R ≈ 0.00 Ω). Al apagar la fuente y medir con el Óhmetro (Ω) sobre ${mission.faultyBranchId}, se confirma 0.00 Ω en lugar de los ${mission.nominalOhms[mission.faultyBranchId]} Ω nominales.`
+      : `Ciclo POE: La rama ${mission.faultyBranchId} sufrió degradación térmica elevando su resistencia real de ${mission.nominalOhms[mission.faultyBranchId]} Ω a ${mission.actualOhms[mission.faultyBranchId]} Ω. Por la Ley de Ohm (ΔV = I · R), produce una caída de tensión tres veces mayor que una rama sana.`;
+
+  if (passed) {
+    const detail = `Identificaste correctamente la rama averiada (${mission.faultyBranchId}), el modo de falla y su justificación física mediante medición instrumental.`;
+    return {
+      passed: true,
+      branchCorrect: true,
+      faultTypeCorrect: true,
+      justificationCorrect: true,
+      feedbackTitleEs: `¡Diagnóstico y Reparación Exitosa en ${mission.faultyBranchId}!`,
+      feedbackDetailEs: detail,
+      feedbackBodyEs: detail,
+      poeExplanationEs,
+      poeNextStepEs: poeExplanationEs,
+    };
+  }
+
+  const hints: string[] = [];
+  if (!branchCorrect) {
+    hints.push(
+      `La rama seleccionada (${selectedBranch}) no es la que origina la falla. Mide con las sondas Roja y Negra cada una de las tres ramas (R₁, R₂ y R₃).`
+    );
+  }
+  if (!faultTypeCorrect) {
+    hints.push(
+      'El tipo de avería no coincide con las lecturas del multímetro. Prueba cambiar la perilla a Óhmetro (Ω) apagando la fuente (FUENTE: OFF).'
+    );
+  }
+  if (!justificationCorrect) {
+    hints.push(
+      'Revisa la justificación física (Ley de Ohm / Kirchhoff): relaciona lo que observaste en el display del multímetro con la causa física.'
+    );
+  }
+
+  const detail = hints.join(' ');
+  return {
+    passed: false,
+    branchCorrect,
+    faultTypeCorrect,
+    justificationCorrect,
+    feedbackTitleEs: 'Diagnóstico Incompleto — Continúa Explorando con las Sondas',
+    feedbackDetailEs: detail,
+    feedbackBodyEs: detail,
+    poeExplanationEs,
+    poeNextStepEs: poeExplanationEs,
+  };
 }
 
 /**
@@ -888,3 +1462,4 @@ export function computeRCAndLEDState(params: {
     curvePoints,
   };
 }
+

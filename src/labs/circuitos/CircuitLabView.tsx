@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Zap,
   RotateCcw,
   Trash2,
   Plus,
@@ -16,6 +15,11 @@ import {
   Power,
   Cpu,
   HelpCircle,
+  Eye,
+  EyeOff,
+  Lightbulb,
+  ShieldAlert,
+  Wrench,
 } from 'lucide-react';
 import { Language, dictionary } from '../../assets/js/i18n';
 import { audioSynth } from '../../assets/js/audio-synth';
@@ -25,6 +29,10 @@ import {
   ComponentType,
   CircuitTopology,
   BranchFaultState,
+  MultimeterMode,
+  MAX_RATED_POWER_WATTS,
+  FaultDiagnosisMission,
+  HiddenFaultType,
   solveCircuit,
   analyzeWorkbenchCircuit,
   buildTopologyComponents3D,
@@ -32,6 +40,9 @@ import {
   getResistorColorBands5,
   calculateOhmRegressionSlope,
   computeRCAndLEDState,
+  evaluateMultimeterMeasurement,
+  generateFaultDiagnosisMission,
+  validateFaultDiagnosisMission,
 } from './circuit-engine';
 import {
   CIRCUIT_CHALLENGES,
@@ -240,6 +251,8 @@ export function createCircuitPreset(presetName: 'ohm' | 'divider' | 'parallel' |
   });
 }
 
+type CockpitTabId = 'controls' | 'multimeter' | 'diagnosis' | 'oscilloscope';
+
 export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
   lang,
   onUpdateTelemetry,
@@ -250,19 +263,48 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
   const t = dictionary[lang];
 
   const [activeSubTab, setActiveSubTab] = useState<'sandbox' | 'challenges'>('sandbox');
+  const [cockpitTab, setCockpitTab] = useState<CockpitTabId>('controls');
   const [viewDimension, setViewDimension] = useState<'3d' | '2d'>('3d');
   const [components, setComponents] = useState<CircuitComponent[]>(() => createCircuitPreset('ohm'));
   const [selectedId, setSelectedId] = useState<string>('res-1');
   const [flowMode, setFlowMode] = useState<'electrons' | 'conventional'>('electrons');
 
-  // === ESTADO DINÁMICO BASADO EN GRAFO DE COMPONENTES (SIN ARQUITECTURA RÍGIDA) ===
+  // === ESTADO DINÁMICO DEL GRAFO MNA ===
   const [isPowered, setIsPowered] = useState<boolean>(true);
   const [topology, setTopology] = useState<CircuitTopology>('series');
   const [eiaBandMode, setEiaBandMode] = useState<4 | 5>(4);
 
+  // === OBJETIVO A: MULTÍMETRO CON SONDAS INTERACTIVAS Y PERILLA SELECTORA (V / Ω / A) ===
+  const [multimeterMode, setMultimeterMode] = useState<MultimeterMode>('V');
+  const [isFuseBlown, setIsFuseBlown] = useState<boolean>(false);
+  const [probeRedNode, setProbeRedNode] = useState<string>('n1');
+  const [probeBlackNode, setProbeBlackNode] = useState<string>('n2');
+  const [activeProbeTip, setActiveProbeTip] = useState<'red' | 'black'>('red');
+  const [measuredBranches, setMeasuredBranches] = useState<Record<'R1' | 'R2' | 'R3', boolean>>({
+    R1: false,
+    R2: false,
+    R3: false,
+  });
+  const [revealAllBranches, setRevealAllBranches] = useState<boolean>(false);
+
+  // === OBJETIVO C: MODO DESAFÍO "CAJA NEGRA" (DIAGNÓSTICO DE CIRCUITO AVERIADO - CICLO POE) ===
+  const [diagnosisMission, setDiagnosisMission] = useState<FaultDiagnosisMission | null>(null);
+  const [poePredictionText, setPoePredictionText] = useState<string>(
+    'Al medir con el multímetro en paralelo (V⎓) o con fuente apagada (Ω), identificaré la rama cuya ley de Ohm diverge del valor nominal.'
+  );
+  const [poeSelectedBranch, setPoeSelectedBranch] = useState<'R1' | 'R2' | 'R3'>('R1');
+  const [poeSelectedFault, setPoeSelectedFault] = useState<HiddenFaultType>('OPEN_FILAMENT');
+  const [poeSelectedJustification, setPoeSelectedJustification] = useState<number>(0);
+  const [poeFeedback, setPoeFeedback] = useState<{
+    passed: boolean;
+    feedbackTitleEs: string;
+    feedbackBodyEs: string;
+    poeNextStepEs: string;
+  } | null>(null);
+
   // Modo Transitorio RC + Diodo LED 3D
   const [rcModeActive, setRcModeActive] = useState<boolean>(false);
-  const [capacitanceUF, setCapacitanceUF] = useState<number>(470);
+  const [capacitanceUF] = useState<number>(470);
   const [rcCharging, setRcCharging] = useState<boolean>(true);
   const [rcElapsed, setRcElapsed] = useState<number>(1.2);
 
@@ -290,6 +332,9 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
   const f1: BranchFaultState = compR1?.faultState ?? 'ON';
   const f2: BranchFaultState = compR2?.faultState ?? 'ON';
   const f3: BranchFaultState = compR3?.faultState ?? 'ON';
+  const typeR1 = compR1?.type === 'bulb' ? 'bulb' : 'resistor';
+  const typeR2 = compR2?.type === 'bulb' ? 'bulb' : 'resistor';
+  const typeR3 = compR3?.type === 'bulb' ? 'bulb' : 'resistor';
 
   const setR1 = (ohms: number) => updateComponentById('res-1', { resistance: ohms });
   const setR2 = (ohms: number) => updateComponentById('res-2', { resistance: ohms });
@@ -301,6 +346,20 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
     if (compBat) updateComponentById(compBat.id, { voltage: v });
   };
 
+  // Alternar entre Resistencia Cerámica y Bombilla Incandescente (Objetivo B: máx 15.0W)
+  const toggleBranchBulbType = (branchId: 'R1' | 'R2' | 'R3') => {
+    const compId = branchId === 'R1' ? 'res-1' : branchId === 'R2' ? 'res-2' : 'res-3';
+    const currentComp = components.find((c) => c.id === compId);
+    if (!currentComp) return;
+    const nextType: ComponentType = currentComp.type === 'bulb' ? 'resistor' : 'bulb';
+    updateComponentById(compId, {
+      type: nextType,
+      label: nextType === 'bulb' ? `Bombilla ${branchId}` : branchId,
+      maxPower: nextType === 'bulb' ? MAX_RATED_POWER_WATTS : undefined,
+      faultState: 'ON',
+    });
+  };
+
   // Sincronización desde la Calculadora EIA de Código de Colores
   useEffect(() => {
     if (!externalResistorSync) return;
@@ -310,19 +369,15 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
     if (externalResistorSync.target === 'R3') setR3(clamped);
   }, [externalResistorSync]);
 
-  // Terminales del Multímetro Flotante (Rojo V+ y Negro COM)
-  const [probeRedNode, setProbeRedNode] = useState<string>('n3');
-  const [probeBlackNode, setProbeBlackNode] = useState<string>('n5');
-
   const [recordedPoints, setRecordedPoints] = useState<Array<{ current: number; voltage: number }>>([
     { current: 0.01, voltage: 4.7 },
     { current: 0.02, voltage: 9.4 },
     { current: 0.03, voltage: 14.1 },
   ]);
 
-  const [newCompType, setNewCompType] = useState<ComponentType>('resistor');
-  const [newNodeA, setNewNodeA] = useState<string>('n2');
-  const [newNodeB, setNewNodeB] = useState<string>('n4');
+  const [newCompType] = useState<ComponentType>('resistor');
+  const [newNodeA] = useState<string>('n2');
+  const [newNodeB] = useState<string>('n4');
 
   const [blackBoxGuess, setBlackBoxGuess] = useState<string>('470');
   const [validationFeedback, setValidationFeedback] = useState<Record<string, ValidationResult>>({});
@@ -341,6 +396,59 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
     () => analyzeWorkbenchCircuit(components, isPowered, topology),
     [components, isPowered, topology]
   );
+
+  // Evaluación realista del Multímetro (Voltímetro V⎓, Óhmetro Ω con fuente apagada, Amperímetro A⎓ con fusible)
+  const multimeterReading = useMemo(
+    () =>
+      evaluateMultimeterMeasurement({
+        mode: multimeterMode,
+        probeRedNode,
+        probeBlackNode,
+        components,
+        solution,
+        topologyResult,
+        isPowered,
+        isFuseBlown,
+      }),
+    [
+      multimeterMode,
+      probeRedNode,
+      probeBlackNode,
+      components,
+      solution,
+      topologyResult,
+      isPowered,
+      isFuseBlown,
+    ]
+  );
+
+  // Disparo automático del fusible si el alumno conecta el Amperímetro en paralelo directo con la fuente activa
+  useEffect(() => {
+    if (multimeterReading.triggersFuseBlow && !isFuseBlown) {
+      setIsFuseBlown(true);
+      audioSynth.playShortCircuitAlarm();
+    }
+  }, [multimeterReading.triggersFuseBlow, isFuseBlown]);
+
+  // Desbloqueo automático de la fila de la tabla cuando el alumno mide los bornes de una rama con las sondas
+  useEffect(() => {
+    if (isFuseBlown) return;
+    if (multimeterMode === 'OHM' && isPowered) return;
+    const branchMap: Array<{ id: 'R1' | 'R2' | 'R3'; comp: CircuitComponent | undefined }> = [
+      { id: 'R1', comp: compR1 },
+      { id: 'R2', comp: compR2 },
+      { id: 'R3', comp: compR3 },
+    ];
+    branchMap.forEach(({ id, comp }) => {
+      if (!comp) return;
+      const matches =
+        (probeRedNode === comp.nodeA && probeBlackNode === comp.nodeB) ||
+        (probeRedNode === comp.nodeB && probeBlackNode === comp.nodeA);
+      if (matches) {
+        setMeasuredBranches((prev) => (prev[id] ? prev : { ...prev, [id]: true }));
+      }
+    });
+  }, [probeRedNode, probeBlackNode, multimeterMode, isPowered, isFuseBlown, compR1, compR2, compR3]);
 
   const rcState = useMemo(
     () =>
@@ -371,9 +479,11 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
     [recordedPoints]
   );
 
-  // Reconfigura únicamente el cableado entre nodos cuando el usuario cambia explícitamente de Topología (Serie / Paralelo / Mixto)
+  // Reconfigura el cableado entre nodos cuando el usuario cambia de Topología (Serie / Paralelo / Mixto)
   const applyTopologyRewiring = (nextTop: CircuitTopology) => {
     setTopology(nextTop);
+    setDiagnosisMission(null);
+    setPoeFeedback(null);
     setComponents((prev) => {
       const prevSw = prev.find((c) => c.id === 'sw-1');
       const built = buildTopologyComponents3D({
@@ -386,9 +496,102 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
         f2,
         f3,
         isPowered: prevSw ? prevSw.isClosed !== false : isPowered,
+        branchTypes: {
+          R1: typeR1,
+          R2: typeR2,
+          R3: typeR3,
+        },
       });
       return built;
     });
+  };
+
+  // Iniciar una nueva misión de Diagnóstico "Caja Negra" (Objetivo C)
+  const handleStartDiagnosisMission = (customTopology?: CircuitTopology) => {
+    const targetTop = customTopology ?? topology;
+    const mission = generateFaultDiagnosisMission(targetTop);
+    setTopology(mission.topology);
+    setDiagnosisMission(mission);
+    setPoeFeedback(null);
+    setIsPowered(true);
+    setRevealAllBranches(false);
+    setMeasuredBranches({ R1: false, R2: false, R3: false });
+    setCockpitTab('diagnosis');
+
+    const fMap: Record<'R1' | 'R2' | 'R3', BranchFaultState> = {
+      R1: 'ON',
+      R2: 'ON',
+      R3: 'ON',
+    };
+    const rMap: Record<'R1' | 'R2' | 'R3', number> = {
+      R1: mission.nominalOhms.R1,
+      R2: mission.nominalOhms.R2,
+      R3: mission.nominalOhms.R3,
+    };
+
+    if (mission.faultType === 'OPEN_FILAMENT') {
+      fMap[mission.faultyBranchId] = 'OPEN';
+    } else if (mission.faultType === 'SHORT_BYPASS') {
+      fMap[mission.faultyBranchId] = 'SHORT';
+    } else if (mission.faultType === 'ALTERED_HIGH_RESISTANCE') {
+      rMap[mission.faultyBranchId] = mission.alteredOhms ?? mission.nominalOhms[mission.faultyBranchId] * 4;
+    }
+
+    setComponents(
+      buildTopologyComponents3D({
+        topology: mission.topology,
+        sourceVoltage: mission.sourceVoltage,
+        r1: rMap.R1,
+        r2: rMap.R2,
+        r3: rMap.R3,
+        f1: fMap.R1,
+        f2: fMap.R2,
+        f3: fMap.R3,
+        isPowered: true,
+      })
+    );
+  };
+
+  // Validar y reparar la misión de Caja Negra (Ciclo POE)
+  const handleValidateAndRepairDiagnosis = () => {
+    if (!diagnosisMission) return;
+    const result = validateFaultDiagnosisMission({
+      mission: diagnosisMission,
+      selectedBranchId: poeSelectedBranch,
+      selectedFaultType: poeSelectedFault,
+      selectedJustificationIndex: poeSelectedJustification,
+    });
+    setPoeFeedback(result);
+    if (result.passed) {
+      audioSynth.playSuccessChime();
+      onCompleteChallenge('elec-poe-diagnosis', 350);
+      // Reparar automáticamente el circuito a sus valores nominales sanos
+      setComponents(
+        buildTopologyComponents3D({
+          topology: diagnosisMission.topology,
+          sourceVoltage: diagnosisMission.sourceVoltage,
+          r1: diagnosisMission.nominalOhms.R1,
+          r2: diagnosisMission.nominalOhms.R2,
+          r3: diagnosisMission.nominalOhms.R3,
+          f1: 'ON',
+          f2: 'ON',
+          f3: 'ON',
+          isPowered: true,
+        })
+      );
+      setRevealAllBranches(true);
+    }
+  };
+
+  // Colocar la sonda activa al hacer clic en un nodo 3D o 2D
+  const handlePlaceActiveProbeOnNode = (nodeId: string) => {
+    if (activeProbeTip === 'red') {
+      setProbeRedNode(nodeId);
+      setActiveProbeTip('black');
+    } else {
+      setProbeBlackNode(nodeId);
+      setActiveProbeTip('red');
+    }
   };
 
   // Sincronizar audio procedural
@@ -397,7 +600,9 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
     if (topologyResult.isShortCircuitFault) {
       audioSynth.playShortCircuitAlarm();
     }
-    const burnedCount = Object.values(solution.componentStates).filter((s) => s.isBurnedOut).length;
+    const burnedCount =
+      Object.values(solution.componentStates).filter((s) => s.isBurnedOut).length +
+      topologyResult.branches.filter((b) => b.isBurnedOut).length;
     if (burnedCount > prevBurnoutCountRef.current) {
       audioSynth.playBurnoutSound();
     }
@@ -408,7 +613,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
     };
   }, [solution, topologyResult, isPowered]);
 
-  // Exportar telemetría en vivo hacia el Generador de Informes Científicos y Tutor IA
+  // Exportar telemetría en vivo
   useEffect(() => {
     onUpdateTelemetry([
       {
@@ -436,7 +641,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
     ]);
   }, [topologyResult, lang, onUpdateTelemetry]);
 
-  // Renderizado del Canvas 2D interactivo a 60 FPS cuando se selecciona Esquemático 2D
+  // Renderizado del Canvas 2D interactivo con Sondas Roja/Negra y Brillo Radial de Bombillas
   useEffect(() => {
     if (viewDimension !== '2d') return;
     const canvas = canvasRef.current;
@@ -472,12 +677,19 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
 
       phaseRef.current = (phaseRef.current + 0.016) % 1000;
 
+      const branchMapById: Record<string, (typeof topologyResult.branches)[number] | undefined> = {
+        'res-1': topologyResult.branches[0],
+        'res-2': topologyResult.branches[1],
+        'res-3': topologyResult.branches[2],
+      };
+
       components.forEach((comp) => {
         const posA = NODE_POSITIONS[comp.nodeA];
         const posB = NODE_POSITIONS[comp.nodeB];
         if (!posA || !posB) return;
 
         const state = solution.componentStates[comp.id];
+        const bInfo = branchMapById[comp.id];
         const isSelected = comp.id === selectedComponent?.id;
         const mx = (posA.x + posB.x) / 2;
         const my = (posA.y + posB.y) / 2;
@@ -489,8 +701,9 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
         ctx.lineTo(posB.x, posB.y);
         ctx.stroke();
 
-        const current = isPowered ? state?.current ?? 0 : 0;
-        if (Math.abs(current) > 0.0005 && !state?.isBurnedOut) {
+        const current = isPowered ? (bInfo ? bInfo.current : state?.current ?? 0) : 0;
+        const isBurned = state?.isBurnedOut || bInfo?.isBurnedOut || false;
+        if (Math.abs(current) > 0.0005 && !isBurned && comp.faultState !== 'OPEN') {
           const dirSign =
             flowMode === 'electrons' ? (current > 0 ? -1 : 1) : current > 0 ? 1 : -1;
           const speed = Math.min(3.5, Math.max(0.35, Math.abs(current) * 8));
@@ -532,8 +745,8 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
           ctx.textAlign = 'center';
           ctx.fillText(`${(comp.voltage ?? 10).toFixed(1)}V`, 0, 8);
         } else if (comp.type === 'resistor') {
-          const bands = getResistorColorBands(comp.resistance);
-          ctx.fillStyle = '#FEF3C7';
+          const masked = !!diagnosisMission;
+          ctx.fillStyle = masked ? '#3B0764' : '#FEF3C7';
           ctx.strokeStyle = isSelected ? '#22D3EE' : '#D97706';
           ctx.lineWidth = 2;
           ctx.beginPath();
@@ -541,19 +754,39 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
           ctx.fill();
           ctx.stroke();
 
-          const bandOffsets = [-24, -10, 4, 22];
-          bands.forEach((b, idx) => {
-            ctx.fillStyle = b.hex;
-            ctx.fillRect(bandOffsets[idx], -15, 7, 30);
-          });
+          if (!masked) {
+            const bands = getResistorColorBands(comp.resistance);
+            const bandOffsets = [-24, -10, 4, 22];
+            bands.forEach((b, idx) => {
+              ctx.fillStyle = b.hex;
+              ctx.fillRect(bandOffsets[idx], -15, 7, 30);
+            });
+          }
 
           ctx.fillStyle = '#E2E8F0';
           ctx.font = 'bold 11px "JetBrains Mono", monospace';
           ctx.textAlign = 'center';
-          ctx.fillText(`${comp.resistance} Ω`, 0, -24);
+          ctx.fillText(
+            masked ? `${comp.label} (??? Ω)` : `${comp.label}: ${comp.resistance} Ω`,
+            0,
+            -24
+          );
         } else if (comp.type === 'bulb') {
-          const isBurned = state?.isBurnedOut ?? false;
-          const brightness = isPowered ? state?.brightness ?? 0 : 0;
+          const powerW = bInfo ? bInfo.power : state?.power ?? 0;
+          const brightness = isPowered && !isBurned ? Math.min(1, powerW / MAX_RATED_POWER_WATTS) : 0;
+
+          // Halo radial térmico proporcional a P = I² * R
+          if (brightness > 0.02 && !isBurned) {
+            const radius = 26 + brightness * 38;
+            const grad = ctx.createRadialGradient(0, 0, 6, 0, 0, radius);
+            grad.addColorStop(0, `rgba(254, 240, 138, ${0.85 * brightness})`);
+            grad.addColorStop(0.5, `rgba(250, 204, 21, ${0.45 * brightness})`);
+            grad.addColorStop(1, 'rgba(250, 204, 21, 0)');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(0, 0, radius, 0, Math.PI * 2);
+            ctx.fill();
+          }
 
           ctx.fillStyle = isBurned ? '#1E293B' : brightness > 0.05 ? '#FEF08A' : '#0F172A';
           ctx.strokeStyle = isBurned ? '#EF4444' : isSelected ? '#22D3EE' : '#FACC15';
@@ -562,26 +795,53 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
           ctx.arc(0, 0, 22, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
+
+          ctx.fillStyle = isBurned ? '#FCA5A5' : '#E2E8F0';
+          ctx.font = 'bold 10px "JetBrains Mono", monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(
+            isBurned ? `${comp.label} [FUNDIDA]` : `💡 ${comp.label} (${powerW.toFixed(1)}W)`,
+            0,
+            -28
+          );
         }
 
         ctx.restore();
       });
 
+      // Dibujar Nodos clickeables y Sondas Roja (V+) / Negra (COM)
       Object.entries(NODE_POSITIONS).forEach(([nodeId, pos]) => {
-        const vNode = isPowered ? solution.nodeVoltages[nodeId] ?? 0 : 0;
+        const isRedHere = probeRedNode === nodeId;
+        const isBlackHere = probeBlackNode === nodeId;
+
         ctx.save();
-        ctx.fillStyle = '#0F172A';
-        ctx.strokeStyle = '#22D3EE';
-        ctx.lineWidth = 2.5;
+        ctx.fillStyle = isRedHere ? '#EF4444' : isBlackHere ? '#0284C7' : '#0F172A';
+        ctx.strokeStyle = isRedHere ? '#FCA5A5' : isBlackHere ? '#7DD3FC' : '#22D3EE';
+        ctx.lineWidth = isRedHere || isBlackHere ? 3.5 : 2.5;
         ctx.beginPath();
-        ctx.arc(pos.x, pos.y, 9, 0, Math.PI * 2);
+        ctx.arc(pos.x, pos.y, 11, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
 
-        ctx.fillStyle = '#94A3B8';
-        ctx.font = '10px "JetBrains Mono", monospace';
+        ctx.fillStyle = '#E2E8F0';
+        ctx.font = 'bold 10px "JetBrains Mono", monospace';
         ctx.textAlign = 'center';
-        ctx.fillText(`${nodeId.toUpperCase()} (${vNode.toFixed(1)}V)`, pos.x, pos.y + 24);
+        ctx.fillText(nodeId.toUpperCase(), pos.x, pos.y + 25);
+
+        if (isRedHere) {
+          ctx.fillStyle = '#EF4444';
+          ctx.fillRect(pos.x - 26, pos.y - 38, 52, 18);
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = 'bold 9px "JetBrains Mono", monospace';
+          ctx.fillText('SONDA V+', pos.x, pos.y - 26);
+        }
+        if (isBlackHere) {
+          ctx.fillStyle = '#0284C7';
+          ctx.fillRect(pos.x - 28, pos.y + 30, 56, 18);
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = 'bold 9px "JetBrains Mono", monospace';
+          ctx.fillText('SONDA COM', pos.x, pos.y + 42);
+        }
         ctx.restore();
       });
 
@@ -590,7 +850,37 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
 
     animId = requestAnimationFrame(renderFrame);
     return () => cancelAnimationFrame(animId);
-  }, [viewDimension, components, solution, selectedComponent, flowMode, isPowered]);
+  }, [
+    viewDimension,
+    components,
+    solution,
+    topologyResult,
+    selectedComponent,
+    flowMode,
+    isPowered,
+    probeRedNode,
+    probeBlackNode,
+    diagnosisMission,
+  ]);
+
+  // Clic en el Canvas 2D para posicionar las Sondas Roja (V+) o Negra (COM) sobre los nodos
+  const handleCanvas2DClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const clickX = (e.clientX - rect.left) * scaleX;
+    const clickY = (e.clientY - rect.top) * scaleY;
+
+    for (const [nodeId, pos] of Object.entries(NODE_POSITIONS)) {
+      const dist = Math.hypot(clickX - pos.x, clickY - pos.y);
+      if (dist <= 26) {
+        handlePlaceActiveProbeOnNode(nodeId);
+        return;
+      }
+    }
+  };
 
   const updateSelectedComponent = (patch: Partial<CircuitComponent>) => {
     if (!selectedComponent) return;
@@ -617,7 +907,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
           : newCompType === 'blackbox'
           ? 470
           : 0,
-      maxPower: newCompType === 'bulb' ? 25 : undefined,
+      maxPower: newCompType === 'bulb' ? MAX_RATED_POWER_WATTS : undefined,
       isClosed: newCompType === 'switch' ? true : undefined,
     };
 
@@ -654,6 +944,8 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
 
   const loadPreset = (preset: 'ohm' | 'divider' | 'parallel' | 'blackbox' | 'mixed') => {
     const next = createCircuitPreset(preset);
+    setDiagnosisMission(null);
+    setPoeFeedback(null);
     setComponents(next);
     setSelectedId(next[1]?.id || next[0]?.id || '');
     if (preset === 'parallel') setTopology('parallel');
@@ -661,7 +953,9 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
     else setTopology('series');
   };
 
-  const hasBurnedBulb = Object.values(solution.componentStates).some((s) => s.isBurnedOut);
+  const hasBurnedBulb =
+    Object.values(solution.componentStates).some((s) => s.isBurnedOut) ||
+    topologyResult.branches.some((b) => b.isBurnedOut);
   const currentQuestion = QUANTUM_DEFENSE_QUIZ[activeQuizIdx];
   const quizCorrectCount = Object.entries(quizAnswers).filter(
     ([qIdx, ans]) => QUANTUM_DEFENSE_QUIZ[Number(qIdx)]?.correctIndex === ans
@@ -679,6 +973,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
 
   // Configura automáticamente la mesa 3D con los datos exactos de la pregunta del cuestionario
   const handleSimulateQuizQuestion = (questionId: number) => {
+    setDiagnosisMission(null);
     setIsPowered(true);
     if (questionId === 1) {
       setComponents(
@@ -711,7 +1006,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
         })
       );
       setTopology('series');
-      setQuizSimNotice('Simulando Pregunta 2 en Mesa 3D: Circuito Serie con R₁=10Ω, R₂=20Ω, R₃=30Ω. ¡Mira en la tabla cómo I_k es idéntica en las tres!');
+      setQuizSimNotice('Simulando Pregunta 2 en Mesa 3D: Circuito Serie con R₁=10Ω, R₂=20Ω, R₃=30Ω. ¡Mide cada rama con las sondas para comprobar que I_k es idéntica!');
     } else if (questionId === 3) {
       setComponents(
         buildTopologyComponents3D({
@@ -808,15 +1103,14 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 quantum-hero-enter">
-      {/* Top Sub-Navigation & QuantumLabs Topology/Power Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl bg-[#0D1322] border border-slate-800/90">
+    <div className="space-y-4 quantum-hero-enter">
+      {/* Cabecera Compacta de Cabina de Laboratorio (Cockpit Header) */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl bg-[#0D1322] border border-slate-800/90">
         <div>
-          <span className="text-xs font-mono uppercase tracking-wider text-cyan-400">
-            MÓDULO 1 · QUANTUMLABS 3D DC WORKBENCH & KIRCHHOFF SOLVER
+          <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-400">
+            CABINA DE EXPERIMENTACIÓN ACTIVA · LEY DE OHM, JOULE &amp; DIAGNÓSTICO POE
           </span>
-          <h2 className="text-xl font-bold text-white">{t.circuitTitle}</h2>
-          <p className="text-xs text-slate-400">{t.circuitSubtitle}</p>
+          <h2 className="text-lg sm:text-xl font-bold text-white">{t.circuitTitle}</h2>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -835,7 +1129,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
             }`}
           >
             <Power className="w-3.5 h-3.5" />
-            <span>{isPowered ? 'FUENTE: ON' : 'FUENTE: OFF'}</span>
+            <span>{isPowered ? 'FUENTE: ON' : 'FUENTE: OFF (Medir Ω)'}</span>
           </button>
 
           {/* Selector de Topologías 3D: Serie / Paralelo / Mixto */}
@@ -862,12 +1156,26 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
             ))}
           </div>
 
+          {/* Botón Directo a Misión Caja Negra (Objetivo C) */}
+          <button
+            type="button"
+            onClick={() => handleStartDiagnosisMission()}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-colors cursor-pointer ${
+              diagnosisMission
+                ? 'bg-purple-500 text-slate-950 border-purple-300'
+                : 'bg-purple-950/60 border-purple-500/50 text-purple-200 hover:bg-purple-900/60'
+            }`}
+          >
+            <Wrench className="w-3.5 h-3.5" />
+            <span>🕵️ Diagnóstico Caja Negra</span>
+          </button>
+
           {/* Tabs Sandbox / Challenges */}
           <div className="flex items-center gap-1 p-1 rounded-lg bg-[#07090E] border border-slate-800">
             <button
               type="button"
               onClick={() => setActiveSubTab('sandbox')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                 activeSubTab === 'sandbox'
                   ? 'bg-cyan-500 text-slate-950 font-semibold'
                   : 'text-slate-300 hover:text-white'
@@ -878,7 +1186,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
             <button
               type="button"
               onClick={() => setActiveSubTab('challenges')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                 activeSubTab === 'challenges'
                   ? 'bg-cyan-500 text-slate-950 font-semibold'
                   : 'text-slate-300 hover:text-white'
@@ -891,12 +1199,49 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
         </div>
       </div>
 
-      {/* Burnout Warning Banner */}
-      {hasBurnedBulb && (
-        <div className="p-3.5 rounded-xl bg-rose-950/60 border border-rose-500/40 flex items-center justify-between gap-4 text-xs text-rose-200">
+      {/* Alerta Didáctica de Fusible del Multímetro Quemado (Objetivo A.3) */}
+      {isFuseBlown && (
+        <div
+          role="alert"
+          data-testid="multimeter-fuse-blown-banner"
+          className="p-3.5 rounded-xl bg-rose-950/90 border-2 border-rose-500 flex flex-wrap items-center justify-between gap-3 text-xs text-rose-100 shadow-lg"
+        >
           <div className="flex items-center gap-2.5">
-            <Flame className="w-5 h-5 text-rose-400 shrink-0" />
-            <span>{t.burnoutWarning}</span>
+            <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0" />
+            <div>
+              <strong className="font-mono uppercase text-rose-300 block">
+                ¡Fusible del multímetro quemado! El amperímetro tiene resistencia interna nula y provocó un cortocircuito.
+              </strong>
+              <span className="text-rose-200/90">
+                Nunca conectes el Amperímetro (A⎓) directamente entre los bornes de la fuente activa. Para medir voltaje en paralelo cambia la perilla a V⎓.
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setIsFuseBlown(false);
+              setMultimeterMode('V');
+            }}
+            className="px-3 py-1.5 rounded-lg bg-rose-500 text-slate-950 font-mono font-bold hover:bg-rose-400 transition-colors shrink-0 cursor-pointer"
+          >
+            🔧 Reemplazar Fusible (10A) y pasar a V⎓
+          </button>
+        </div>
+      )}
+
+      {/* Alerta Térmica de Bombilla Fundida por superar 15.0W (Objetivo B.3) */}
+      {hasBurnedBulb && (
+        <div
+          role="alert"
+          data-testid="bulb-burnout-banner"
+          className="p-3.5 rounded-xl bg-amber-950/80 border border-amber-500/60 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-100"
+        >
+          <div className="flex items-center gap-2.5">
+            <Flame className="w-5 h-5 text-amber-400 shrink-0" />
+            <span>
+              <strong>¡Filamento Incandescente Fundido (Falla OPEN por Sobrecalentamiento)!</strong> La potencia disipada $P = I^2 \cdot R$ superó el límite nominal de <strong>{MAX_RATED_POWER_WATTS.toFixed(1)} W</strong>, abriendo automáticamente esa rama.
+            </span>
           </div>
           <button
             type="button"
@@ -905,27 +1250,28 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                 prev.map((c) => ({
                   ...c,
                   isBurnedOut: false,
-                  voltage: c.type === 'battery' ? 15 : c.voltage,
+                  faultState: c.faultState === 'OPEN' ? 'ON' : c.faultState,
+                  voltage: c.type === 'battery' ? Math.min(18, c.voltage ?? 18) : c.voltage,
                 }))
               )
             }
-            className="px-3 py-1 rounded-md bg-rose-500 text-slate-950 font-semibold hover:bg-rose-400 transition-colors shrink-0 cursor-pointer"
+            className="px-3 py-1.5 rounded-lg bg-amber-400 text-slate-950 font-mono font-bold hover:bg-amber-300 transition-colors shrink-0 cursor-pointer"
           >
-            Reparar Filamento
+            💡 Reemplazar Bombilla Fundida (18V Seguro)
           </button>
         </div>
       )}
 
       {/* Challenges Panel */}
       {activeSubTab === 'challenges' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {CIRCUIT_CHALLENGES.map((ch) => {
             const isDone = !!completedChallenges[ch.id];
             const fb = validationFeedback[ch.id];
             return (
               <div
                 key={ch.id}
-                className="p-5 rounded-xl bg-[#0D1322] border border-slate-800 flex flex-col justify-between gap-4"
+                className="p-4 rounded-xl bg-[#0D1322] border border-slate-800 flex flex-col justify-between gap-3"
               >
                 <div>
                   <div className="flex items-center justify-between gap-2 text-xs font-mono">
@@ -934,18 +1280,18 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                       {isDone ? `● ${t.challengeCompleted}` : `▲ ${t.challengePending}`}
                     </span>
                   </div>
-                  <h3 className="mt-1.5 text-base font-bold text-white">
+                  <h3 className="mt-1 text-base font-bold text-white">
                     {lang === 'es' ? ch.titleEs : ch.titleEn}
                   </h3>
-                  <p className="mt-1.5 text-xs text-slate-300 leading-relaxed">
+                  <p className="mt-1 text-xs text-slate-300 leading-relaxed">
                     {lang === 'es' ? ch.descriptionEs : ch.descriptionEn}
                   </p>
-                  <p className="mt-2 p-2.5 rounded-lg bg-[#07090E] border border-slate-800/80 text-[11px] font-mono text-slate-400">
+                  <p className="mt-2 p-2 rounded-lg bg-[#07090E] border border-slate-800/80 text-[11px] font-mono text-slate-400">
                     {lang === 'es' ? ch.hintEs : ch.hintEn}
                   </p>
 
                   {ch.requiresInput && (
-                    <div className="mt-3">
+                    <div className="mt-2.5">
                       <label
                         htmlFor={`input-${ch.id}`}
                         className="block text-xs font-medium text-slate-300 mb-1"
@@ -964,7 +1310,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
 
                   {fb && (
                     <div
-                      className={`mt-3 p-2.5 rounded-lg border text-xs flex items-start gap-2 ${
+                      className={`mt-2.5 p-2.5 rounded-lg border text-xs flex items-start gap-2 ${
                         fb.passed
                           ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-200'
                           : 'bg-amber-950/50 border-amber-500/40 text-amber-200'
@@ -984,14 +1330,14 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                   <button
                     type="button"
                     onClick={() => loadPreset(ch.id === 'elec-1' ? 'divider' : 'blackbox')}
-                    className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 transition-colors cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 transition-colors cursor-pointer"
                   >
                     {t.loadChallengeSetup}
                   </button>
                   <button
                     type="button"
                     onClick={() => handleValidateChallenge(ch.id)}
-                    className="flex-1 px-4 py-2 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition-colors cursor-pointer"
+                    className="flex-1 px-4 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold text-xs transition-colors cursor-pointer"
                   >
                     {t.validateChallenge}
                   </button>
@@ -1002,20 +1348,20 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
         </div>
       )}
 
-      {/* Main Split Console: Left 3D Workbench + Zone 2 Multimeter | Right Zone 1 Controls & Inspector */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left 7 Cols: Interactive 3D WebGL Workbench + Zona 2 (LCD Multimeter & Analytical Table) */}
-        <div className="lg:col-span-7 space-y-4">
+      {/* OBJETIVO D: CABINA DE LABORATORIO UNIFICADA (COCKPIT LAYOUT SIN SCROLL EXCESIVO) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+        {/* Columna Izquierda (7 Cols): Banco de Trabajo 3D/2D + Barra de Sondas y Multímetro en Vivo */}
+        <div className="lg:col-span-7 space-y-3">
           <div className="rounded-xl bg-[#0D1322] border border-slate-800 overflow-hidden">
             {/* Canvas Top Toolbar */}
-            <div className="px-4 py-3 bg-[#090D16] border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+            <div className="px-3.5 py-2.5 bg-[#090D16] border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-slate-400">{t.flowModeLabel}:</span>
                 <div className="flex items-center gap-1 p-0.5 rounded-lg bg-[#07090E] border border-slate-800">
                   <button
                     type="button"
                     onClick={() => setFlowMode('electrons')}
-                    className={`px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${
+                    className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${
                       flowMode === 'electrons'
                         ? 'bg-sky-500 text-slate-950 font-semibold'
                         : 'text-slate-400 hover:text-white'
@@ -1026,7 +1372,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setFlowMode('conventional')}
-                    className={`px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${
+                    className={`px-2 py-1 rounded text-xs font-medium transition-colors cursor-pointer ${
                       flowMode === 'conventional'
                         ? 'bg-rose-500 text-white font-semibold'
                         : 'text-slate-400 hover:text-white'
@@ -1037,21 +1383,19 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                {/* 4 vs 5 Band EIA Toggle on 3D Resistors */}
+              <div className="flex flex-wrap items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setEiaBandMode((m) => (m === 4 ? 5 : 4))}
-                  className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-cyan-300 border border-slate-700 cursor-pointer"
+                  className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-cyan-300 border border-slate-700 cursor-pointer"
                 >
                   EIA: {eiaBandMode} Bandas
                 </button>
 
-                {/* RC + LED 3D Mode Toggle */}
                 <button
                   type="button"
                   onClick={() => setRcModeActive((v) => !v)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-mono border transition-colors cursor-pointer ${
+                  className={`px-2 py-1 rounded-lg text-[11px] font-mono border transition-colors cursor-pointer ${
                     rcModeActive
                       ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300 font-bold'
                       : 'bg-slate-800 border-slate-700 text-slate-300'
@@ -1071,7 +1415,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                     }`}
                   >
                     <Box className="w-3.5 h-3.5" />
-                    <span>Mesa 3D (WebGL)</span>
+                    <span>Mesa 3D</span>
                   </button>
                   <button
                     type="button"
@@ -1093,9 +1437,12 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                     setF2('ON');
                     setF3('ON');
                     setIsPowered(true);
+                    setIsFuseBlown(false);
+                    setDiagnosisMission(null);
+                    setMeasuredBranches({ R1: false, R2: false, R3: false });
                     loadPreset('ohm');
                   }}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-700 text-xs text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-700 text-xs text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   <span>{t.resetSim}</span>
@@ -1104,12 +1451,16 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
             </div>
 
             {/* Interactive 3D WebGL Workbench or 2D Schematic Canvas */}
-            <div className="relative w-full h-[300px] sm:h-[380px] md:h-auto md:aspect-[16/9] bg-[#070B14]">
-              {/* Guía Rápida para Estudiantes sobre el Lienzo 3D (Visible en pantallas medianas y grandes) */}
+            <div className="relative w-full h-[290px] sm:h-[360px] md:h-[400px] bg-[#070B14]">
               {viewDimension === '3d' && (
                 <div className="hidden sm:flex absolute bottom-2.5 left-2.5 right-2.5 z-10 pointer-events-none flex-wrap items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-[#050811]/90 border border-slate-800/90 text-[11px] font-mono text-slate-300">
-                  <span>🖱️ <strong className="text-cyan-300">Arrastra R₁, R₂ o R₃:</strong> Hacia los lados cambia Ω · Hacia afuera desconecta (ABRIR)</span>
-                  <span>⚡ <strong className="text-amber-300">Clic en Interruptor 3D:</strong> Corta o da paso a la energía</span>
+                  <span>
+                    🎯 <strong className="text-rose-400">Clic en Poste N0..N5:</strong> Coloca Sonda{' '}
+                    {activeProbeTip === 'red' ? 'Roja (V+)' : 'Negra (COM)'}
+                  </span>
+                  <span>
+                    🖱️ <strong className="text-cyan-300">Arrastra R₁..R₃:</strong> Cambia Ω o desconecta (ABRIR)
+                  </span>
                 </div>
               )}
               {viewDimension === '3d' ? (
@@ -1125,7 +1476,12 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                   flowMode={flowMode}
                   probeRedNode={probeRedNode}
                   probeBlackNode={probeBlackNode}
+                  activeProbeTip={activeProbeTip}
+                  measuredBranches={measuredBranches}
+                  revealAllBranches={revealAllBranches}
+                  maskNominalValues={!!diagnosisMission}
                   onSelectComponent={(id) => setSelectedId(id)}
+                  onSelectNode={(nodeId) => handlePlaceActiveProbeOnNode(nodeId)}
                   onToggleSwitch={(id) => {
                     const sw = components.find((c) => c.id === id);
                     if (sw) {
@@ -1153,101 +1509,134 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                   ref={canvasRef}
                   width={820}
                   height={460}
+                  onClick={handleCanvas2DClick}
                   data-testid="circuit-canvas"
                   className="w-full h-full object-contain cursor-pointer"
                 />
               )}
             </div>
 
-            {/* Guía Táctil en Móvil debajo del Lienzo 3D (para no tapar la mesa 3D en celulares) */}
-            {viewDimension === '3d' && (
-              <div className="sm:hidden px-3 py-2 bg-[#060913] border-t border-slate-800/80 text-[10px] font-mono text-slate-300 flex flex-col gap-1">
-                <span>👆 <strong className="text-cyan-300">Toca y arrastra R₁, R₂ o R₃:</strong> Hacia los lados cambia Ω · Hacia afuera desconecta (ABRIR)</span>
-                <span>⚡ <strong className="text-amber-300">Toca el Interruptor 3D:</strong> Enciende o apaga el circuito</span>
-              </div>
-            )}
-
-            {/* Preset & Component Selector Bar Under Canvas */}
-            <div className="px-3.5 sm:px-4 py-3 bg-[#090D16] border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
+            {/* Barra Inferior de Sondas Interactivas y Presets Rápidos */}
+            <div className="px-3.5 py-2.5 bg-[#090D16] border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-xs text-slate-400 mr-1">Presets:</span>
+                <span className="text-[11px] font-mono text-slate-400">Punta activa al tocar nodo:</span>
                 <button
                   type="button"
-                  onClick={() => loadPreset('divider')}
-                  className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-cyan-300 cursor-pointer"
+                  onClick={() => setActiveProbeTip('red')}
+                  className={`px-2 py-1 rounded text-[11px] font-mono font-bold border transition-colors cursor-pointer ${
+                    activeProbeTip === 'red'
+                      ? 'bg-rose-500 text-white border-rose-300'
+                      : 'bg-slate-900 text-rose-300 border-slate-700'
+                  }`}
                 >
-                  {t.presetDivider}
+                  🔴 Sonda Roja V+ ({probeRedNode.toUpperCase()})
                 </button>
                 <button
                   type="button"
-                  onClick={() => loadPreset('parallel')}
-                  className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-purple-300 cursor-pointer"
+                  onClick={() => setActiveProbeTip('black')}
+                  className={`px-2 py-1 rounded text-[11px] font-mono font-bold border transition-colors cursor-pointer ${
+                    activeProbeTip === 'black'
+                      ? 'bg-sky-500 text-slate-950 border-sky-300'
+                      : 'bg-slate-900 text-sky-300 border-slate-700'
+                  }`}
                 >
-                  {t.presetParallel}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => loadPreset('mixed')}
-                  className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-amber-300 cursor-pointer"
-                >
-                  Mixto 3D
-                </button>
-                <button
-                  type="button"
-                  onClick={() => loadPreset('blackbox')}
-                  className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-emerald-300 cursor-pointer"
-                >
-                  {t.presetBlackBox}
+                  ⚫ Sonda Negra COM ({probeBlackNode.toUpperCase()})
                 </button>
               </div>
 
               <div className="flex flex-wrap items-center gap-1.5">
-                {components.map((c) => (
+                <span className="text-[11px] font-mono text-slate-400">Medir rama:</span>
+                {[
+                  { id: 'res-1', label: 'R₁' },
+                  { id: 'res-2', label: 'R₂' },
+                  { id: 'res-3', label: 'R₃' },
+                  { id: 'bat-1', label: 'Fuente' },
+                ].map((item) => (
                   <button
-                    key={c.id}
+                    key={item.id}
                     type="button"
-                    onClick={() => setSelectedId(c.id)}
-                    className={`px-2 py-1 rounded text-[11px] font-mono transition-colors cursor-pointer ${
-                      c.id === selectedComponent?.id
-                        ? 'bg-cyan-500 text-slate-950 font-bold'
-                        : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700'
-                    }`}
+                    onClick={() => handleQuickProbeComponent(item.id)}
+                    className="px-2 py-1 rounded bg-slate-800 hover:bg-cyan-500 hover:text-slate-950 text-[11px] font-mono text-cyan-300 border border-slate-700 transition-colors cursor-pointer"
                   >
-                    {c.label}
+                    🎯 {item.label}
                   </button>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* ZONA 2: Multímetro Digital LCD, Banner Diagnóstico y Tabla Analítica por Rama */}
-          <div className="p-4 sm:p-5 rounded-xl bg-[#0D1322] border border-slate-800 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          {/* Barra Compacta del Multímetro Digital en Tiempo Real (Siempre Visible debajo del Canvas) */}
+          <div className="p-3.5 rounded-xl bg-[#0D1322] border border-slate-800 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Gauge className="w-4 h-4 text-cyan-400 shrink-0" />
-                <h3 className="text-xs sm:text-sm font-bold text-white">
-                  ZONA 2 · Multímetro Digital LCD y Verificación de Kirchhoff (LVK / LCK)
-                </h3>
+                <span className="text-xs font-bold text-white">
+                  Multímetro Digital de Sondas ({probeRedNode.toUpperCase()} → {probeBlackNode.toUpperCase()})
+                </span>
               </div>
-              <div className="flex flex-wrap items-center gap-1.5 text-[10px] sm:text-[11px] font-mono">
-                <span className="px-2 py-0.5 rounded bg-emerald-950 border border-emerald-500/40 text-emerald-300">
-                  ● LVK: Equilibrio
-                </span>
-                <span className="px-2 py-0.5 rounded bg-cyan-950 border border-cyan-500/40 text-cyan-300">
-                  ● LCK: Conservación
-                </span>
+
+              {/* Perilla Selectora del Multímetro: V⎓ / Ω / A⎓ (Objetivo A.3) */}
+              <div
+                role="group"
+                aria-label="Selector de modo del multímetro"
+                className="flex items-center gap-1 p-1 rounded-lg bg-[#050811] border border-slate-800"
+              >
+                {(
+                  [
+                    { mode: 'V', label: 'V⎓ (Voltímetro)', color: 'bg-cyan-500 text-slate-950' },
+                    { mode: 'OHM', label: 'Ω (Óhmetro)', color: 'bg-amber-400 text-slate-950' },
+                    { mode: 'A', label: 'A⎓ (Amperímetro)', color: 'bg-rose-500 text-white' },
+                  ] as Array<{ mode: MultimeterMode; label: string; color: string }>
+                ).map((m) => (
+                  <button
+                    key={m.mode}
+                    type="button"
+                    data-testid={`multimeter-mode-${m.mode}`}
+                    onClick={() => setMultimeterMode(m.mode)}
+                    className={`px-2.5 py-1 rounded text-[11px] font-mono font-bold transition-colors cursor-pointer ${
+                      multimeterMode === m.mode
+                        ? m.color
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* LCD Matrix Display Readouts */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
-              <div className="p-2.5 sm:p-3 rounded-lg bg-[#050811] border border-slate-800">
+            {/* Display Digital + Telemetría General */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="p-2.5 rounded-lg bg-[#050811] border-2 border-cyan-500/50">
+                <span className="text-[10px] font-mono text-cyan-300 block uppercase truncate">
+                  LECTURA SONDAS ({multimeterMode === 'V' ? 'V⎓' : multimeterMode === 'OHM' ? 'Ω' : 'A⎓'})
+                </span>
+                <div className="mt-1 flex items-baseline gap-1">
+                  <span
+                    data-testid="multimeter-readout"
+                    className={`text-lg sm:text-2xl font-mono font-bold tabular-nums ${
+                      isFuseBlown || !multimeterReading.isValidConnection
+                        ? 'text-rose-400'
+                        : 'text-white'
+                    }`}
+                  >
+                    {multimeterMode === 'V' && multimeterReading.isValidConnection && !isFuseBlown
+                      ? multimeterVoltage.toFixed(2)
+                      : multimeterReading.displayText}
+                  </span>
+                  <span className="text-xs font-mono text-cyan-400">{multimeterReading.unit}</span>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-[#050811] border border-slate-800">
                 <span className="text-[10px] font-mono text-slate-400 block uppercase truncate">
                   RESISTENCIA EQ (R_eq)
                 </span>
                 <div className="mt-1 flex items-baseline gap-1">
                   <span className="text-lg sm:text-2xl font-mono font-bold text-cyan-300 tabular-nums">
-                    {Number.isFinite(topologyResult.equivalentResistance)
+                    {diagnosisMission
+                      ? '???'
+                      : Number.isFinite(topologyResult.equivalentResistance)
                       ? topologyResult.equivalentResistance.toFixed(2)
                       : '∞'}
                   </span>
@@ -1255,7 +1644,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                 </div>
               </div>
 
-              <div className="p-2.5 sm:p-3 rounded-lg bg-[#050811] border border-slate-800">
+              <div className="p-2.5 rounded-lg bg-[#050811] border border-slate-800">
                 <span className="text-[10px] font-mono text-slate-400 block uppercase truncate">
                   CORRIENTE TOTAL (I_T)
                 </span>
@@ -1270,7 +1659,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                 </div>
               </div>
 
-              <div className="p-2.5 sm:p-3 rounded-lg bg-[#050811] border border-slate-800">
+              <div className="p-2.5 rounded-lg bg-[#050811] border border-slate-800">
                 <span className="text-[10px] font-mono text-slate-400 block uppercase truncate">
                   POTENCIA JOULE (P_T)
                 </span>
@@ -1281,779 +1670,811 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                   <span className="text-xs font-mono text-slate-400">W</span>
                 </div>
               </div>
-
-              <div className="p-2.5 sm:p-3 rounded-lg bg-[#050811] border border-slate-800">
-                <span className="text-[10px] font-mono text-slate-400 block uppercase truncate">
-                  SONDAS V+ / COM (ΔV)
-                </span>
-                <div className="mt-1 flex items-baseline gap-1">
-                  <span
-                    data-testid="multimeter-readout"
-                    className="text-lg sm:text-2xl font-mono font-bold text-white tabular-nums"
-                  >
-                    {multimeterVoltage.toFixed(2)}
-                  </span>
-                  <span className="text-xs font-mono text-cyan-400">VDC</span>
-                </div>
-              </div>
             </div>
 
-            {/* Natural Language Diagnostic Banner */}
-            <div
-              className={`p-3 rounded-lg border text-xs font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 ${
-                topologyResult.isShortCircuitFault
-                  ? 'bg-rose-950/60 border-rose-500 text-rose-200'
-                  : topologyResult.isOpenCircuitFault
-                  ? 'bg-amber-950/60 border-amber-500 text-amber-200'
-                  : 'bg-[#070B14] border-slate-800 text-cyan-200'
-              }`}
-            >
-              <span>
-                {lang === 'es'
-                  ? topologyResult.diagnosticMessageEs
-                  : topologyResult.diagnosticMessageEn}
-              </span>
-              <span className="shrink-0 text-[11px] text-slate-400">
-                {topologyResult.kvlEquationText}
-              </span>
-            </div>
-
-            {/* Analytical Breakdown Table Per Branch (R1, R2, R3) */}
-            <div className="overflow-x-auto rounded-lg border border-slate-800">
-              <table className="w-full min-w-[460px] text-left text-xs font-mono">
-                <thead className="bg-[#090D16] text-slate-400 border-b border-slate-800">
-                  <tr>
-                    <th className="py-2 px-2.5 sm:px-3">Rama</th>
-                    <th className="py-2 px-2.5 sm:px-3">R Nominal</th>
-                    <th className="py-2 px-2.5 sm:px-3">Caída V_k</th>
-                    <th className="py-2 px-2.5 sm:px-3">Corriente I_k</th>
-                    <th className="py-2 px-2.5 sm:px-3">Potencia P_k</th>
-                    <th className="py-2 px-2.5 sm:px-3">Estado</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/70 bg-[#070A12]">
-                  {topologyResult.branches.map((b) => (
-                    <tr key={b.branchId}>
-                      <td className="py-2 px-2.5 sm:px-3 font-bold text-cyan-300">{b.branchId}</td>
-                      <td className="py-2 px-2.5 sm:px-3 text-slate-200">{b.nominalOhms} Ω</td>
-                      <td className="py-2 px-2.5 sm:px-3 text-amber-300">{b.voltageDrop.toFixed(2)} V</td>
-                      <td className="py-2 px-2.5 sm:px-3 text-sky-300">{b.current.toFixed(3)} A</td>
-                      <td className="py-2 px-2.5 sm:px-3 text-emerald-300">{b.power.toFixed(2)} W</td>
-                      <td className="py-2 px-2.5 sm:px-3">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            b.faultState === 'ON'
-                              ? 'bg-emerald-950 text-emerald-300'
-                              : b.faultState === 'OPEN'
-                              ? 'bg-amber-950 text-amber-300'
-                              : 'bg-rose-950 text-rose-300'
-                          }`}
-                        >
-                          {b.faultState}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Paso a Paso con tus Datos Reales + Analogía Cotidiana para Estudiantes */}
-            <div className="p-3.5 rounded-xl bg-[#070B14] border border-cyan-500/30 space-y-2.5 text-xs">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-mono font-bold text-cyan-300">
-                  📐 ¿De dónde salen estos números? (Fórmula Paso a Paso en Vivo)
-                </span>
-                <span className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 font-mono text-[10px]">
-                  Modo Aprendizaje Paso a Paso
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 font-mono text-[11px]">
-                <div className="p-2 rounded bg-[#0B101E] border border-slate-800">
-                  <span className="text-slate-400 block text-[10px]">1. Resistencia Equivalente:</span>
-                  <span className="text-cyan-200 font-semibold">
-                    {topology === 'series'
-                      ? `R_eq = ${r1}+${r2}+${r3} = ${
-                          Number.isFinite(topologyResult.equivalentResistance)
-                            ? `${topologyResult.equivalentResistance.toFixed(1)} Ω`
-                            : '∞ Ω'
-                        }`
-                      : topology === 'parallel'
-                      ? `1/R_eq = 1/${r1}+1/${r2}+1/${r3} ⇒ ${
-                          Number.isFinite(topologyResult.equivalentResistance)
-                            ? `${topologyResult.equivalentResistance.toFixed(2)} Ω`
-                            : '∞ Ω'
-                        }`
-                      : `R_eq = ${r1} + (${r2}∥${r3}) = ${
-                          Number.isFinite(topologyResult.equivalentResistance)
-                            ? `${topologyResult.equivalentResistance.toFixed(2)} Ω`
-                            : '∞ Ω'
-                        }`}
-                  </span>
-                </div>
-
-                <div className="p-2 rounded bg-[#0B101E] border border-slate-800">
-                  <span className="text-slate-400 block text-[10px]">2. Ley de Ohm (I = V / R_eq):</span>
-                  <span className="text-amber-300 font-semibold">
-                    {topologyResult.isShortCircuitFault
-                      ? 'CORTO → OCP = 0.000 A'
-                      : !Number.isFinite(topologyResult.equivalentResistance) || !isPowered
-                      ? `I_T = 0.000 A`
-                      : `I_T = ${sourceVoltage.toFixed(1)}V / ${topologyResult.equivalentResistance.toFixed(
-                          1
-                        )}Ω = ${topologyResult.totalCurrent.toFixed(3)} A`}
-                  </span>
-                </div>
-
-                <div className="p-2 rounded bg-[#0B101E] border border-slate-800">
-                  <span className="text-slate-400 block text-[10px]">3. Potencia (P = V · I):</span>
-                  <span className="text-emerald-300 font-semibold">
-                    {`P_T = ${sourceVoltage.toFixed(1)}V × ${topologyResult.totalCurrent.toFixed(
-                      2
-                    )}A = ${topologyResult.totalPower.toFixed(2)} W`}
-                  </span>
-                </div>
-              </div>
-
-              <p className="text-[11px] text-slate-300 leading-relaxed pt-0.5">
-                <strong className="text-amber-300">💡 Analogía de la vida real: </strong>
-                {topologyResult.isShortCircuitFault
-                  ? '¡Hiciste un puente sin resistencia! Es como romper una represa: trataría de pasar muchísima corriente de golpe y el fusible automático (Protección OCP) apaga todo para evitar que se queme.'
-                  : topologyResult.isOpenCircuitFault
-                  ? 'Hay una resistencia desconectada (ABRIR). Es como un puente levadizo levantado: los autos (electrones) no pueden cruzar por ese camino.'
-                  : topology === 'series'
-                  ? 'En SERIE el circuito es una carretera de un solo carril: exactamente la misma fila de electrones está obligada a pasar por R₁, R₂ y R₃, pero el voltaje (empujón) se reparte entre las tres.'
-                  : topology === 'parallel'
-                  ? 'En PARALELO el circuito es una autopista de 3 carriles independientes: cada resistencia recibe todo el voltaje de la fuente y los electrones eligen pasar en mayor cantidad por el carril más ancho (el de menor Ω).'
-                  : 'En MIXTO todos los electrones pasan primero por el peaje principal (R₁) y luego el camino se divide en dos carriles paralelos (R₂ y R₃).'}
-              </p>
-            </div>
-
-            {/* Botones de Medición Rápida con Sondas 3D + Selectores de Nodos */}
-            <div className="space-y-2 pt-1">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[11px] font-mono text-slate-300">
-                  🎯 <strong className="text-white">Medir directamente con las Sondas 3D en:</strong>
-                </span>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {[
-                    { id: 'bat-1', label: '🔋 Fuente DC' },
-                    { id: 'res-1', label: '📏 R₁' },
-                    { id: 'res-2', label: '📏 R₂' },
-                    { id: 'res-3', label: '📏 R₃' },
-                    { id: 'bulb-1', label: '💡 Bombilla' },
-                  ].map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => handleQuickProbeComponent(item.id)}
-                      className="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-cyan-500 hover:text-slate-950 text-[11px] font-mono text-cyan-300 border border-slate-700 transition-colors cursor-pointer"
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 text-xs pt-1">
-                <div>
-                  <label htmlFor="probe-red" className="block text-[11px] text-rose-400 font-mono mb-1">
-                    Sonda 3D Roja (V+)
-                  </label>
-                  <select
-                    id="probe-red"
-                    value={probeRedNode}
-                    onChange={(e) => setProbeRedNode(e.target.value)}
-                    className="w-full rounded bg-[#07090E] border border-slate-700 px-2.5 py-1.5 text-xs font-mono text-slate-200"
-                  >
-                    {Object.keys(NODE_POSITIONS).map((n) => (
-                      <option key={n} value={n}>
-                        Nodo {n.toUpperCase()}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="probe-black" className="block text-[11px] text-sky-400 font-mono mb-1">
-                    Sonda 3D Negra (COM)
-                  </label>
-                  <select
-                    id="probe-black"
-                    value={probeBlackNode}
-                    onChange={(e) => setProbeBlackNode(e.target.value)}
-                    className="w-full rounded bg-[#07090E] border border-slate-700 px-2.5 py-1.5 text-xs font-mono text-slate-200"
-                  >
-                    {Object.keys(NODE_POSITIONS).map((n) => (
-                      <option key={n} value={n}>
-                        Nodo {n.toUpperCase()}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right 5 Cols: ZONA 1 (Controles V, R1..R3, Fallas ON/ABRIR/CORTO) + Inspector MNA + ZONA 3 (2 Gráficas) */}
-        <div className="lg:col-span-5 space-y-4">
-          {/* ZONA 1: Controles de Fuente DC (0-48V), Resistencias R1..R3 (1-100Ω) y Modos de Falla */}
-          <div className="p-5 rounded-xl bg-[#0D1322] border border-slate-800 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
-              <div className="flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-cyan-400" />
-                <h3 className="text-sm font-bold text-white">
-                  ZONA 1 · Banco de Control DC y Simulación de Fallas
-                </h3>
-              </div>
-              <span className="text-[11px] font-mono text-cyan-400 uppercase">{topology}</span>
-            </div>
-
-            {/* Source Voltage Slider (0 - 48 V) */}
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <label htmlFor="quantum-v-slider" className="text-slate-300 font-medium">
-                  Voltaje Fuente DC de Sobremesa (0 – 48 V)
-                </label>
-                <span className="font-mono font-bold text-amber-400 tabular-nums">
-                  {sourceVoltage.toFixed(1)} V
-                </span>
-              </div>
-              <input
-                id="quantum-v-slider"
-                type="range"
-                min={0}
-                max={48}
-                step={0.5}
-                value={sourceVoltage}
-                onChange={(e) => {
-                  const v = parseFloat(e.target.value);
-                  setSourceVoltage(v);
-                }}
-                className="w-full accent-amber-400 cursor-pointer"
-              />
-            </div>
-
-            {/* R1, R2, R3 Sliders (1 - 100 Ω) + ON / ABRIR / CORTO Fault Switches */}
-            {(
-              [
-                { id: 'R1', compId: 'res-1', val: r1, setVal: setR1, fault: f1, setFault: setF1 },
-                { id: 'R2', compId: 'res-2', val: r2, setVal: setR2, fault: f2, setFault: setF2 },
-                { id: 'R3', compId: 'res-3', val: r3, setVal: setR3, fault: f3, setFault: setF3 },
-              ] as const
-            ).map((branch) => (
-              <div
-                key={branch.id}
-                className="p-3 rounded-lg bg-[#07090E] border border-slate-800/90 space-y-2"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label
-                    htmlFor={`slider-${branch.id}`}
-                    className="text-xs font-mono font-bold text-cyan-300"
-                  >
-                    Resistencia {branch.id}: {branch.val} Ω
-                  </label>
-
-                  {/* Fault Mode Buttons: ON / ABRIR / CORTO */}
-                  <div className="flex items-center gap-1">
-                    {(
-                      [
-                        { state: 'ON', label: 'ON', title: 'Operación normal de la resistencia' },
-                        { state: 'OPEN', label: 'ABRIR', title: 'Cortar / abrir la pata de la resistencia (R → ∞)' },
-                        { state: 'SHORT', label: 'CORTO', title: 'Cortocircuito físico real (dispara protección OCP y detiene el circuito)' },
-                      ] as Array<{ state: BranchFaultState; label: string; title: string }>
-                    ).map((btn) => (
-                      <button
-                        key={btn.state}
-                        type="button"
-                        title={btn.title}
-                        onClick={() => branch.setFault(btn.state)}
-                        className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-colors cursor-pointer ${
-                          branch.fault === btn.state
-                            ? btn.state === 'ON'
-                              ? 'bg-emerald-500 text-slate-950'
-                              : btn.state === 'OPEN'
-                              ? 'bg-amber-500 text-slate-950'
-                              : 'bg-rose-500 text-white'
-                            : 'bg-slate-800 text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        {btn.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <input
-                  id={`slider-${branch.id}`}
-                  type="range"
-                  min={1}
-                  max={100}
-                  step={1}
-                  value={Math.min(100, branch.val)}
-                  onChange={(e) => {
-                    const nextVal = parseInt(e.target.value, 10);
-                    branch.setVal(nextVal);
-                  }}
-                  className="w-full accent-cyan-400 cursor-pointer"
-                />
-              </div>
-            ))}
-
-            {/* Explicación Física Interactiva: MNA Dinámico, Circuito Abierto (ABRIR) y Cortocircuito Físico Real (CORTO) */}
-            <div className="p-3.5 rounded-xl bg-[#070B14] border border-slate-800 space-y-2.5 text-[11px] leading-relaxed">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-mono font-bold text-cyan-300">
-                  🔬 Motor MNA Dinámico: Ajuste en Mesa 3D y Protección de Cortocircuito Real
-                </span>
-                {(f1 !== 'ON' || f2 !== 'ON' || f3 !== 'ON') && (
+            {multimeterReading.warningEs && (
+              <div className="p-2.5 rounded-lg bg-amber-950/60 border border-amber-500/50 text-amber-200 text-xs font-mono flex items-center justify-between gap-2">
+                <span>⚠️ {multimeterReading.warningEs}</span>
+                {multimeterMode === 'OHM' && isPowered && (
                   <button
                     type="button"
-                    onClick={() => {
-                      setF1('ON');
-                      setF2('ON');
-                      setF3('ON');
-                    }}
-                    className="px-2 py-0.5 rounded bg-cyan-500 text-slate-950 font-mono font-bold text-[10px] cursor-pointer"
+                    onClick={() => setIsPowered(false)}
+                    className="px-2.5 py-1 rounded bg-amber-400 text-slate-950 font-bold text-[11px] shrink-0 cursor-pointer"
                   >
-                    Restaurar R₁, R₂, R₃ a ON
+                    Apagar Fuente (OFF)
                   </button>
                 )}
               </div>
-              <p className="text-slate-300">
-                <strong className="text-cyan-300">1. Arrastre 3D Dinámico (Ley de Ohm y Kirchhoff):</strong>{' '}
-                Arrastra cualquier resistencia (<span className="font-mono">R₁, R₂, R₃</span>) en la mesa 3D hacia los lados para variar su resistencia en vivo, o jálala hacia afuera de los postes para desconectarla físicamente (<span className="font-mono">ABRIR</span>).
-              </p>
-              <p className="text-slate-300">
-                <strong className="text-rose-400">2. Cortocircuito Físico Real (CORTO / Protección OCP):</strong>{' '}
-                En condiciones de cortocircuito físico real (<span className="font-mono">CORTO</span> o <span className="font-mono">R_eq → 0 Ω</span>), la fuente DC activa de inmediato su <strong>Protección contra Sobrecorriente (OCP)</strong>, cortando la salida (<span className="font-mono">V = 0.00 V, I = 0.000 A</span>), apagando la bombilla y deteniendo los electrones para impedir que el sistema siga operando en falla.
-              </p>
-              <div className="pt-1 flex flex-wrap items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setF1('OPEN');
-                    setF2('ON');
-                    setF3('ON');
-                  }}
-                  className="px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-200 font-mono text-[10px] cursor-pointer"
-                >
-                  ✂️ Probar: Cortar R₁ (ABRIR)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setF1('SHORT');
-                    setF2('ON');
-                    setF3('ON');
-                  }}
-                  className="px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/50 text-rose-200 font-mono text-[10px] cursor-pointer"
-                >
-                  ⚡ Probar: Cortocircuito Físico (OCP)
-                </button>
-              </div>
-            </div>
-
-            {/* Optional RC + LED 3D Sandbox Controls */}
-            {rcModeActive && (
-              <div className="p-3.5 rounded-xl bg-emerald-950/30 border border-emerald-500/40 space-y-2.5 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono font-bold text-emerald-300 flex items-center gap-1.5">
-                    <Cpu className="w-4 h-4" />
-                    <span>Transitorio RC + Diodo LED 3D</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setRcCharging((c) => !c)}
-                    className="px-2.5 py-0.5 rounded bg-emerald-500 text-slate-950 font-mono font-bold text-[10px] cursor-pointer"
-                  >
-                    {rcCharging ? 'Modo: CARGA' : 'Modo: DESCARGA'}
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-2 font-mono text-[11px]">
-                  <div>
-                    <span className="text-slate-400 block">Constante τ = R·C:</span>
-                    <span className="text-white font-bold">{rcState.tauSeconds.toFixed(2)} s</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block">Voltaje Capacitor V_C(t):</span>
-                    <span className="text-cyan-300 font-bold">
-                      {rcState.capacitorVoltage.toFixed(2)} V
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  <div className="flex justify-between text-[11px] font-mono mb-1">
-                    <label htmlFor="rc-time-slider" className="text-slate-300">
-                      Instante t en curva exponencial:
-                    </label>
-                    <span className="text-emerald-300">{rcElapsed.toFixed(1)} s</span>
-                  </div>
-                  <input
-                    id="rc-time-slider"
-                    type="range"
-                    min={0}
-                    max={Math.max(2, rcState.tauSeconds * 5)}
-                    step={0.1}
-                    value={rcElapsed}
-                    onChange={(e) => setRcElapsed(parseFloat(e.target.value))}
-                    className="w-full accent-emerald-400 cursor-pointer"
-                  />
-                </div>
-              </div>
             )}
           </div>
+        </div>
 
-          {/* ZONA 3: Dos Gráficas Dinámicas a 60 FPS (V vs. I + Hipérbola I vs. R_eq) */}
-          <div className="p-5 rounded-xl bg-[#0D1322] border border-slate-800 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
-                  <Activity className="w-4 h-4 text-cyan-400" />
-                  <span>ZONA 3 · Osciloscopio Dual (V vs. I &amp; Hipérbola I vs. R)</span>
-                </h3>
-                <p className="text-[11px] text-slate-400">
-                  Pendiente R_reg = {regression.slopeResistance.toFixed(1)} Ω · Punto de operación en vivo
-                </p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {/* Gráfica 1: Voltaje vs Corriente (Ley de Ohm Lineal) */}
-              <div className="p-2.5 rounded-lg bg-[#07090E] border border-slate-800">
-                <span className="text-[10px] font-mono text-cyan-300 block mb-1">
-                  1. Linealidad V vs. I (Pendiente = R_eq)
-                </span>
-                <svg viewBox="0 0 220 130" className="w-full h-28">
-                  <line x1="28" y1="12" x2="28" y2="110" stroke="#334155" strokeWidth="1" />
-                  <line x1="28" y1="110" x2="205" y2="110" stroke="#334155" strokeWidth="1" />
-                  <text x="6" y="22" fill="#94A3B8" fontSize="8" fontFamily="monospace">I(A)</text>
-                  <text x="178" y="123" fill="#94A3B8" fontSize="8" fontFamily="monospace">V (0-48V)</text>
-                  <line
-                    x1="28"
-                    y1="110"
-                    x2="195"
-                    y2="20"
-                    stroke="#06B6D4"
-                    strokeWidth="2"
-                    strokeDasharray="3 2"
-                  />
-                  {/* Punto de operación móvil con coordenadas */}
-                  {(() => {
-                    const normV = Math.min(1, topologyResult.sourceVoltage / 48);
-                    const cx = 28 + normV * 165;
-                    const cy = 110 - normV * 88;
-                    const tx = Math.min(142, Math.max(32, cx - 22));
-                    const ty = Math.max(22, cy - 9);
-                    return (
-                      <g>
-                        <circle cx={cx} cy={cy} r="5" fill="#F59E0B" stroke="#FFF" strokeWidth="1.5" />
-                        <text x={tx} y={ty} fill="#FEF08A" fontSize="8.5" fontFamily="monospace" fontWeight="bold">
-                          ({topologyResult.sourceVoltage.toFixed(0)}V, {topologyResult.totalCurrent.toFixed(2)}A)
-                        </text>
-                      </g>
-                    );
-                  })()}
-                </svg>
-              </div>
-
-              {/* Gráfica 2: Corriente vs Resistencia (Hipérbola I = V / R) */}
-              <div className="p-2.5 rounded-lg bg-[#07090E] border border-slate-800">
-                <span className="text-[10px] font-mono text-purple-300 block mb-1">
-                  2. Hipérbola I vs. R_eq (I = V / R)
-                </span>
-                <svg viewBox="0 0 220 130" className="w-full h-28">
-                  <line x1="28" y1="12" x2="28" y2="110" stroke="#334155" strokeWidth="1" />
-                  <line x1="28" y1="110" x2="205" y2="110" stroke="#334155" strokeWidth="1" />
-                  <text x="6" y="22" fill="#94A3B8" fontSize="8" fontFamily="monospace">I(A)</text>
-                  <text x="172" y="123" fill="#94A3B8" fontSize="8" fontFamily="monospace">R_eq (Ω)</text>
-                  <path
-                    d="M 35 18 Q 55 92 200 104"
-                    fill="none"
-                    stroke="#A855F7"
-                    strokeWidth="2"
-                  />
-                  {(() => {
-                    const reqClamped = Number.isFinite(topologyResult.equivalentResistance)
-                      ? Math.min(150, Math.max(5, topologyResult.equivalentResistance))
-                      : 150;
-                    const normR = (reqClamped - 5) / 145;
-                    const cx = 35 + normR * 160;
-                    const cy = 106 - (1 - normR) ** 2.2 * 84;
-                    const tx = Math.min(138, Math.max(32, cx - 20));
-                    const ty = Math.max(22, cy - 9);
-                    return (
-                      <g>
-                        <circle cx={cx} cy={cy} r="5" fill="#22D3EE" stroke="#FFF" strokeWidth="1.5" />
-                        <text x={tx} y={ty} fill="#67E8F9" fontSize="8.5" fontFamily="monospace" fontWeight="bold">
-                          ({Number.isFinite(topologyResult.equivalentResistance) ? topologyResult.equivalentResistance.toFixed(0) : '∞'}Ω, {topologyResult.totalCurrent.toFixed(2)}A)
-                        </text>
-                      </g>
-                    );
-                  })()}
-                </svg>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
+        {/* Columna Derecha (5 Cols): Cabina Instrumental Unificada con Pestañas (Cockpit Tabs) */}
+        <div className="lg:col-span-5 rounded-xl bg-[#0D1322] border border-slate-800 overflow-hidden">
+          {/* Pestañas de Cabina (Evitan el Scroll Vertical Excesivo - Objetivo D) */}
+          <div
+            role="tablist"
+            aria-label="Paneles de instrumentación del laboratorio"
+            className="grid grid-cols-2 sm:grid-cols-4 bg-[#07090E] border-b border-slate-800 p-1 gap-1"
+          >
+            {(
+              [
+                { id: 'controls', label: '🎛️ Control & 💡' },
+                { id: 'multimeter', label: '📟 Sondas & Tabla' },
+                { id: 'diagnosis', label: '🕵️ Caja Negra' },
+                { id: 'oscilloscope', label: '📈 Gráficas & Test' },
+              ] as Array<{ id: CockpitTabId; label: string }>
+            ).map((tab) => (
               <button
+                key={tab.id}
                 type="button"
-                onClick={handleRecordPoint}
-                className="flex-1 py-1.5 px-3 rounded-lg bg-cyan-500 text-slate-950 font-semibold text-xs hover:bg-cyan-400 transition-colors cursor-pointer"
+                role="tab"
+                aria-selected={cockpitTab === tab.id}
+                onClick={() => setCockpitTab(tab.id)}
+                className={`py-2 px-2 rounded-lg text-[11px] font-mono font-bold transition-colors cursor-pointer truncate ${
+                  cockpitTab === tab.id
+                    ? 'bg-cyan-500 text-slate-950 shadow-sm'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                }`}
               >
-                {t.recordDataPoint} ({recordedPoints.length})
+                {tab.label}
               </button>
-              <button
-                type="button"
-                onClick={() => setRecordedPoints([])}
-                className="py-1.5 px-3 rounded-lg border border-slate-700 text-xs text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                {t.clearGraphData}
-              </button>
-            </div>
+            ))}
           </div>
 
-          {/* Inspector Individual MNA (Para Reto 1 Divisor y Reto 2 Caja Negra) */}
-          {selectedComponent && (
-            <div className="p-4 rounded-xl bg-[#0D1322] border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                <span className="text-xs font-bold text-white">
-                  {t.selectedCompTitle}: {selectedComponent.label}
-                </span>
-                <span className="text-[11px] font-mono text-cyan-400 uppercase">
-                  {selectedComponent.type}
-                </span>
-              </div>
-
-              {(selectedComponent.type === 'resistor' || selectedComponent.type === 'bulb') && (
-                <div>
-                  <div className="flex justify-between text-xs mb-1">
-                    <label htmlFor="resistance-slider" className="text-slate-300">
-                      {t.resistanceLabel}
-                    </label>
-                    <span className="font-mono font-bold text-cyan-300">
-                      {selectedComponent.resistance} Ω
-                    </span>
+          <div className="p-4 space-y-4">
+            {/* TAB 1: CONTROLES DC, SUSTITUCIÓN POR BOMBILLAS INCANDESCENTES (15W) Y FALLAS */}
+            {cockpitTab === 'controls' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-cyan-400" />
+                    <h3 className="text-xs sm:text-sm font-bold text-white">
+                      Banco DC, Bombillas Térmicas (15W) y Fallas
+                    </h3>
                   </div>
-                  <input
-                    id="resistance-slider"
-                    type="range"
-                    min={1}
-                    max={1000}
-                    step={1}
-                    value={selectedComponent.resistance}
-                    onChange={(e) =>
-                      updateSelectedComponent({ resistance: parseInt(e.target.value, 10) })
-                    }
-                    className="w-full accent-cyan-400 cursor-pointer"
-                  />
-
-                  {selectedComponent.type === 'resistor' && (
-                    <div className="mt-2 grid grid-cols-4 gap-1">
-                      {(eiaBandMode === 5
-                        ? getResistorColorBands5(selectedComponent.resistance).slice(0, 4)
-                        : getResistorColorBands(selectedComponent.resistance)
-                      ).map((band, i) => (
-                        <div
-                          key={i}
-                          className="p-1 rounded bg-[#07090E] border border-slate-800 text-center"
-                        >
-                          <div
-                            className="w-full h-2.5 rounded-sm mb-0.5"
-                            style={{ backgroundColor: band.hex }}
-                          />
-                          <span className="text-[9px] font-mono text-slate-300 block truncate">
-                            {lang === 'es' ? band.nameEs : band.nameEn}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <span className="text-[11px] font-mono text-cyan-400 uppercase">{topology}</span>
                 </div>
-              )}
 
-              {selectedComponent.type === 'battery' && (
+                {/* Source Voltage Slider (0 - 48 V) */}
                 <div>
                   <div className="flex justify-between text-xs mb-1">
-                    <label htmlFor="battery-voltage-slider" className="text-slate-300">
-                      {t.voltageLabel}
+                    <label htmlFor="quantum-v-slider" className="text-slate-300 font-medium">
+                      Voltaje Fuente DC (0 – 48 V)
                     </label>
-                    <span className="font-mono font-bold text-amber-400">
-                      {(selectedComponent.voltage ?? 10).toFixed(1)} V
+                    <span className="font-mono font-bold text-amber-400 tabular-nums">
+                      {sourceVoltage.toFixed(1)} V
                     </span>
                   </div>
                   <input
-                    id="battery-voltage-slider"
+                    id="quantum-v-slider"
                     type="range"
-                    min={0.5}
-                    max={60}
+                    min={0}
+                    max={48}
                     step={0.5}
-                    value={selectedComponent.voltage ?? 10}
-                    onChange={(e) =>
-                      updateSelectedComponent({ voltage: parseFloat(e.target.value) })
-                    }
+                    value={sourceVoltage}
+                    onChange={(e) => setSourceVoltage(parseFloat(e.target.value))}
                     className="w-full accent-amber-400 cursor-pointer"
                   />
                 </div>
-              )}
 
-              <div className="flex items-center justify-between text-xs font-mono pt-1 border-t border-slate-800">
-                <span className="text-slate-400">
-                  ΔV: {(solution.componentStates[selectedComponent.id]?.voltageDrop ?? 0).toFixed(2)}V · I:{' '}
-                  {Math.abs(solution.componentStates[selectedComponent.id]?.current ?? 0).toFixed(3)}A
-                </span>
-                <div className="flex items-center gap-2">
+                {/* Ramas R1, R2, R3 con Botón de Bombilla Incandescente (Objetivo B) */}
+                {(
+                  [
+                    {
+                      id: 'R1' as const,
+                      compId: 'res-1',
+                      val: r1,
+                      setVal: setR1,
+                      fault: f1,
+                      setFault: setF1,
+                      compType: typeR1,
+                      branchData: topologyResult.branches[0],
+                    },
+                    {
+                      id: 'R2' as const,
+                      compId: 'res-2',
+                      val: r2,
+                      setVal: setR2,
+                      fault: f2,
+                      setFault: setF2,
+                      compType: typeR2,
+                      branchData: topologyResult.branches[1],
+                    },
+                    {
+                      id: 'R3' as const,
+                      compId: 'res-3',
+                      val: r3,
+                      setVal: setR3,
+                      fault: f3,
+                      setFault: setF3,
+                      compType: typeR3,
+                      branchData: topologyResult.branches[2],
+                    },
+                  ]
+                ).map((branch) => {
+                  const powerW = branch.branchData?.power ?? 0;
+                  const isBurned = branch.branchData?.isBurnedOut ?? false;
+                  const thermalPct = Math.min(100, (powerW / MAX_RATED_POWER_WATTS) * 100);
+
+                  return (
+                    <div
+                      key={branch.id}
+                      className="p-3 rounded-lg bg-[#07090E] border border-slate-800/90 space-y-2"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <label
+                            htmlFor={`slider-${branch.id}`}
+                            className="text-xs font-mono font-bold text-cyan-300"
+                          >
+                            {branch.compType === 'bulb' ? `💡 Bombilla ${branch.id}` : `📏 ${branch.id}`}:{' '}
+                            {diagnosisMission ? '??? Ω' : `${branch.val} Ω`}
+                          </label>
+                          <button
+                            type="button"
+                            data-testid={`toggle-bulb-${branch.id}`}
+                            onClick={() => toggleBranchBulbType(branch.id)}
+                            title="Sustituir entre Resistencia Cerámica y Bombilla Incandescente (Máx 15.0W)"
+                            className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
+                              branch.compType === 'bulb'
+                                ? 'bg-amber-400/20 border-amber-400 text-amber-300'
+                                : 'bg-slate-800 border-slate-700 text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            <Lightbulb className="w-3 h-3" />
+                            <span>{branch.compType === 'bulb' ? 'Bombilla 15W' : 'Usar Bombilla'}</span>
+                          </button>
+                        </div>
+
+                        {!diagnosisMission && (
+                          <div className="flex items-center gap-1">
+                            {(
+                              [
+                                { state: 'ON', label: 'ON' },
+                                { state: 'OPEN', label: 'ABRIR' },
+                                { state: 'SHORT', label: 'CORTO' },
+                              ] as Array<{ state: BranchFaultState; label: string }>
+                            ).map((btn) => (
+                              <button
+                                key={btn.state}
+                                type="button"
+                                onClick={() => branch.setFault(btn.state)}
+                                className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold transition-colors cursor-pointer ${
+                                  branch.fault === btn.state
+                                    ? btn.state === 'ON'
+                                      ? 'bg-emerald-500 text-slate-950'
+                                      : btn.state === 'OPEN'
+                                      ? 'bg-amber-500 text-slate-950'
+                                      : 'bg-rose-500 text-white'
+                                    : 'bg-slate-800 text-slate-400 hover:text-white'
+                                }`}
+                              >
+                                {btn.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {!diagnosisMission && (
+                        <input
+                          id={`slider-${branch.id}`}
+                          type="range"
+                          min={1}
+                          max={100}
+                          step={1}
+                          value={Math.min(100, branch.val)}
+                          onChange={(e) => branch.setVal(parseInt(e.target.value, 10))}
+                          className="w-full accent-cyan-400 cursor-pointer"
+                        />
+                      )}
+
+                      {/* Barra de Respuesta Térmica y Luminosa para Bombillas Incandescentes (Objetivo B) */}
+                      {branch.compType === 'bulb' && (
+                        <div className="pt-1 space-y-1">
+                          <div className="flex items-center justify-between text-[10px] font-mono">
+                            <span className={isBurned ? 'text-rose-400 font-bold' : 'text-amber-300'}>
+                              {isBurned
+                                ? '🔥 Filamento roto por sobrecalentamiento (> 15.0 W)'
+                                : `Potencia Térmica P = I²·R: ${powerW.toFixed(2)} W / ${MAX_RATED_POWER_WATTS.toFixed(1)} W`}
+                            </span>
+                            <span className="text-slate-400">
+                              Brillo: {Math.round((branch.branchData?.brightness ?? 0) * 100)}%
+                            </span>
+                          </div>
+                          <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                            <div
+                              className={`h-full transition-all ${
+                                isBurned
+                                  ? 'bg-rose-500'
+                                  : thermalPct > 80
+                                  ? 'bg-amber-400'
+                                  : 'bg-yellow-300'
+                              }`}
+                              style={{ width: `${isBurned ? 100 : thermalPct}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Controles Opcionales RC + LED 3D */}
+                {rcModeActive && (
+                  <div className="p-3 rounded-xl bg-emerald-950/30 border border-emerald-500/40 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-emerald-300 flex items-center gap-1.5">
+                        <Cpu className="w-4 h-4" />
+                        <span>Transitorio RC + Diodo LED 3D</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setRcCharging((c) => !c)}
+                        className="px-2 py-0.5 rounded bg-emerald-500 text-slate-950 font-mono font-bold text-[10px] cursor-pointer"
+                      >
+                        {rcCharging ? 'CARGA' : 'DESCARGA'}
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 font-mono text-[11px]">
+                      <div>
+                        <span className="text-slate-400 block">Constante τ = R·C:</span>
+                        <span className="text-white font-bold">{rcState.tauSeconds.toFixed(2)} s</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block">Voltaje V_C(t):</span>
+                        <span className="text-cyan-300 font-bold">{rcState.capacitorVoltage.toFixed(2)} V</span>
+                      </div>
+                    </div>
+                    <input
+                      id="rc-time-slider"
+                      type="range"
+                      min={0}
+                      max={Math.max(2, rcState.tauSeconds * 5)}
+                      step={0.1}
+                      value={rcElapsed}
+                      onChange={(e) => setRcElapsed(parseFloat(e.target.value))}
+                      className="w-full accent-emerald-400 cursor-pointer"
+                    />
+                  </div>
+                )}
+
+                {/* Inspector Individual MNA */}
+                {selectedComponent && !diagnosisMission && (
+                  <div className="p-3 rounded-xl bg-[#07090E] border border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-white">
+                        {t.selectedCompTitle}: {selectedComponent.label}
+                      </span>
+                      <div className="flex items-center gap-2 font-mono">
+                        <button
+                          type="button"
+                          onClick={handleAddComponent}
+                          className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Nodo</span>
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Eliminar componente"
+                          onClick={() => {
+                            if (components.length <= 2) return;
+                            setComponents((prev) => prev.filter((c) => c.id !== selectedComponent.id));
+                          }}
+                          className="text-rose-400 hover:text-rose-300 flex items-center gap-1 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                    {(selectedComponent.type === 'resistor' || selectedComponent.type === 'bulb') && (
+                      <input
+                        id="resistance-slider"
+                        type="range"
+                        min={1}
+                        max={1000}
+                        step={1}
+                        value={selectedComponent.resistance}
+                        onChange={(e) =>
+                          updateSelectedComponent({ resistance: parseInt(e.target.value, 10) })
+                        }
+                        className="w-full accent-cyan-400 cursor-pointer"
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 2: MULTÍMETRO DE SONDAS INTERACTIVAS Y TABLA CON REVELACIÓN POR MEDICIÓN (OBJETIVO A) */}
+            {cockpitTab === 'multimeter' && (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+                  <div>
+                    <h3 className="text-xs sm:text-sm font-bold text-white">
+                      Medición Experimental con Sondas (V⎓ / Ω / A⎓)
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      Coloca las puntas Roja y Negra en los bornes de cada rama para desbloquear sus lecturas.
+                    </p>
+                  </div>
                   <button
                     type="button"
-                    onClick={handleAddComponent}
-                    className="text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
+                    onClick={() => setRevealAllBranches((v) => !v)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-cyan-300 border border-slate-700 cursor-pointer"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Nodo</span>
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Eliminar componente"
-                    onClick={() => {
-                      if (components.length <= 2) return;
-                      setComponents((prev) => prev.filter((c) => c.id !== selectedComponent.id));
-                    }}
-                    className="text-rose-400 hover:text-rose-300 flex items-center gap-1 cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    {revealAllBranches ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    <span>{revealAllBranches ? 'Ocultar no medidas' : 'Modo Docente: Ver todo'}</span>
                   </button>
                 </div>
+
+                {/* Selectores explícitos de Nodo para Sonda Roja y Negra */}
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label htmlFor="probe-red" className="block text-[11px] text-rose-400 font-mono mb-1">
+                      🔴 Sonda Roja (Positivo V+)
+                    </label>
+                    <select
+                      id="probe-red"
+                      value={probeRedNode}
+                      onChange={(e) => setProbeRedNode(e.target.value)}
+                      className="w-full rounded bg-[#07090E] border border-slate-700 px-2.5 py-1.5 text-xs font-mono text-slate-200"
+                    >
+                      {Object.keys(NODE_POSITIONS).map((n) => (
+                        <option key={n} value={n}>
+                          Nodo {n.toUpperCase()}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="probe-black" className="block text-[11px] text-sky-400 font-mono mb-1">
+                      ⚫ Sonda Negra (Tierra COM)
+                    </label>
+                    <select
+                      id="probe-black"
+                      value={probeBlackNode}
+                      onChange={(e) => setProbeBlackNode(e.target.value)}
+                      className="w-full rounded bg-[#07090E] border border-slate-700 px-2.5 py-1.5 text-xs font-mono text-slate-200"
+                    >
+                      {Object.keys(NODE_POSITIONS).map((n) => (
+                        <option key={n} value={n}>
+                          Nodo {n.toUpperCase()}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Tabla Analítica por Rama (Oculta lecturas hasta medir con las sondas - Objetivo A.2) */}
+                <div className="overflow-x-auto rounded-lg border border-slate-800">
+                  <table className="w-full text-left text-xs font-mono">
+                    <thead className="bg-[#090D16] text-slate-400 border-b border-slate-800">
+                      <tr>
+                        <th className="py-2 px-2.5">Rama</th>
+                        <th className="py-2 px-2.5">R</th>
+                        <th className="py-2 px-2.5">V_k</th>
+                        <th className="py-2 px-2.5">I_k</th>
+                        <th className="py-2 px-2.5">P_k</th>
+                        <th className="py-2 px-2.5">Acción</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/70 bg-[#070A12]">
+                      {topologyResult.branches.map((b) => {
+                        const isRevealed = revealAllBranches || measuredBranches[b.branchId];
+                        const compId =
+                          b.branchId === 'R1' ? 'res-1' : b.branchId === 'R2' ? 'res-2' : 'res-3';
+                        return (
+                          <tr key={b.branchId}>
+                            <td className="py-2 px-2.5 font-bold text-cyan-300">
+                              {b.componentType === 'bulb' ? `💡 ${b.branchId}` : b.branchId}
+                            </td>
+                            <td className="py-2 px-2.5 text-slate-200">
+                              {diagnosisMission && !isRevealed ? '??? Ω' : `${b.nominalOhms} Ω`}
+                            </td>
+                            <td className="py-2 px-2.5 text-amber-300">
+                              {isRevealed ? `${b.voltageDrop.toFixed(2)} V` : '🔒 Sonda'}
+                            </td>
+                            <td className="py-2 px-2.5 text-sky-300">
+                              {isRevealed ? `${b.current.toFixed(3)} A` : '🔒 Sonda'}
+                            </td>
+                            <td className="py-2 px-2.5 text-emerald-300">
+                              {isRevealed ? `${b.power.toFixed(2)} W` : '🔒 Sonda'}
+                            </td>
+                            <td className="py-2 px-2.5">
+                              <button
+                                type="button"
+                                onClick={() => handleQuickProbeComponent(compId)}
+                                className="px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/50 text-cyan-300 text-[10px] font-bold hover:bg-cyan-500 hover:text-slate-950 transition-colors cursor-pointer"
+                              >
+                                Medir {b.branchId}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Explicación Didáctica de Modos del Multímetro */}
+                <div className="p-3 rounded-xl bg-[#070B14] border border-slate-800 text-[11px] text-slate-300 space-y-1.5">
+                  <p>
+                    <strong className="text-cyan-300">● Voltímetro DC (V⎓):</strong> Conéctalo en{' '}
+                    <strong>paralelo</strong> colocando las sondas en dos nodos distintos.
+                  </p>
+                  <p>
+                    <strong className="text-amber-300">● Óhmetro (Ω):</strong> Solo mide resistencia con la{' '}
+                    <strong>FUENTE: OFF</strong> para no dañar el circuito interno con tensión externa.
+                  </p>
+                  <p>
+                    <strong className="text-rose-400">● Amperímetro (A⎓):</strong> Mide la corriente que circula por una rama. ¡Si lo conectas en paralelo directo con la fuente activa quemarás el fusible por cortocircuito!
+                  </p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+
+            {/* TAB 3: MODO DESAFÍO "CAJA NEGRA" - DIAGNÓSTICO DE CIRCUITO AVERIADO (CICLO POE - OBJETIVO C) */}
+            {cockpitTab === 'diagnosis' && (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2.5">
+                  <div>
+                    <span className="text-[10px] font-mono uppercase text-purple-400 block">
+                      CICLO PREDECIR · OBSERVAR · EXPLICAR (POE)
+                    </span>
+                    <h3 className="text-sm font-bold text-white">
+                      Diagnóstico de Circuito Averiado (Caja Negra)
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    data-testid="start-poe-mission-btn"
+                    onClick={() => handleStartDiagnosisMission()}
+                    className="px-3 py-1 rounded-lg bg-purple-500 hover:bg-purple-400 text-slate-950 font-mono font-bold text-xs transition-colors cursor-pointer"
+                  >
+                    🎲 Generar Avería Oculta
+                  </button>
+                </div>
+
+                {!diagnosisMission ? (
+                  <div className="p-4 rounded-xl bg-[#07090E] border border-slate-800 text-xs text-slate-300 space-y-3">
+                    <p>
+                      En este modo el laboratorio inyecta aleatoriamente una <strong>falla oculta</strong> en una de las ramas (<span className="font-mono">R₁, R₂, R₃</span>) y oculta los códigos de colores y valores nominales.
+                    </p>
+                    <p className="text-slate-400">
+                      Deberás usar el <strong>Multímetro con Sondas (V⎓, Ω con fuente apagada y A⎓)</strong> para inspeccionar los nodos, deducir qué componente falla y justificar físicamente tu diagnóstico antes de repararlo.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleStartDiagnosisMission()}
+                      className="w-full py-2 rounded-lg bg-purple-500 hover:bg-purple-400 text-slate-950 font-mono font-bold text-xs transition-colors cursor-pointer"
+                    >
+                      Iniciar Misión de Diagnóstico Ahora
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3 text-xs">
+                    <div className="p-3 rounded-lg bg-purple-950/40 border border-purple-500/40 text-purple-100 space-y-1">
+                      <span className="font-mono font-bold text-purple-300 block">
+                        📋 Síntoma Reportado ({diagnosisMission.topology.toUpperCase()}):
+                      </span>
+                      <p className="text-[11px] leading-relaxed">{diagnosisMission.symptomEs}</p>
+                    </div>
+
+                    {/* Paso 1 POE: Hipótesis / Predicción */}
+                    <div>
+                      <label className="block text-[11px] font-mono text-cyan-300 mb-1">
+                        1. PREDECIR / OBSERVAR (Usa las sondas en R₁, R₂ y R₃):
+                      </label>
+                      <input
+                        type="text"
+                        value={poePredictionText}
+                        onChange={(e) => setPoePredictionText(e.target.value)}
+                        className="w-full rounded-lg bg-[#07090E] border border-slate-700 px-2.5 py-1.5 text-[11px] text-slate-200"
+                      />
+                    </div>
+
+                    {/* Paso 2 POE: Identificar Componente y Tipo de Falla */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div>
+                        <label
+                          htmlFor="poe-branch-select"
+                          className="block text-[11px] font-mono text-amber-300 mb-1"
+                        >
+                          2. Componente Averiado:
+                        </label>
+                        <select
+                          id="poe-branch-select"
+                          value={poeSelectedBranch}
+                          onChange={(e) => setPoeSelectedBranch(e.target.value as 'R1' | 'R2' | 'R3')}
+                          className="w-full rounded-lg bg-[#07090E] border border-slate-700 px-2.5 py-1.5 text-xs font-mono text-white"
+                        >
+                          <option value="R1">Rama R₁ (Nodos N1-N2 / N0)</option>
+                          <option value="R2">Rama R₂ (Nodos N2-N3 / N4)</option>
+                          <option value="R3">Rama R₃ (Nodos N3-N5)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="poe-fault-select"
+                          className="block text-[11px] font-mono text-amber-300 mb-1"
+                        >
+                          3. Naturaleza de la Falla:
+                        </label>
+                        <select
+                          id="poe-fault-select"
+                          value={poeSelectedFault}
+                          onChange={(e) => setPoeSelectedFault(e.target.value as HiddenFaultType)}
+                          className="w-full rounded-lg bg-[#07090E] border border-slate-700 px-2.5 py-1.5 text-xs font-mono text-white"
+                        >
+                          <option value="OPEN_FILAMENT">Circuito Abierto (R → ∞ / OL)</option>
+                          <option value="SHORT_BYPASS">Cortocircuito Interno (R ≈ 0 Ω)</option>
+                          <option value="ALTERED_HIGH_RESISTANCE">
+                            Resistencia Degradada / Alterada (×4 Ω)
+                          </option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Paso 3 POE: Justificación Física Constructivista */}
+                    <div>
+                      <span className="block text-[11px] font-mono text-emerald-300 mb-1">
+                        4. EXPLICAR (Justificación con Ley de Ohm y Kirchhoff):
+                      </span>
+                      <div className="space-y-1.5">
+                        {diagnosisMission.justificationOptionsEs.map((opt, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setPoeSelectedJustification(idx)}
+                            className={`w-full p-2.5 rounded-lg border text-left text-[11px] leading-relaxed transition-colors cursor-pointer ${
+                              poeSelectedJustification === idx
+                                ? 'bg-cyan-950/80 border-cyan-400 text-cyan-100 font-semibold'
+                                : 'bg-[#07090E] border-slate-800 text-slate-300 hover:border-slate-700'
+                            }`}
+                          >
+                            <span className="font-mono font-bold text-cyan-400 mr-1.5">
+                              [{String.fromCharCode(65 + idx)}]
+                            </span>
+                            {opt}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {poeFeedback && (
+                      <div
+                        className={`p-3 rounded-xl border text-xs space-y-1 ${
+                          poeFeedback.passed
+                            ? 'bg-emerald-950/60 border-emerald-500 text-emerald-100'
+                            : 'bg-amber-950/60 border-amber-500 text-amber-100'
+                        }`}
+                      >
+                        <strong className="block font-mono">{poeFeedback.feedbackTitleEs}</strong>
+                        <p className="text-[11px]">{poeFeedback.feedbackBodyEs}</p>
+                        <p className="text-[10px] font-mono text-cyan-300 pt-1">
+                          💡 {poeFeedback.poeNextStepEs}
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        data-testid="repair-poe-circuit-btn"
+                        onClick={handleValidateAndRepairDiagnosis}
+                        className="flex-1 py-2 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-mono font-bold text-xs transition-colors cursor-pointer"
+                      >
+                        🔧 Diagnosticar y Reparar Circuito
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDiagnosisMission(null);
+                          setPoeFeedback(null);
+                          loadPreset('ohm');
+                        }}
+                        className="py-2 px-3 rounded-lg border border-slate-700 text-xs text-slate-300 hover:bg-slate-800 transition-colors cursor-pointer"
+                      >
+                        Salir
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 4: OSCILOSCOPIO DUAL (V vs I / I vs R) Y EVALUACIÓN DE 10 PREGUNTAS */}
+            {cockpitTab === 'oscilloscope' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <Activity className="w-4 h-4 text-cyan-400" />
+                    <span>Osciloscopio Dual (Pendiente R = {regression.slopeResistance.toFixed(1)} Ω)</span>
+                  </h3>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={handleRecordPoint}
+                      className="px-2 py-1 rounded bg-cyan-500 text-slate-950 font-mono font-bold text-[10px] cursor-pointer"
+                    >
+                      + Punto ({recordedPoints.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRecordedPoints([])}
+                      className="px-2 py-1 rounded border border-slate-700 text-[10px] text-slate-300 cursor-pointer"
+                    >
+                      Limpiar
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="p-2 rounded-lg bg-[#07090E] border border-slate-800">
+                    <span className="text-[10px] font-mono text-cyan-300 block mb-1">
+                      1. Linealidad V vs. I (Ley de Ohm)
+                    </span>
+                    <svg viewBox="0 0 220 120" className="w-full h-24">
+                      <line x1="28" y1="10" x2="28" y2="102" stroke="#334155" strokeWidth="1" />
+                      <line x1="28" y1="102" x2="205" y2="102" stroke="#334155" strokeWidth="1" />
+                      <line
+                        x1="28"
+                        y1="102"
+                        x2="195"
+                        y2="18"
+                        stroke="#06B6D4"
+                        strokeWidth="2"
+                        strokeDasharray="3 2"
+                      />
+                      {(() => {
+                        const normV = Math.min(1, topologyResult.sourceVoltage / 48);
+                        const cx = 28 + normV * 165;
+                        const cy = 102 - normV * 82;
+                        return (
+                          <circle cx={cx} cy={cy} r="5" fill="#F59E0B" stroke="#FFF" strokeWidth="1.5" />
+                        );
+                      })()}
+                    </svg>
+                  </div>
+
+                  <div className="p-2 rounded-lg bg-[#07090E] border border-slate-800">
+                    <span className="text-[10px] font-mono text-purple-300 block mb-1">
+                      2. Hipérbola I vs. R_eq (I = V / R)
+                    </span>
+                    <svg viewBox="0 0 220 120" className="w-full h-24">
+                      <line x1="28" y1="10" x2="28" y2="102" stroke="#334155" strokeWidth="1" />
+                      <line x1="28" y1="102" x2="205" y2="102" stroke="#334155" strokeWidth="1" />
+                      <path
+                        d="M 35 16 Q 55 86 200 98"
+                        fill="none"
+                        stroke="#A855F7"
+                        strokeWidth="2"
+                      />
+                      {(() => {
+                        const reqClamped = Number.isFinite(topologyResult.equivalentResistance)
+                          ? Math.min(150, Math.max(5, topologyResult.equivalentResistance))
+                          : 150;
+                        const normR = (reqClamped - 5) / 145;
+                        const cx = 35 + normR * 160;
+                        const cy = 98 - (1 - normR) ** 2.2 * 78;
+                        return (
+                          <circle cx={cx} cy={cy} r="5" fill="#22D3EE" stroke="#FFF" strokeWidth="1.5" />
+                        );
+                      })()}
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Cuestionario Integrado en la Pestaña de Evaluación */}
+                <div className="p-3 rounded-xl bg-[#07090E] border border-slate-800 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <span className="text-cyan-400 font-bold flex items-center gap-1">
+                      <HelpCircle className="w-3.5 h-3.5" />
+                      <span>Defensa Científica ({quizCorrectCount}/10)</span>
+                    </span>
+                    {currentQuestion && (
+                      <button
+                        type="button"
+                        onClick={() => handleSimulateQuizQuestion(currentQuestion.id)}
+                        className="px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/50 text-cyan-200 text-[10px] cursor-pointer"
+                      >
+                        🔬 Simular en 3D
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-1">
+                    {QUANTUM_DEFENSE_QUIZ.map((q, idx) => {
+                      const answered = quizAnswers[idx] !== undefined;
+                      const isCorrect = quizAnswers[idx] === q.correctIndex;
+                      return (
+                        <button
+                          key={q.id}
+                          type="button"
+                          onClick={() => setActiveQuizIdx(idx)}
+                          className={`w-6 h-6 rounded font-mono text-[10px] font-bold border transition-colors cursor-pointer ${
+                            activeQuizIdx === idx
+                              ? 'bg-cyan-500 text-slate-950 border-cyan-300'
+                              : answered
+                              ? isCorrect
+                                ? 'bg-emerald-950 border-emerald-500/50 text-emerald-300'
+                                : 'bg-rose-950 border-rose-500/50 text-rose-300'
+                              : 'bg-[#0D1322] border-slate-800 text-slate-400'
+                          }`}
+                        >
+                          {q.id}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {quizSimNotice && (
+                    <div className="p-2 rounded bg-cyan-950/60 border border-cyan-500/40 text-[10px] font-mono text-cyan-200">
+                      {quizSimNotice}
+                    </div>
+                  )}
+
+                  {currentQuestion && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-white">{currentQuestion.questionEs}</p>
+                      <div className="grid grid-cols-1 gap-1.5">
+                        {currentQuestion.optionsEs.map((opt, oIdx) => {
+                          const selected = quizAnswers[activeQuizIdx] === oIdx;
+                          const isRight = oIdx === currentQuestion.correctIndex;
+                          const hasAnswered = quizAnswers[activeQuizIdx] !== undefined;
+                          return (
+                            <button
+                              key={oIdx}
+                              type="button"
+                              onClick={() => {
+                                setQuizAnswers((prev) => ({ ...prev, [activeQuizIdx]: oIdx }));
+                                if (oIdx === currentQuestion.correctIndex) {
+                                  audioSynth.playSuccessChime();
+                                }
+                              }}
+                              className={`p-2 rounded-lg border text-left text-[11px] transition-colors cursor-pointer ${
+                                hasAnswered && isRight
+                                  ? 'bg-emerald-950/60 border-emerald-500 text-emerald-200 font-semibold'
+                                  : hasAnswered && selected && !isRight
+                                  ? 'bg-rose-950/60 border-rose-500 text-rose-200'
+                                  : 'bg-[#0D1322] border-slate-800 text-slate-200 hover:border-cyan-500/50'
+                              }`}
+                            >
+                              <span className="font-mono font-bold mr-1.5 text-cyan-400">
+                                {String.fromCharCode(65 + oIdx)}.
+                              </span>
+                              <span>{opt}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {quizAnswers[activeQuizIdx] !== undefined && (
+                        <div className="p-2 rounded bg-[#0D1322] border border-slate-800 text-[11px] text-slate-300 flex items-start gap-1.5">
+                          <BookOpen className="w-3.5 h-3.5 text-cyan-400 shrink-0 mt-0.5" />
+                          <span>{currentQuestion.explanationEs}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* ZONA 4: Módulo de Evaluación y Defensa Científica (Animado al Hacer Scroll) */}
-      <ScrollReveal direction="up" delayMs={80}>
-      <section className="p-6 rounded-2xl bg-[#0D1322] border border-slate-800 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-3">
-          <div className="flex items-center gap-2.5">
-            <HelpCircle className="w-5 h-5 text-cyan-400" />
-            <div>
-              <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-400 block">
-                ZONA 4 · MÓDULO DE EVALUACIÓN Y DEFENSA ANTE JURADO (10 PREGUNTAS)
-              </span>
-              <h3 className="text-base font-bold text-white">
-                Cuestionario Interactivo de Electrodinámica, Topologías y Diagnóstico de Fallas
-              </h3>
-            </div>
-          </div>
-
-          <div className="px-3 py-1.5 rounded-lg bg-[#07090E] border border-slate-800 text-xs font-mono">
-            <span className="text-slate-400">Aciertos: </span>
-            <span className="font-bold text-emerald-400">{quizCorrectCount} / 10</span>
-          </div>
+      {/* Resumen Pedagógico Compacto de Leyes de Kirchhoff al Pie */}
+      <ScrollReveal direction="up" delayMs={60}>
+        <div className="p-3.5 rounded-xl bg-[#0D1322] border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+          <span className="text-cyan-300">
+            {lang === 'es' ? topologyResult.diagnosticMessageEs : topologyResult.diagnosticMessageEn}
+          </span>
+          <span className="text-slate-400">{topologyResult.kvlEquationText}</span>
         </div>
-
-        {/* Navigation Pills 1..10 */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          {QUANTUM_DEFENSE_QUIZ.map((q, idx) => {
-            const answered = quizAnswers[idx] !== undefined;
-            const isCorrect = quizAnswers[idx] === q.correctIndex;
-            return (
-              <button
-                key={q.id}
-                type="button"
-                onClick={() => setActiveQuizIdx(idx)}
-                className={`w-8 h-8 rounded-lg font-mono text-xs font-bold border transition-colors cursor-pointer ${
-                  activeQuizIdx === idx
-                    ? 'bg-cyan-500 text-slate-950 border-cyan-300'
-                    : answered
-                    ? isCorrect
-                      ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
-                      : 'bg-rose-950/80 border-rose-500/50 text-rose-300'
-                    : 'bg-[#07090E] border-slate-800 text-slate-400 hover:text-white'
-                }`}
-              >
-                {q.id}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Current Question Card */}
-        {currentQuestion && (
-          <div className="p-4 rounded-xl bg-[#07090E] border border-slate-800 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-cyan-400">
-              <span>
-                PREGUNTA {currentQuestion.id} DE 10 · {currentQuestion.category.toUpperCase()}
-              </span>
-              <button
-                type="button"
-                onClick={() => handleSimulateQuizQuestion(currentQuestion.id)}
-                className="px-3 py-1 rounded-lg bg-cyan-500/20 hover:bg-cyan-500 hover:text-slate-950 border border-cyan-400/60 text-cyan-200 font-mono font-bold text-[11px] transition-colors cursor-pointer"
-              >
-                🔬 Simular este ejercicio en la Mesa 3D
-              </button>
-            </div>
-
-            {quizSimNotice && (
-              <div className="p-2.5 rounded-lg bg-cyan-950/50 border border-cyan-500/40 text-xs font-mono text-cyan-200 flex items-center justify-between gap-2">
-                <span>{quizSimNotice}</span>
-                <button
-                  type="button"
-                  onClick={() => setQuizSimNotice(null)}
-                  className="text-[10px] text-slate-400 hover:text-white cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
-
-            <p className="text-sm font-semibold text-white">{currentQuestion.questionEs}</p>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-              {currentQuestion.optionsEs.map((opt, oIdx) => {
-                const selected = quizAnswers[activeQuizIdx] === oIdx;
-                const isRight = oIdx === currentQuestion.correctIndex;
-                const hasAnswered = quizAnswers[activeQuizIdx] !== undefined;
-
-                return (
-                  <button
-                    key={oIdx}
-                    type="button"
-                    onClick={() => {
-                      setQuizAnswers((prev) => ({ ...prev, [activeQuizIdx]: oIdx }));
-                      if (oIdx === currentQuestion.correctIndex) {
-                        audioSynth.playSuccessChime();
-                      }
-                    }}
-                    className={`p-3 rounded-lg border text-left text-xs transition-colors cursor-pointer ${
-                      hasAnswered && isRight
-                        ? 'bg-emerald-950/60 border-emerald-500 text-emerald-200 font-semibold'
-                        : hasAnswered && selected && !isRight
-                        ? 'bg-rose-950/60 border-rose-500 text-rose-200'
-                        : 'bg-[#0D1322] border-slate-800 text-slate-200 hover:border-cyan-500/50'
-                    }`}
-                  >
-                    <span className="font-mono font-bold mr-2 text-cyan-400">
-                      {String.fromCharCode(65 + oIdx)}.
-                    </span>
-                    <span>{opt}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {quizAnswers[activeQuizIdx] !== undefined && (
-              <div className="p-3 rounded-lg bg-[#0D1322] border border-slate-800 text-xs text-slate-300 flex items-start gap-2">
-                <BookOpen className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                <span>
-                  <strong className="text-cyan-300">Justificación Física: </strong>
-                  {currentQuestion.explanationEs}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
       </ScrollReveal>
     </div>
   );

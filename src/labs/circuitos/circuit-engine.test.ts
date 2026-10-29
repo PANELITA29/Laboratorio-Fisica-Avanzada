@@ -81,6 +81,10 @@ import {
   buildTopologyComponents3D,
   getResistorColorBands5,
   computeRCAndLEDState,
+  MAX_RATED_POWER_WATTS,
+  evaluateMultimeterMeasurement,
+  generateFaultDiagnosisMission,
+  validateFaultDiagnosisMission,
 } from './circuit-engine';
 
 test('QuantumLabs Topology Solver: Series, Parallel, and Mixed (R1 + R2||R3) analytical equilibrium', () => {
@@ -215,4 +219,143 @@ test('5-Band precision EIA color code and RC + LED transient state', () => {
   assert.ok(Math.abs(rc.capacitorVoltage - 12 * (1 - Math.exp(-1))) < 0.05);
   assert.equal(rc.ledBurnedOut, false);
 });
+
+test('Objective A: Multimeter interactive probes (V, OHM with power OFF, A fuse blowout protection)', () => {
+  const comps = buildTopologyComponents3D({
+    topology: 'series',
+    sourceVoltage: 24,
+    r1: 20,
+    r2: 30,
+    r3: 50,
+    f1: 'ON',
+    f2: 'ON',
+    f3: 'ON',
+    isPowered: true,
+  });
+  const sol = solveCircuit(comps, { isPowered: true });
+  const topRes = analyzeWorkbenchCircuit(comps, true, 'series');
+
+  // 1. Voltímetro DC en paralelo sobre R1 (n1 -> n2): V = 0.24A * 20Ω = 4.80 V
+  const vRead = evaluateMultimeterMeasurement({
+    mode: 'V',
+    probeRedNode: 'n1',
+    probeBlackNode: 'n2',
+    components: comps,
+    solution: sol,
+    topologyResult: topRes,
+    isPowered: true,
+    isFuseBlown: false,
+  });
+  assert.equal(vRead.isValidConnection, true);
+  assert.ok(Math.abs((vRead.numericValue ?? 0) - 4.8) < 0.05);
+
+  // 2. Óhmetro con fuente encendida bloquea la medición y pide apagar la fuente
+  const ohmWhileOn = evaluateMultimeterMeasurement({
+    mode: 'OHM',
+    probeRedNode: 'n1',
+    probeBlackNode: 'n2',
+    components: comps,
+    solution: sol,
+    topologyResult: topRes,
+    isPowered: true,
+    isFuseBlown: false,
+  });
+  assert.equal(ohmWhileOn.isValidConnection, false);
+  assert.equal(ohmWhileOn.displayText, 'ERR: ON');
+
+  // 3. Óhmetro con fuente apagada mide exactamente R1 = 20.0 Ω
+  const ohmWhileOff = evaluateMultimeterMeasurement({
+    mode: 'OHM',
+    probeRedNode: 'n1',
+    probeBlackNode: 'n2',
+    components: comps,
+    solution: sol,
+    topologyResult: topRes,
+    isPowered: false,
+    isFuseBlown: false,
+  });
+  assert.equal(ohmWhileOff.isValidConnection, true);
+  assert.ok(Math.abs((ohmWhileOff.numericValue ?? 0) - 20) < 0.01);
+
+  // 4. Amperímetro conectado en paralelo directo con la fuente activa quema el fusible
+  const ampShort = evaluateMultimeterMeasurement({
+    mode: 'A',
+    probeRedNode: 'n1',
+    probeBlackNode: 'n0',
+    components: comps,
+    solution: sol,
+    topologyResult: topRes,
+    isPowered: true,
+    isFuseBlown: false,
+  });
+  assert.equal(ampShort.triggersFuseBlow, true);
+  assert.equal(ampShort.displayText, 'FUSE!');
+  assert.ok(ampShort.warningEs?.includes('¡Fusible del multímetro quemado!'));
+});
+
+test('Objective B: Incandescent Bulb thermal response (P = I^2 * R) and automatic burnout above 15.0W', () => {
+  assert.equal(MAX_RATED_POWER_WATTS, 15.0);
+
+  // 1. Bombilla en R1 con potencia P <= 15.0W (12V sobre 20Ω en paralelo -> P = 144/20 = 7.2W <= 15W)
+  const safeBulbComps = buildTopologyComponents3D({
+    topology: 'parallel',
+    sourceVoltage: 12,
+    r1: 20,
+    r2: 30,
+    r3: 60,
+    f1: 'ON',
+    f2: 'ON',
+    f3: 'ON',
+    isPowered: true,
+    branchTypes: { R1: 'bulb', R2: 'resistor', R3: 'resistor' },
+  });
+  const safeTop = analyzeWorkbenchCircuit(safeBulbComps, true, 'parallel');
+  assert.equal(safeTop.branches[0].isBurnedOut, false);
+  assert.ok(Math.abs(safeTop.branches[0].power - 7.2) < 0.05);
+  assert.ok(Math.abs((safeTop.branches[0].brightness ?? 0) - 7.2 / 15.0) < 0.02);
+
+  // 2. Subir voltaje a 24V sobre bombilla R1 de 20Ω -> P = 576/20 = 28.8W > 15.0W -> Se funde (OPEN automático)
+  const overPowerComps = buildTopologyComponents3D({
+    topology: 'parallel',
+    sourceVoltage: 24,
+    r1: 20,
+    r2: 30,
+    r3: 60,
+    f1: 'ON',
+    f2: 'ON',
+    f3: 'ON',
+    isPowered: true,
+    branchTypes: { R1: 'bulb', R2: 'resistor', R3: 'resistor' },
+  });
+  const burnedTop = analyzeWorkbenchCircuit(overPowerComps, true, 'parallel');
+  assert.equal(burnedTop.branches[0].isBurnedOut, true);
+  assert.equal(burnedTop.branches[0].faultState, 'OPEN');
+  assert.equal(burnedTop.branches[0].current, 0);
+});
+
+test('Objective C: Black Box Fault Diagnosis POE cycle generation and validation', () => {
+  const mission = generateFaultDiagnosisMission('series', 0.1);
+  assert.equal(mission.topology, 'series');
+  assert.ok(['R1', 'R2', 'R3'].includes(mission.faultyBranchId));
+
+  // Correct diagnosis passes
+  const passCheck = validateFaultDiagnosisMission({
+    mission,
+    selectedBranchId: mission.faultyBranchId,
+    selectedFaultType: mission.faultType,
+    selectedJustificationIndex: mission.correctJustificationIndex,
+  });
+  assert.equal(passCheck.passed, true);
+
+  // Wrong branch fails with constructive POE guidance
+  const wrongBranch: 'R1' | 'R2' | 'R3' = mission.faultyBranchId === 'R1' ? 'R2' : 'R1';
+  const failCheck = validateFaultDiagnosisMission({
+    mission,
+    selectedBranchId: wrongBranch,
+    selectedFaultType: mission.faultType,
+    selectedJustificationIndex: mission.correctJustificationIndex,
+  });
+  assert.equal(failCheck.passed, false);
+});
+
 
