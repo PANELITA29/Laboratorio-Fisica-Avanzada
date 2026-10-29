@@ -57,42 +57,6 @@ import { CircuitWorkbench3D } from './CircuitWorkbench3D';
 import { ScrollReveal } from '../../components/QuantumAnimations';
 import { TourGuiado, TourStep } from '../../components/TourGuiado';
 
-const CIRCUIT_TOUR_STEPS: TourStep[] = [
-  {
-    targetSelector: '[data-tour="circuits-multimeter"]',
-    badgeEs: '1 · MULTÍMETRO DIGITAL',
-    badgeEn: '1 · DIGITAL MULTIMETER',
-    titleEs: 'El Multímetro Digital (V⎓ / Ω / A⎓)',
-    titleEn: 'Digital Multimeter (V⎓ / Ω / A⎓)',
-    descriptionEs:
-      'Alterna la perilla entre Voltímetro (paralelo), Óhmetro (con fuente en OFF) y Amperímetro (en serie), y coloca las sondas Roja (V+) y Negra (COM) para medir en tiempo real.',
-    descriptionEn:
-      'Switch the dial between Voltmeter (parallel), Ohmmeter (Power OFF), and Ammeter (series), and place the Red (V+) and Black (COM) probes to measure in real time.',
-  },
-  {
-    targetSelector: '[data-tour="circuits-components-3d"]',
-    badgeEs: '2 · ÁREA DE COMPONENTES',
-    badgeEn: '2 · COMPONENTS AREA',
-    titleEs: 'Área de Componentes 3D y Sondas Interactivas',
-    titleEn: '3D Components Area & Interactive Probes',
-    descriptionEs:
-      'Arrastra las resistencias R₁–R₃ para variar sus ohmios, haz clic en los postes N0–N5 para colocar las sondas o une el cable manualmente si retiras un resistor.',
-    descriptionEn:
-      'Drag resistors R1–R3 to change ohms, click binding posts N0–N5 to place multimeter probes, or manually splice the wire if you remove a resistor.',
-  },
-  {
-    targetSelector: '[data-tour="circuits-control-panel"]',
-    badgeEs: '3 · PANEL DE CONTROL',
-    badgeEn: '3 · CONTROL PANEL',
-    titleEs: 'Panel de Control DC, Bombillas de 15W y Fallas',
-    titleEn: 'DC Control Panel, 15W Bulbs & Faults',
-    descriptionEs:
-      'Regula la fuente (0–48 V), sustituye resistores por bombillas incandescentes (que se funden a >15W), quita resistores dejando el cable listo para unir o simula averías.',
-    descriptionEn:
-      'Adjust source voltage (0–48 V), swap resistors for 15W incandescent bulbs, remove resistors while keeping the wire ready to splice, or trigger faults.',
-  },
-];
-
 interface CircuitLabViewProps {
   lang: Language;
   onUpdateTelemetry: (items: TelemetryItem[]) => void;
@@ -1222,10 +1186,242 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
     }
   };
 
+  // Pasos detallados del Tour Guiado con instrucciones paso a paso, desglose de parámetros y acciones en vivo
+  const circuitTourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        targetSelector: '[data-tour="circuits-cockpit-header"]',
+        badgeEs: '1 · CABINA Y TOPOLOGÍA',
+        badgeEn: '1 · COCKPIT & TOPOLOGY',
+        titleEs: 'Paso 1: Interruptor de Fuente, Topologías (Serie / Paralelo / Mixto) y Caja Negra',
+        titleEn: 'Step 1: Power Switch, Topologies (Series / Parallel / Mixed) & Black Box',
+        descriptionEs:
+          'En esta barra superior controlas la arquitectura global del circuito eléctrico antes de medir o modificar componentes.',
+        descriptionEn:
+          'In this top bar you control the global architecture of the electrical circuit before measuring or modifying components.',
+        whatToDoEs: [
+          'Haz clic en «Serie», «Paralelo» o «Mixto (R₁+R₂∥R₃)» para recablear automáticamente la mesa 3D.',
+          'Pulsa «FUENTE: ON / OFF» para encender la fuente DC o apagarla cuando quieras usar el Óhmetro (Ω).',
+          'Activa «🕵️ Diagnóstico Caja Negra» cuando quieras resolver el reto de encontrar una avería oculta.',
+        ],
+        whatToDoEn: [
+          'Click "Serie", "Paralelo", or "Mixto" to automatically rewire the 3D workbench.',
+          'Click "FUENTE: ON / OFF" to toggle DC power or turn it OFF before using the Ohmmeter (Ω).',
+          'Click "Diagnóstico Caja Negra" to start a hidden fault troubleshooting mission.',
+        ],
+        parametersEs: [
+          {
+            name: 'FUENTE: ON / OFF',
+            value: 'Interruptor Maestro',
+            detail: 'Conecta o desconecta la energía DC. Imprescindible poner en OFF para medir resistencia (Ω).',
+          },
+          {
+            name: 'Topología 3D',
+            value: 'Serie | Paralelo | Mixto',
+            detail: 'Serie: 1 sola ruta (I igual). Paralelo: 3 ramas con mismo voltaje. Mixto: R₁ en serie con (R₂ ∥ R₃).',
+          },
+          {
+            name: 'Diagnóstico Caja Negra',
+            value: 'Ciclo POE',
+            detail: 'Oculta los valores nominales e inyecta una falla aleatoria para que la deduzcas midiendo con las sondas.',
+          },
+        ],
+        formulaEs: 'Serie: R_eq = R₁+R₂+R₃ · Paralelo: 1/R_eq = 1/R₁+1/R₂+1/R₃',
+        formulaEn: 'Series: R_eq = R₁+R₂+R₃ · Parallel: 1/R_eq = 1/R₁+1/R₂+1/R₃',
+        onTryAction: () => {
+          const nextTop: CircuitTopology =
+            topology === 'series' ? 'parallel' : topology === 'parallel' ? 'mixed' : 'series';
+          applyTopologyRewiring(nextTop);
+        },
+        tryActionLabelEs: 'Alternar Topología 3D',
+        tryActionLabelEn: 'Toggle 3D Topology',
+      },
+      {
+        targetSelector: '[data-tour="circuits-components-3d"]',
+        badgeEs: '2 · MESA 3D Y SONDAS',
+        badgeEn: '2 · 3D WORKBENCH & PROBES',
+        titleEs: 'Paso 2: Mesa 3D Interactiva, Postes N0–N5 y Puntas de Prueba',
+        titleEn: 'Step 2: Interactive 3D Workbench, Nodes N0–N5 & Probe Tips',
+        descriptionEs:
+          'Este es el banco físico del circuito a ancho completo. Las esferas animadas muestran el flujo de carga en tiempo real según la corriente calculada por Ley de Ohm.',
+        descriptionEn:
+          'This is the full-width physical circuit workbench. Animated spheres show real-time charge flow proportional to current.',
+        whatToDoEs: [
+          'Usa la barra inferior «🎯 Medir rama con sondas» (🔋 Fuente, 📏 R₁, 📏 R₂, 📏 R₃) o haz clic en cualquier poste naranja N0..N5 para colocar la Sonda Roja (V+) y la Sonda Negra (COM).',
+          'Arrastra verticalmente las resistencias R₁, R₂ o R₃ en la escena 3D para cambiar sus ohmios (Ω) o desconectarlas.',
+          'Alterna entre «Mesa 3D (WebGL)» y «Esquemático 2D», o cambia entre «Flujo de Electrones (- → +)» y «Convencional (+ → -)».',
+        ],
+        whatToDoEn: [
+          'Use the quick probe buttons (Fuente, R₁, R₂, R₃) or click any orange binding post N0..N5 to place the Red (V+) and Black (COM) probes.',
+          'Drag resistors R₁, R₂, or R₃ vertically in 3D to change their ohms (Ω) or disconnect them.',
+          'Switch between "3D Workbench" and "2D Schematic", or toggle Electron vs Conventional flow.',
+        ],
+        parametersEs: [
+          {
+            name: '🔴 Sonda Roja (V+) y ⚫ Sonda Negra (COM)',
+            value: 'Postes N0 a N5',
+            detail: 'Miden la diferencia de potencial ΔV = V(Roja) - V(Negra) entre los dos nodos donde las coloques.',
+          },
+          {
+            name: 'Bandas de Color EIA y Modo RC + LED',
+            value: '4 / 5 Bandas · τ = R·C',
+            detail: 'Lee el código de colores sobre cada cuerpo cerámico o activa el circuito transitorio con capacitor y diodo LED.',
+          },
+        ],
+        formulaEs: 'ΔV_rama = V(Nodo Sonda Roja) − V(Nodo Sonda Negra)',
+        formulaEn: 'ΔV_branch = V(Red Probe Node) − V(Black Probe Node)',
+        onTryAction: () => {
+          handleQuickProbeComponent('res-1');
+        },
+        tryActionLabelEs: 'Colocar Sondas en R₁',
+        tryActionLabelEn: 'Place Probes on R₁',
+      },
+      {
+        targetSelector: '[data-tour="circuits-multimeter"]',
+        badgeEs: '3 · MULTÍMETRO DIGITAL',
+        badgeEn: '3 · DIGITAL MULTIMETER',
+        titleEs: 'Paso 3: Multímetro Digital LCD (V⎓ / Ω / A⎓) y Leyes de Kirchhoff',
+        titleEn: 'Step 3: LCD Digital Multimeter (V⎓ / Ω / A⎓) & Kirchhoff Laws',
+        descriptionEs:
+          'Aquí lees las mediciones exactas entre las sondas y compruebas analíticamente la Ley de Voltajes (LVK) y la Ley de Corrientes de Kirchhoff (LCK).',
+        descriptionEn:
+          'Here you read exact probe measurements and analytically verify Kirchhoff Voltage (KVL) and Current Laws (KCL).',
+        whatToDoEs: [
+          'Elige el modo en la perilla selectora: «V⎓ (Voltímetro)» para medir voltaje en paralelo, «Ω (Óhmetro)» con la fuente apagada, o «A⎓ (Amperímetro)» en serie.',
+          'Observa las 4 pantallas LCD: Lectura de Sondas, Resistencia Equivalente (R_eq), Corriente Total (I_T) y Potencia Joule (P_T).',
+          'En la tabla inferior pulsa el botón «Medir» de cualquier rama (R₁, R₂ o R₃) para llevar las sondas directamente a ese componente.',
+        ],
+        whatToDoEn: [
+          'Select the dial mode: "V⎓ (Voltmeter)" in parallel, "Ω (Ohmmeter)" with Power OFF, or "A⎓ (Ammeter)" in series.',
+          'Observe the 4 LCD readouts: Probe Reading, Equivalent Resistance (R_eq), Total Current (I_T), and Joule Power (P_T).',
+          'Click "Medir" on any row in the branch table to snap probes directly across R₁, R₂, or R₃.',
+        ],
+        parametersEs: [
+          {
+            name: 'V⎓ (Voltímetro DC)',
+            value: 'Conexión en Paralelo',
+            detail: 'Tiene resistencia interna infinita (R_int → ∞). Mide los voltios que caen en una rama sin desviar corriente.',
+          },
+          {
+            name: 'Ω (Óhmetro)',
+            value: 'Requiere FUENTE: OFF',
+            detail: 'Inyecta una corriente interna de prueba. Si la fuente está encendida, mostrará alerta para apagarla.',
+          },
+          {
+            name: 'A⎓ (Amperímetro DC)',
+            value: 'Conexión en Serie',
+            detail: 'Tiene resistencia interna casi nula (R_int ≈ 0 Ω). ¡No lo conectes en paralelo a la fuente o quemarás el fusible de 10 A!',
+          },
+        ],
+        formulaEs: 'LVK: ∑ ΔV_malla = 0  |  LCK: ∑ I_entran = ∑ I_salen',
+        formulaEn: 'KVL: ∑ ΔV_loop = 0  |  KCL: ∑ I_in = ∑ I_out',
+        onTryAction: () => {
+          setMultimeterMode('V');
+          setIsFuseBlown(false);
+          handleQuickProbeComponent('res-2');
+        },
+        tryActionLabelEs: 'Medir Voltaje en R₂ (V⎓)',
+        tryActionLabelEn: 'Measure Voltage on R₂ (V⎓)',
+      },
+      {
+        targetSelector: '[data-tour="circuits-control-panel"]',
+        badgeEs: '4 · CONTROL DC Y BOMBILLAS',
+        badgeEn: '4 · DC CONTROL & BULBS',
+        titleEs: 'Paso 4: Banco de Control DC (0–48 V), Bombillas Térmicas (15W) y Empalme de Cables',
+        titleEn: 'Step 4: DC Control Bench (0–48 V), 15W Thermal Bulbs & Wire Splicing',
+        descriptionEs:
+          'Desde este panel ajustas el voltaje de la fuente y los ohmios de cada rama, pruebas el calentamiento térmico de bombillas o retiras resistores conservando el cable.',
+        descriptionEn:
+          'From this panel you adjust source voltage and branch ohms, test bulb thermal heating, or remove resistors while keeping the wire.',
+        whatToDoEs: [
+          'Desliza «Voltaje Fuente DC (0 – 48 V)» y los sliders de R₁, R₂ y R₃ (1 – 100 Ω) para ver cómo cambian la corriente y el brillo en tiempo real.',
+          'Pulsa «💡 Usar Bombilla» en cualquier rama para sustituir el resistor por un filamento incandescente que brilla según P = I²·R (y se funde si supera 15.0 W).',
+          'Pulsa «🗑️ Quitar R» para retirar un resistor sin borrar su cable: el tramo quedará suelto hasta que pulses «🔗 Unir Cable de Corriente».',
+        ],
+        whatToDoEn: [
+          'Slide "Source Voltage (0 – 48 V)" and R₁, R₂, R₃ sliders (1 – 100 Ω) to see current and brightness change in real time.',
+          'Click "Usar Bombilla" on any branch to swap the resistor for an incandescent filament that glows with P = I²·R (and burns out above 15.0 W).',
+          'Click "Quitar R" to remove a resistor while preserving its wire, then click "Unir Cable de Corriente" to manually splice it.',
+        ],
+        parametersEs: [
+          {
+            name: 'Voltaje Fuente DC (V_F)',
+            value: '0.0 V – 48.0 V',
+            detail: 'Empuje energético del circuito. Duplicar el voltaje duplica la corriente I, pero cuadruplica la potencia térmica (P = V²/R).',
+          },
+          {
+            name: '💡 Bombilla Térmica Incandescente',
+            value: 'Límite Máx: 15.0 W',
+            detail: 'Modula su incandescencia proporcionalmente a P = I²·R. Si P > 15.0 W, el filamento se rompe entrando en falla OPEN.',
+          },
+          {
+            name: 'Estados ON / ABRIR / CORTO y Empalme',
+            value: 'Simulación de Fallas',
+            detail: 'ABRIR corta el paso de corriente (R → ∞); CORTO puentea la rama a 0 Ω; Quitar R deja el cable listo para unir.',
+          },
+        ],
+        formulaEs: 'Efecto Joule: P = V · I = I² · R = V² / R (Límite filamento = 15.0 W)',
+        formulaEn: 'Joule Heating: P = V · I = I² · R = V² / R (Filament limit = 15.0 W)',
+        onTryAction: () => {
+          if (typeR1 !== 'bulb') {
+            toggleBranchBulbType('R1');
+          }
+          setSourceVoltage(24);
+        },
+        tryActionLabelEs: 'Encender Bombilla en R₁ (24V)',
+        tryActionLabelEn: 'Light Bulb on R₁ (24V)',
+      },
+      {
+        targetSelector: '[data-tour="circuits-graphs"]',
+        badgeEs: '5 · OSCILOSCOPIO Y GRÁFICAS',
+        badgeEn: '5 · OSCILLOSCOPE & GRAPHS',
+        titleEs: 'Paso 5: Osciloscopio Multicanal y 4 Gráficas Dinámicas en Vivo',
+        titleEn: 'Step 5: Multichannel Oscilloscope & 4 Live Dynamic Graphs',
+        descriptionEs:
+          'Visualiza matemáticamente el comportamiento del circuito mientras mueves los controles y construye tu propia recta experimental de la Ley de Ohm.',
+        descriptionEn:
+          'Mathematically visualize circuit behavior as you move controls and build your own experimental Ohm Law line.',
+        whatToDoEs: [
+          'Cambia el voltaje de la fuente y observa cómo el punto amarillo se desplaza sobre la recta «1. Linealidad I vs. V» (pendiente = 1/R_eq).',
+          'Pulsa el botón «+ Registrar Punto Experimental» en distintos voltajes para graficar tu nube de puntos medidos.',
+          'Observa la «2. Hipérbola I vs. R_eq», el «3. Espectro Térmico P_k vs Límite 15W» y el «4. Perfil de Voltajes LVK».',
+        ],
+        whatToDoEn: [
+          'Change source voltage and watch the operating point move along "1. I vs. V Linearity" (slope = 1/R_eq).',
+          'Click "+ Registrar Punto Experimental" at different voltages to plot your measured data points.',
+          'Inspect "2. I vs. R_eq Hyperbola", "3. Thermal Power vs 15W Limit", and "4. KVL Voltage Profile".',
+        ],
+        parametersEs: [
+          {
+            name: 'Gráfica 1 (I vs V) y Gráfica 2 (I vs R_eq)',
+            value: 'Pendiente m = 1 / R_eq',
+            detail: 'Demuestran que la corriente es directamente proporcional al voltaje V e inversamente proporcional a la resistencia R.',
+          },
+          {
+            name: 'Gráfica 3 (Potencia 15W) y Gráfica 4 (LVK / RC)',
+            value: 'Barras Térmicas y ΔV_k',
+            detail: 'Compara los vatios disipados en cada rama frente a la línea roja de fusión (15 W) y verifica que ∑ ΔV_k = V_F.',
+          },
+        ],
+        formulaEs: 'Pendiente Ohm: m = ΔI / ΔV = 1 / R_eq',
+        formulaEn: 'Ohm Slope: m = ΔI / ΔV = 1 / R_eq',
+        onTryAction: () => {
+          handleRecordPoint();
+        },
+        tryActionLabelEs: '+ Registrar Punto (V, I)',
+        tryActionLabelEn: '+ Record Point (V, I)',
+      },
+    ],
+    [topology, typeR1, sourceVoltage, r1, r2, r3]
+  );
+
   return (
     <div className="space-y-6 quantum-hero-enter">
       {/* Cabecera de Cabina de Laboratorio (Cockpit Header) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-[#0D1322] border border-slate-800/90">
+      <div
+        data-tour="circuits-cockpit-header"
+        className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-[#0D1322] border border-slate-800/90"
+      >
         <div>
           <span className="text-[11px] font-mono uppercase tracking-wider text-cyan-400">
             CONSOLA DE INGENIERÍA ELÉCTRICA · MNA DINÁMICO, TELEMETRÍA Y GRÁFICAS EN TIEMPO REAL
@@ -1324,7 +1520,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
           </div>
 
           {/* Componente TourGuiado: Se activa automáticamente al cargar el laboratorio por primera vez */}
-          <TourGuiado labId="circuits" lang={lang} steps={CIRCUIT_TOUR_STEPS} />
+          <TourGuiado labId="circuits" lang={lang} steps={circuitTourSteps} />
         </div>
       </div>
 
@@ -3079,7 +3275,86 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                 </div>
               )}
             </div>
+
+            {/* Semáforo Pedagógico y Sustitución de Ley de Ohm / Kirchhoff Paso a Paso (Estilo Modo Sistema Solar) */}
+            <div className="p-3.5 rounded-xl bg-[#070B14] border border-cyan-500/30 space-y-2 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-mono font-bold text-cyan-300">
+                  🚦 Diagnóstico Eléctrico para Estudiantes y Ley de Ohm Paso a Paso:
+                </span>
+                <span className="font-mono text-[11px] text-amber-300 bg-[#0B101E] px-2.5 py-0.5 rounded border border-slate-800">
+                  {`I_T = V_F / R_eq = ${topologyResult.sourceVoltage.toFixed(1)} V / ${
+                    Number.isFinite(topologyResult.equivalentResistance)
+                      ? `${topologyResult.equivalentResistance.toFixed(2)} Ω`
+                      : '∞ Ω'
+                  } = ${topologyResult.totalCurrent.toFixed(3)} A  |  P_T = I_T² · R_eq = ${topologyResult.totalPower.toFixed(2)} W`}
+                </span>
+              </div>
+
+              <p className="text-slate-200 leading-relaxed">
+                {topologyResult.isShortCircuitFault || isFuseBlown ? (
+                  <span className="text-rose-300 font-medium">
+                    🔴 <strong>¡Cortocircuito o Sobrecorriente Crítica Detectada!</strong> Cuando una rama en paralelo cae a 0 Ω o conectas el Amperímetro (A⎓) directamente a la fuente, la resistencia equivalente se desploma y la corriente se dispara peligrosamente. Revisa la rama en CORTO o reemplaza el fusible.
+                  </span>
+                ) : hasBurnedBulb ? (
+                  <span className="text-amber-300 font-medium">
+                    🔥 <strong>¡Filamento Incandescente Fundido por Efecto Joule (&gt; {MAX_RATED_POWER_WATTS.toFixed(1)} W)!</strong> Al subir demasiado el voltaje o reducir la resistencia, la potencia térmica $P = I^2 \cdot R$ superó los 15.0 W nominales y rompió el filamento, dejando esa rama en Circuito Abierto (OPEN).
+                  </span>
+                ) : !isPowered || topologyResult.isOpenCircuitFault ? (
+                  <span className="text-amber-200 font-medium">
+                    🟡 <strong>Circuito Abierto o Fuente Apagada (I_T = 0.000 A):</strong>{' '}
+                    {!isPowered
+                      ? 'La fuente DC está en OFF (estado ideal para medir resistencia equivalente con el Óhmetro en modo Ω).'
+                      : 'Existe un tramo abierto o un cable suelto tras retirar un resistor. Únelo con «🔗 Unir Cable de Corriente» o pasa la rama a estado ON para cerrar la trayectoria.'}
+                  </span>
+                ) : (
+                  <span className="text-cyan-200 font-medium">
+                    🟢 <strong>Operación Nominal Estable ({topology.toUpperCase()}):</strong> La fuente entrega{' '}
+                    {topologyResult.sourceVoltage.toFixed(1)} V a una resistencia equivalente de{' '}
+                    {topologyResult.equivalentResistance.toFixed(2)} Ω, impulsando una corriente de{' '}
+                    {topologyResult.totalCurrent.toFixed(3)} A. Observa que se cumplen exactamente{' '}
+                    <span className="font-mono text-emerald-300">{topologyResult.kvlEquationText}</span> y{' '}
+                    <span className="font-mono text-cyan-300">{topologyResult.kclEquationText}</span>.
+                  </span>
+                )}
+              </p>
+            </div>
       </div>
+
+      {/* Guía Pedagógica Interactiva de Parámetros del Laboratorio de Circuitos (Estilo Modo Sistema Solar) */}
+      <ScrollReveal direction="up" delayMs={60}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 rounded-xl bg-[#0D1322] border border-slate-800 space-y-1.5">
+            <div className="flex items-center gap-2 text-xs font-mono font-bold text-cyan-400 uppercase">
+              <BookOpen className="w-4 h-4" />
+              <span>1. Fuente DC (0–48V), Topologías y Ohmios (Ω)</span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              En <strong>Serie</strong> las resistencias se suman (<span className="font-mono text-cyan-300">R_eq = R₁+R₂+R₃</span>) y todas comparten la misma corriente <span className="font-mono">I_T</span>. En <strong>Paralelo</strong> todas reciben el mismo voltaje de la fuente y la corriente se reparte inversamente a cada resistencia (<span className="font-mono text-amber-300">I_k = V_F / R_k</span>).
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-[#0D1322] border border-slate-800 space-y-1.5">
+            <div className="flex items-center gap-2 text-xs font-mono font-bold text-purple-400 uppercase">
+              <BookOpen className="w-4 h-4" />
+              <span>2. Multímetro (V⎓, Ω, A⎓) y Sondas N0–N5</span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Coloca la <strong className="text-rose-300">Sonda Roja (V+)</strong> y la <strong className="text-sky-300">Sonda Negra (COM)</strong> tocando los postes <span className="font-mono">N0..N5</span> o los botones rápidos. Usa <strong>V⎓</strong> en paralelo con la fuente encendida, <strong>Ω</strong> únicamente con <span className="font-mono text-rose-300">FUENTE: OFF</span>, y <strong>A⎓</strong> solo en serie sobre una rama.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-xl bg-[#0D1322] border border-slate-800 space-y-1.5">
+            <div className="flex items-center gap-2 text-xs font-mono font-bold text-amber-400 uppercase">
+              <BookOpen className="w-4 h-4" />
+              <span>3. Bombillas 15W, Efecto Joule y Empalme</span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Al activar <strong className="text-amber-300">💡 Usar Bombilla</strong>, el brillo del filamento crece con la potencia térmica <span className="font-mono text-emerald-300">P = I²·R</span>; si supera <strong>15.0 W</strong> se funde automáticamente. Si pulsas <strong className="text-rose-300">🗑️ Quitar R</strong>, el cable queda en la mesa para que lo unas manualmente con <strong className="text-emerald-300">🔗 Unir Cable</strong>.
+            </p>
+          </div>
+        </div>
+      </ScrollReveal>
 
       {/* ZONA 4: MÓDULO DE EVALUACIÓN Y DEFENSA CIENTÍFICA (10 PREGUNTAS INTERACTIVAS) */}
       <ScrollReveal direction="up" delayMs={80}>

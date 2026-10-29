@@ -42,6 +42,18 @@ const MECHANICS_TOUR_STEPS: TourStep[] = [
       'Observa la oscilación RK4 en 3D y el medidor superior de Conservación de Energía (Cinética K vs Potencial U) junto con el período teórico T.',
     descriptionEn:
       'Observe the 3D RK4 oscillation and the top Energy Conservation meter (Kinetic K vs Potential U) along with theoretical period T.',
+    whatToDoEs: [
+      'Alterna entre los modos superiores: «Péndulo Simple», «Foucault 3D», «Resonancia Acoplada» e «Interferencia de Ondas».',
+      'Observa las barras superiores de Energía Cinética (K, verde), Potencial (U, ámbar) y Mecánica Total (E_tot).',
+    ],
+    parametersEs: [
+      {
+        name: 'Conservación de Energía (E = K + U)',
+        value: 'Integrador RK4',
+        detail: 'En el punto más bajo U se convierte en K máxima; en los extremos la velocidad es cero y U es máxima.',
+      },
+    ],
+    formulaEs: 'E_tot = K + U = ½·m·v² + m·g·L·(1 - cos θ)',
   },
   {
     targetSelector: '[data-tour="mechanics-control-dock"]',
@@ -53,6 +65,23 @@ const MECHANICS_TOUR_STEPS: TourStep[] = [
       'Ajusta la longitud de cuerda (L), masa (m), fricción (b), resorte acoplado (k_c) o cambia de planeta (Luna, Marte, Tierra, Júpiter).',
     descriptionEn:
       'Adjust string length (L), mass (m), air damping (b), coupling spring (k_c), or switch planetary gravity (Moon, Mars, Earth, Jupiter).',
+    whatToDoEs: [
+      'Mueve el slider «Longitud de Cuerda (L)» (0.4 m a 3.0 m) o haz clic en los botones planetarios (🌙 Luna, 🔴 Marte, 🌍 Tierra, 🪐 Júpiter).',
+      'Activa o desactiva los vectores 3D de Tensión (T), Peso (m·g) y Velocidad Tangencial (v).',
+    ],
+    parametersEs: [
+      {
+        name: 'Longitud (L) y Gravedad (g)',
+        value: 'L: 0.4–3.0 m | g: 1.6–24.8 m/s²',
+        detail: 'Son los dos únicos parámetros que modifican el período T de pequeñas oscilaciones.',
+      },
+      {
+        name: 'Masa (m) y Fricción (b)',
+        value: 'm: 0.5–8.0 kg | b: 0–0.35',
+        detail: 'Cambiar la masa aumenta la energía en Joules pero NO altera el período T (Ley de Isobarocronismo de Galileo).',
+      },
+    ],
+    formulaEs: 'Ley de Huygens: T = 2π · √(L / g)',
   },
   {
     targetSelector: '[data-tour="mechanics-huygens-panel"]',
@@ -64,6 +93,18 @@ const MECHANICS_TOUR_STEPS: TourStep[] = [
       'Comprueba cómo se sustituyen tus valores en tiempo real en T = 2π·√(L/g) y verifica por qué cambiar la masa no altera el período del péndulo.',
     descriptionEn:
       'See how your live values substitute into T = 2π·√(L/g) and verify why changing mass does not alter the pendulum period.',
+    whatToDoEs: [
+      'Pulsa el botón «⚖️ Probar Experimento de Galileo» para cambiar la masa drásticamente y comprobar que el período T permanece idéntico.',
+      'Revisa la sustitución numérica en tiempo real y el diagnóstico de estado energético.',
+    ],
+    parametersEs: [
+      {
+        name: 'Reloj de Segundos (L ≈ 0.994 m en Tierra)',
+        value: 'Período T = 2.00 s',
+        detail: 'Ajustando L = 1.00 m en gravedad terrestre (9.81 m/s²), cada semioscilación dura exactamente 1 segundo.',
+      },
+    ],
+    formulaEs: 'Frecuencia f = 1 / T (Hz)  |  Velocidad máx v_max = √(2·g·L·(1 - cos θ₀))',
   },
 ];
 

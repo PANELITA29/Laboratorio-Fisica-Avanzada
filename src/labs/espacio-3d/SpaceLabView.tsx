@@ -51,6 +51,23 @@ const SPACE_TOUR_STEPS: TourStep[] = [
       'Rota la cámara con el ratón o gesto táctil y observa en tiempo real la curvatura gravitatoria y la telemetría Verlet (radio r, velocidad v y energía E_tot).',
     descriptionEn:
       'Rotate the camera with mouse or touch and observe the gravitational curvature and live Verlet telemetry (radius r, velocity v, and total energy E_tot).',
+    whatToDoEs: [
+      'Arrastra con clic izquierdo sobre el lienzo 3D para rotar la vista y usa la rueda del ratón para acercar o alejar.',
+      'Prueba los escenarios superiores: «Sistema Solar», «Tierra-Luna», «Exoplaneta», «Geoestacionaria» o «Lagrange».',
+    ],
+    parametersEs: [
+      {
+        name: 'Radio Orbital (r) y Velocidad (v)',
+        value: 'Telemetría Verlet 60 FPS',
+        detail: 'Muestra en la esquina superior izquierda la distancia instantánea al astro central y la rapidez orbital.',
+      },
+      {
+        name: 'Energía Mecánica Total (E_tot = K + U)',
+        value: 'E_tot < 0 (Órbita Ligada)',
+        detail: 'Si E_tot es negativa el planeta permanece en órbita; si supera 0 GJ el cuerpo escapa al espacio.',
+      },
+    ],
+    formulaEs: 'z(x,y) = -∑ G·Mᵢ / √(r² + ε²)  |  E_tot = ½mv² - G·M·m/r',
   },
   {
     targetSelector: '[data-tour="space-control-dock"]',
@@ -62,6 +79,23 @@ const SPACE_TOUR_STEPS: TourStep[] = [
       'Ajusta la velocidad de inserción (v_c), la constante gravitacional G y activa o desactiva los vectores de gravedad, velocidad y estelas orbitales.',
     descriptionEn:
       'Adjust insertion velocity (v_c), gravitational constant G, and toggle gravity vectors, velocity vectors, and orbital trails.',
+    whatToDoEs: [
+      'Mueve el slider «Velocidad de Inserción» entre 0.50x y 1.60x v_c para transformar una órbita circular (1.00x) en elíptica o de escape (≥1.41x).',
+      'Cambia la cámara entre «Libre Orbital», «Persecución (Chase)» y «Superficial» para seguir de cerca a cualquier planeta.',
+    ],
+    parametersEs: [
+      {
+        name: 'Factor de Velocidad (v / v_c)',
+        value: '0.50x – 1.60x v_c',
+        detail: '1.00x produce una órbita circular; valores > 1.00x alargan la elipse y ≥ 1.41x superan la velocidad de escape.',
+      },
+      {
+        name: 'Capas 3D (Malla, Gravedad Fg, Velocidad v)',
+        value: 'Vectores en Vivo',
+        detail: 'La flecha azul (Fg) apunta hacia el centro gravitacional y la flecha verde (v) es tangente a la trayectoria.',
+      },
+    ],
+    formulaEs: 'v_circular = √(G·M / r)  |  v_escape = √2 · v_c ≈ 1.414 · v_c',
   },
   {
     targetSelector: '[data-tour="space-kepler-instrument"]',
@@ -73,6 +107,23 @@ const SPACE_TOUR_STEPS: TourStep[] = [
       'Modifica la masa estelar (M☉), el semieje mayor (a) y la excentricidad (e), o inyecta el impulso Δv₁ para ejecutar una transferencia interplanetaria de Hohmann.',
     descriptionEn:
       'Modify stellar mass (M☉), semi-major axis (a), and eccentricity (e), or inject Δv₁ to execute a Hohmann interplanetary transfer.',
+    whatToDoEs: [
+      'Ajusta «Masa Estrella Central (M☉)», «Semieje Mayor (a)» y «Excentricidad (e)» y observa cómo se actualiza la fórmula paso a paso.',
+      'Pulsa «🚀 Ejecutar Transferencia de Hohmann» para inyectar Δv₁ y enviar la nave desde la órbita terrestre hacia Marte.',
+    ],
+    parametersEs: [
+      {
+        name: 'Semieje Mayor (a) y Excentricidad (e)',
+        value: '0.5 – 2.2 UA | e: 0 – 0.75',
+        detail: 'Controlan el tamaño de la órbita y qué tan achatada es la elipse (1ª y 2ª Ley de Kepler).',
+      },
+      {
+        name: '3ª Ley de Kepler y Δv₁ Hohmann',
+        value: 'T² = a³ / M☉',
+        detail: 'Calcula el período orbital en años y días terrestres y el impulso necesario para cambiar de órbita.',
+      },
+    ],
+    formulaEs: '3ª Ley de Kepler: T = √(a³ / M☉) años',
   },
 ];
 
