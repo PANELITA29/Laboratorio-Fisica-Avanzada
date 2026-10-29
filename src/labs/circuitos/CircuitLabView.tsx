@@ -1437,11 +1437,11 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
         </div>
       )}
 
-      {/* CONSOLA DIVIDIDA PRINCIPAL: IZQUIERDA (MESA 3D + ZONA 2 MULTÍMETRO Y TABLA ANALÍTICA) | DERECHA (ZONA 1 CONTROLES DC + ZONA 3 GRÁFICAS INTERACTIVAS EN VIVO) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Columna Izquierda (7 Cols): Banco de Trabajo 3D/2D + ZONA 2 (Multímetro Digital LCD, Sondas, LVK/LCK y Tabla por Rama) */}
-        <div className="lg:col-span-7 space-y-5">
-          <div className="rounded-xl bg-[#0D1322] border border-slate-800 overflow-hidden">
+      {/* VISUALIZACIÓN DEL CIRCUITO EN 3D / 2D A ANCHO COMPLETO DE PANTALLA (100% FULL WIDTH) */}
+      <div
+        data-testid="circuit-fullwidth-stage"
+        className="w-full rounded-2xl bg-[#0D1322] border border-slate-800 overflow-hidden shadow-2xl"
+      >
             {/* Canvas Top Toolbar */}
             <div className="px-4 py-3 bg-[#090D16] border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -1541,8 +1541,8 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
               </div>
             </div>
 
-            {/* Interactive 3D WebGL Workbench or 2D Schematic Canvas */}
-            <div className="relative w-full h-[300px] sm:h-[380px] md:h-[420px] bg-[#070B14]">
+            {/* Interactive 3D WebGL Workbench or 2D Schematic Canvas (Ancho Completo Panorámico) */}
+            <div className="relative w-full h-[360px] sm:h-[460px] lg:h-[540px] bg-[#070B14]">
               {viewDimension === '3d' && (
                 <div className="hidden sm:flex absolute bottom-2.5 left-2.5 right-2.5 z-10 pointer-events-none flex-wrap items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-[#050811]/90 border border-slate-800/90 text-[11px] font-mono text-slate-300">
                   <span>
@@ -1709,6 +1709,10 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
             </div>
           </div>
 
+      {/* PANELES DE INSTRUMENTACIÓN, CONTROLES DC, MULTÍMETRO Y GRÁFICAS DEBAJO DE LA MESA 3D */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* Columna Izquierda Inferior (7 Cols): ZONA 2 (Multímetro Digital LCD, Sondas, LVK/LCK y Tabla por Rama) + ZONA 3 (Gráficas en Vivo) */}
+        <div className="lg:col-span-7 space-y-6">
           {/* ZONA 2: MULTÍMETRO DIGITAL LCD, SONDAS (V⎓ / Ω / A⎓), LEYES DE KIRCHHOFF (LVK / LCK) Y TABLA ANALÍTICA POR RAMA */}
           <div className="p-4 sm:p-5 rounded-xl bg-[#0D1322] border border-slate-800 space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
@@ -2524,12 +2528,14 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
               </div>
             )}
           </div>
+        </div>
+      </div>
 
-          {/* ZONA 3: CENTRO DE GRÁFICAS DINÁMICAS E INTERACTIVAS A 60 FPS (SIEMPRE VISIBLE Y EN VIVO) */}
-          <div
-            data-testid="circuit-interactive-graphs"
-            className="p-5 rounded-xl bg-[#0D1322] border border-slate-800 space-y-4"
-          >
+      {/* ZONA 3: CENTRO DE GRÁFICAS DINÁMICAS E INTERACTIVAS A 60 FPS (ANCHO COMPLETO DEBAJO DE LOS PANELES) */}
+      <div
+        data-testid="circuit-interactive-graphs"
+        className="w-full p-5 rounded-2xl bg-[#0D1322] border border-slate-800 space-y-4"
+      >
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
               <div>
                 <h3 className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
@@ -2571,14 +2577,18 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div
+              className={`grid grid-cols-1 gap-4 ${
+                activeGraphMode === 'all'
+                  ? 'sm:grid-cols-2 xl:grid-cols-4'
+                  : activeGraphMode === 'power'
+                  ? 'sm:grid-cols-2'
+                  : 'grid-cols-1'
+              }`}
+            >
               {/* GRÁFICA 1: Linealidad V vs. I (Ley de Ohm + Puntos Experimentales Registrados) */}
               {(activeGraphMode === 'all' || activeGraphMode === 'vi') && (
-                <div
-                  className={`p-3 rounded-lg bg-[#07090E] border border-slate-800 ${
-                    activeGraphMode === 'vi' ? 'sm:col-span-2' : ''
-                  }`}
-                >
+                <div className="p-3.5 rounded-xl bg-[#07090E] border border-slate-800">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[10px] font-mono text-cyan-300 font-bold">
                       1. Linealidad I vs. V (Pendiente = 1/R_eq)
@@ -3021,8 +3031,6 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                 </div>
               )}
             </div>
-          </div>
-        </div>
       </div>
 
       {/* ZONA 4: MÓDULO DE EVALUACIÓN Y DEFENSA CIENTÍFICA (10 PREGUNTAS INTERACTIVAS) */}
