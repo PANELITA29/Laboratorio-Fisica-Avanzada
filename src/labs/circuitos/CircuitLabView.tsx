@@ -55,6 +55,54 @@ import {
 } from './circuit-challenges';
 import { CircuitWorkbench3D } from './CircuitWorkbench3D';
 import { ScrollReveal } from '../../components/QuantumAnimations';
+import { TourGuiado, TourStep } from '../../components/TourGuiado';
+
+const CIRCUIT_TOUR_STEPS: TourStep[] = [
+  {
+    targetSelector: '[data-tour="circuits-components-3d"]',
+    badgeEs: '1 · MESA 3D Y COMPONENTES',
+    badgeEn: '1 · 3D WORKBENCH & COMPONENTS',
+    titleEs: 'Mesa de Componentes 3D y Sondas Interactivas',
+    titleEn: '3D Component Workbench & Interactive Probes',
+    descriptionEs:
+      'Arrastra las resistencias R₁–R₃ para variar sus ohmios, haz clic en los postes N0–N5 para colocar las sondas o une el cable manualmente si retiras un resistor.',
+    descriptionEn:
+      'Drag resistors R1–R3 to change ohms, click binding posts N0–N5 to place multimeter probes, or manually splice the wire if you remove a resistor.',
+  },
+  {
+    targetSelector: '[data-tour="circuits-multimeter"]',
+    badgeEs: '2 · MULTÍMETRO DIGITAL',
+    badgeEn: '2 · DIGITAL MULTIMETER',
+    titleEs: 'Multímetro Digital LCD (V⎓ / Ω / A⎓) y Kirchhoff',
+    titleEn: 'LCD Digital Multimeter (V⎓ / Ω / A⎓) & Kirchhoff',
+    descriptionEs:
+      'Alterna la perilla entre Voltímetro (paralelo), Óhmetro (con fuente en OFF) y Amperímetro (en serie), y verifica la tabla analítica por rama.',
+    descriptionEn:
+      'Switch the dial between Voltmeter (parallel), Ohmmeter (Power OFF), and Ammeter (series), and inspect the analytical branch table.',
+  },
+  {
+    targetSelector: '[data-tour="circuits-control-panel"]',
+    badgeEs: '3 · PANEL DE CONTROL DC',
+    badgeEn: '3 · DC CONTROL PANEL',
+    titleEs: 'Banco de Control DC, Bombillas de 15W y Fallas',
+    titleEn: 'DC Control Bank, 15W Bulbs & Faults',
+    descriptionEs:
+      'Regula la fuente (0–48 V), sustituye resistores por bombillas incandescentes (que se funden a >15W), quita resistores dejando el cable listo para unir o simula averías.',
+    descriptionEn:
+      'Adjust source voltage (0–48 V), swap resistors for 15W incandescent bulbs, remove resistors while keeping the wire ready to splice, or trigger faults.',
+  },
+  {
+    targetSelector: '[data-tour="circuits-graphs"]',
+    badgeEs: '4 · GRÁFICAS EN VIVO',
+    badgeEn: '4 · LIVE OSCILLOSCOPE GRAPHS',
+    titleEs: 'Osciloscopio Multicanal y Gráficas Dinámicas',
+    titleEn: 'Multichannel Oscilloscope & Live Graphs',
+    descriptionEs:
+      'Analiza en tiempo real la recta de la Ley de Ohm (I vs V), la hipérbola I vs R, el reparto de Kirchhoff y la parábola térmica de Joule (P = V²/R).',
+    descriptionEn:
+      'Analyze in real time the Ohm Law line (I vs V), I vs R hyperbola, Kirchhoff branch distribution, and Joule thermal parabola (P = V²/R).',
+  },
+];
 
 interface CircuitLabViewProps {
   lang: Language;
@@ -1285,6 +1333,9 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
               <span>{t.challengesTab}</span>
             </button>
           </div>
+
+          {/* Componente TourGuiado: Se activa automáticamente al cargar el laboratorio por primera vez */}
+          <TourGuiado labId="circuits" lang={lang} steps={CIRCUIT_TOUR_STEPS} />
         </div>
       </div>
 
@@ -1440,6 +1491,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
       {/* VISUALIZACIÓN DEL CIRCUITO EN 3D / 2D A ANCHO COMPLETO DE PANTALLA (100% FULL WIDTH) */}
       <div
         data-testid="circuit-fullwidth-stage"
+        data-tour="circuits-components-3d"
         className="w-full rounded-2xl bg-[#0D1322] border border-slate-800 overflow-hidden shadow-2xl"
       >
             {/* Canvas Top Toolbar */}
@@ -1714,7 +1766,10 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
         {/* Columna Izquierda Inferior (7 Cols): ZONA 2 (Multímetro Digital LCD, Sondas, LVK/LCK y Tabla por Rama) + ZONA 3 (Gráficas en Vivo) */}
         <div className="lg:col-span-7 space-y-6">
           {/* ZONA 2: MULTÍMETRO DIGITAL LCD, SONDAS (V⎓ / Ω / A⎓), LEYES DE KIRCHHOFF (LVK / LCK) Y TABLA ANALÍTICA POR RAMA */}
-          <div className="p-4 sm:p-5 rounded-xl bg-[#0D1322] border border-slate-800 space-y-4">
+          <div
+            data-tour="circuits-multimeter"
+            className="p-4 sm:p-5 rounded-xl bg-[#0D1322] border border-slate-800 space-y-4"
+          >
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Gauge className="w-4 h-4 text-cyan-400 shrink-0" />
@@ -2013,7 +2068,10 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
         {/* Columna Derecha (5 Cols): ZONA 1 (Banco de Control DC, Bombillas 15W, Fallas, Caja Negra) + ZONA 3 (OSCILOSCOPIO MULTICANAL Y GRÁFICAS DINÁMICAS 60 FPS) */}
         <div className="lg:col-span-5 space-y-5">
           {/* ZONA 1: CONTROLES DC, BOMBILLAS TÉRMICAS (15W) Y SIMULACIÓN DE FALLAS */}
-          <div className="p-5 rounded-xl bg-[#0D1322] border border-slate-800 space-y-4">
+          <div
+            data-tour="circuits-control-panel"
+            className="p-5 rounded-xl bg-[#0D1322] border border-slate-800 space-y-4"
+          >
             <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
               <div className="flex items-center gap-2">
                 <Sliders className="w-4 h-4 text-cyan-400" />
@@ -2534,6 +2592,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
       {/* ZONA 3: CENTRO DE GRÁFICAS DINÁMICAS E INTERACTIVAS A 60 FPS (ANCHO COMPLETO DEBAJO DE LOS PANELES) */}
       <div
         data-testid="circuit-interactive-graphs"
+        data-tour="circuits-graphs"
         className="w-full p-5 rounded-2xl bg-[#0D1322] border border-slate-800 space-y-4"
       >
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">

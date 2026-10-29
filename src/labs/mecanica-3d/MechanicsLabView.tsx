@@ -29,6 +29,43 @@ import {
   validateMechanicsChallenge2,
 } from './mechanics-engine';
 import { ScrollReveal } from '../../components/QuantumAnimations';
+import { TourGuiado, TourStep } from '../../components/TourGuiado';
+
+const MECHANICS_TOUR_STEPS: TourStep[] = [
+  {
+    targetSelector: '[data-tour="mechanics-3d-stage"]',
+    badgeEs: '1 · BANCO 3D Y ENERGÍA',
+    badgeEn: '1 · 3D WORKBENCH & ENERGY',
+    titleEs: 'Pórtico 3D de Péndulos, Ondas y Medidor K + U',
+    titleEn: '3D Pendulum Gantry, Waves & K + U Meter',
+    descriptionEs:
+      'Observa la oscilación RK4 en 3D y el medidor superior de Conservación de Energía (Cinética K vs Potencial U) junto con el período teórico T.',
+    descriptionEn:
+      'Observe the 3D RK4 oscillation and the top Energy Conservation meter (Kinetic K vs Potential U) along with theoretical period T.',
+  },
+  {
+    targetSelector: '[data-tour="mechanics-control-dock"]',
+    badgeEs: '2 · PANEL DE CONTROL DINÁMICO',
+    badgeEn: '2 · DYNAMIC CONTROL PANEL',
+    titleEs: 'Controles de Longitud, Masa, Gravedad y Vectores',
+    titleEn: 'Length, Mass, Gravity & 3D Vector Controls',
+    descriptionEs:
+      'Ajusta la longitud de cuerda (L), masa (m), fricción (b), resorte acoplado (k_c) o cambia de planeta (Luna, Marte, Tierra, Júpiter).',
+    descriptionEn:
+      'Adjust string length (L), mass (m), air damping (b), coupling spring (k_c), or switch planetary gravity (Moon, Mars, Earth, Jupiter).',
+  },
+  {
+    targetSelector: '[data-tour="mechanics-huygens-panel"]',
+    badgeEs: '3 · TELEMETRÍA DE HUYGENS Y GALILEO',
+    badgeEn: '3 · HUYGENS & GALILEO TELEMETRY',
+    titleEs: 'Fórmula Paso a Paso y Mito de la Masa de Galileo',
+    titleEn: 'Step-by-Step Formula & Galileo Mass Experiment',
+    descriptionEs:
+      'Comprueba cómo se sustituyen tus valores en tiempo real en T = 2π·√(L/g) y verifica por qué cambiar la masa no altera el período del péndulo.',
+    descriptionEn:
+      'See how your live values substitute into T = 2π·√(L/g) and verify why changing mass does not alter the pendulum period.',
+  },
+];
 
 interface MechanicsLabViewProps {
   lang: Language;
@@ -648,6 +685,8 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
               </button>
             ))}
           </div>
+
+          <TourGuiado labId="mechanics" lang={lang} steps={MECHANICS_TOUR_STEPS} />
         </div>
       </div>
 
@@ -723,7 +762,10 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
 
       {/* Escenario 3D Principal con Barras de Conservación de Energía en Vivo y Dock Inferior (Debajo en móvil, flotante en lg+) */}
       <div className="space-y-3 lg:space-y-0 lg:relative w-full">
-        <div className="relative w-full h-[340px] sm:h-[440px] lg:h-[560px] rounded-xl bg-[#060A12] border border-slate-800 overflow-hidden">
+        <div
+          data-tour="mechanics-3d-stage"
+          className="relative w-full h-[340px] sm:h-[440px] lg:h-[560px] rounded-xl bg-[#060A12] border border-slate-800 overflow-hidden"
+        >
           <div ref={mountRef} data-testid="mechanics-3d-canvas" className="w-full h-full" />
 
           {/* Medidor en Vivo de Conservación de Energía (Top-Left, superficie sólida sin backdrop-blur) */}
@@ -788,7 +830,10 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
           </button>
 
           {!dockCollapsed && (
-            <div className="w-full rounded-xl bg-[#0B0F1C] border border-slate-700/90 p-3.5 sm:p-4 shadow-2xl space-y-3">
+            <div
+              data-tour="mechanics-control-dock"
+              className="w-full rounded-xl bg-[#0B0F1C] border border-slate-700/90 p-3.5 sm:p-4 shadow-2xl space-y-3"
+            >
               {/* Row 1: Vector Toggles & Planetary Gravity Selector */}
               <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 border-b border-slate-800 pb-3">
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -978,7 +1023,10 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
 
       {/* Panel Paso a Paso de la Fórmula de Huygens + Experimento del Mito de Galileo (Animado al Hacer Scroll) */}
       <ScrollReveal direction="up" delayMs={80}>
-      <div className="p-4 rounded-xl bg-[#070B14] border border-emerald-500/30 space-y-2 text-xs">
+      <div
+        data-tour="mechanics-huygens-panel"
+        className="p-4 rounded-xl bg-[#070B14] border border-emerald-500/30 space-y-2 text-xs"
+      >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="font-mono font-bold text-emerald-300">
             📐 Fórmula del Péndulo Paso a Paso con tus Datos + Experimento del Mito de Galileo:

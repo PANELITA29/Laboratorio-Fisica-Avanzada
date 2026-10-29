@@ -38,6 +38,43 @@ import {
   SpaceValidationResult,
 } from './space-challenges';
 import { ScrollReveal } from '../../components/QuantumAnimations';
+import { TourGuiado, TourStep } from '../../components/TourGuiado';
+
+const SPACE_TOUR_STEPS: TourStep[] = [
+  {
+    targetSelector: '[data-tour="space-3d-stage"]',
+    badgeEs: '1 · ESCENARIO ORBITAL 3D',
+    badgeEn: '1 · 3D ORBITAL STAGE',
+    titleEs: 'Malla Espacio-Tiempo y Cuerpos Celestes 3D',
+    titleEn: '3D Spacetime Mesh & Celestial Bodies',
+    descriptionEs:
+      'Rota la cámara con el ratón o gesto táctil y observa en tiempo real la curvatura gravitatoria y la telemetría Verlet (radio r, velocidad v y energía E_tot).',
+    descriptionEn:
+      'Rotate the camera with mouse or touch and observe the gravitational curvature and live Verlet telemetry (radius r, velocity v, and total energy E_tot).',
+  },
+  {
+    targetSelector: '[data-tour="space-control-dock"]',
+    badgeEs: '2 · PANEL DE CONTROL ORBITAL',
+    badgeEn: '2 · ORBITAL CONTROL DOCK',
+    titleEs: 'Panel de Control: Velocidad de Inserción y Capas',
+    titleEn: 'Control Panel: Insertion Velocity & Vector Layers',
+    descriptionEs:
+      'Ajusta la velocidad de inserción (v_c), la constante gravitacional G y activa o desactiva los vectores de gravedad, velocidad y estelas orbitales.',
+    descriptionEn:
+      'Adjust insertion velocity (v_c), gravitational constant G, and toggle gravity vectors, velocity vectors, and orbital trails.',
+  },
+  {
+    targetSelector: '[data-tour="space-kepler-instrument"]',
+    badgeEs: '3 · TELEMETRÍA KEPLER Y HOHMANN',
+    badgeEn: '3 · KEPLER & HOHMANN TELEMETRY',
+    titleEs: 'Instrumentación de Leyes de Kepler y Maniobra Hohmann',
+    titleEn: 'Kepler Laws Instrumentation & Hohmann Transfer',
+    descriptionEs:
+      'Modifica la masa estelar (M☉), el semieje mayor (a) y la excentricidad (e), o inyecta el impulso Δv₁ para ejecutar una transferencia interplanetaria de Hohmann.',
+    descriptionEn:
+      'Modify stellar mass (M☉), semi-major axis (a), and eccentricity (e), or inject Δv₁ to execute a Hohmann interplanetary transfer.',
+  },
+];
 
 interface SpaceLabViewProps {
   lang: Language;
@@ -676,6 +713,8 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
               </button>
             ))}
           </div>
+
+          <TourGuiado labId="space" lang={lang} steps={SPACE_TOUR_STEPS} />
         </div>
       </div>
 
@@ -749,7 +788,10 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
 
       {/* Escenario Principal 3D (En móvil el dock se ubica debajo del lienzo 3D para no tapar la simulación) */}
       <div className="space-y-3 lg:space-y-0 lg:relative w-full">
-        <div className="relative w-full h-[340px] sm:h-[440px] lg:h-[580px] rounded-xl bg-[#05070E] border border-slate-800 overflow-hidden">
+        <div
+          data-tour="space-3d-stage"
+          className="relative w-full h-[340px] sm:h-[440px] lg:h-[580px] rounded-xl bg-[#05070E] border border-slate-800 overflow-hidden"
+        >
           {/* Contenedor aislado del Canvas WebGL */}
           <div
             ref={mountRef}
@@ -782,7 +824,10 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
           </button>
 
           {!dockCollapsed && (
-            <div className="w-full rounded-xl bg-[#0B0F1C] border border-slate-700/90 p-3.5 sm:p-4 shadow-2xl space-y-3">
+            <div
+              data-tour="space-control-dock"
+              className="w-full rounded-xl bg-[#0B0F1C] border border-slate-700/90 p-3.5 sm:p-4 shadow-2xl space-y-3"
+            >
               {/* Row 1: Camera Kinematics & Vector Layers */}
               <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 border-b border-slate-800 pb-3">
                 {/* Camera Selector */}
@@ -972,7 +1017,10 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
 
       {/* Panel Analítico Interactivo: Leyes de Kepler (Animado al Hacer Scroll) */}
       <ScrollReveal direction="up" delayMs={80}>
-      <div className="p-5 rounded-xl bg-[#0D1322] border border-slate-800 space-y-4">
+      <div
+        data-tour="space-kepler-instrument"
+        className="p-5 rounded-xl bg-[#0D1322] border border-slate-800 space-y-4"
+      >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
           <div>
             <span className="text-[11px] font-mono uppercase tracking-wider text-purple-400 block">

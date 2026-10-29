@@ -99,6 +99,33 @@
   animation: quantumFloatPulse 2s ease-in-out infinite;
 }
 
+@keyframes tourPulseBorder {
+  0%, 100% {
+    box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.95), 0 0 24px 4px rgba(34, 211, 238, 0.45), inset 0 0 14px rgba(34, 211, 238, 0.18);
+    border-color: #22d3ee !important;
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(56, 189, 248, 1), 0 0 38px 10px rgba(34, 211, 238, 0.75), inset 0 0 22px rgba(34, 211, 238, 0.3);
+    border-color: #fde047 !important;
+  }
+}
+
+.tour-guiado-pulse-target {
+  position: relative;
+  z-index: 35 !important;
+  animation: tourPulseBorder 1.6s ease-in-out infinite !important;
+  border-radius: 0.85rem;
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour-guiado-pulse-target {
+    animation: none !important;
+    box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.95), 0 0 20px rgba(34, 211, 238, 0.5) !important;
+    border-color: #22d3ee !important;
+  }
+}
+
 @media print {
   body {
     background-color: #FFFFFF !important;
@@ -111,3 +138,4 @@
     display: block !important;
   }
 }
+
