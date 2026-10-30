@@ -537,45 +537,48 @@ export default function App() {
       >
         {activeView === 'hub' && (
           <div id="portal-hub-view" className="space-y-8 sm:space-y-10">
-            <section className="max-w-4xl flex flex-col justify-between space-y-5 pt-1">
-              <div className="space-y-3.5">
-                <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-slate-300">
-                  <span className="text-cyan-300 font-semibold">
+            <section className="max-w-4xl mx-auto flex flex-col items-center text-center space-y-6 pt-3 sm:pt-6 pb-2">
+              <div className="space-y-4 flex flex-col items-center w-full">
+                <div className="inline-flex flex-wrap items-center justify-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-cyan-500/30 text-xs font-mono text-slate-300 shadow-[0_0_20px_rgba(6,182,212,0.15)] backdrop-blur-md">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_#22d3ee]"></span>
+                  <span className="text-cyan-300 font-semibold tracking-wide">
                     {lang === 'es' ? 'Suite de Instrumentación Numérica' : 'Numerical Instrumentation Suite'}
                   </span>
                   <span aria-hidden="true" className="text-slate-600">·</span>
-                  <span>WebGL2 &amp; Canvas 2D</span>
+                  <span className="text-slate-300">WebGL2 &amp; Canvas 2D</span>
                   <span aria-hidden="true" className="text-slate-600">·</span>
-                  <span>Δt = 16.67 ms</span>
+                  <span className="text-cyan-400 font-semibold">Δt = 16.67 ms</span>
                 </div>
 
-                <h1 className="fluid-title-xl font-bold tracking-tight text-white max-w-[22ch]">
-                  <span className="block">{translations.heroTitleLine1}</span>
-                  <span className="block text-slate-300 font-normal mt-1.5 text-[0.72em] leading-snug">
+                <h1 className="font-['Outfit'] font-black tracking-tight text-center max-w-4xl mx-auto">
+                  <span className="block text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-transparent bg-clip-text bg-gradient-to-b from-white via-slate-100 to-slate-300 drop-shadow-[0_2px_16px_rgba(255,255,255,0.12)] leading-[1.12] pb-1">
+                    {translations.heroTitleLine1}
+                  </span>
+                  <span className="block text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-300 to-teal-300 font-semibold mt-2 sm:mt-3 text-lg sm:text-xl md:text-2xl lg:text-3xl tracking-tight leading-snug">
                     {translations.heroTitleLine2}
                   </span>
                 </h1>
 
-                <p className="text-xs sm:text-sm text-[#CBD5E1] leading-relaxed max-w-[62ch]">
+                <p className="text-xs sm:text-sm md:text-base text-slate-300 leading-relaxed max-w-2xl mx-auto font-normal text-center">
                   {translations.heroDescription}
                 </p>
               </div>
 
-              <div className="pt-1 space-y-2">
-                <div className="text-xs font-mono text-slate-300">
+              <div className="pt-1 flex flex-col items-center space-y-2.5 w-full">
+                <div className="text-xs font-mono uppercase tracking-wider text-slate-400 text-center">
                   {lang === 'es' ? 'Filtrar bancos de prueba por dominio físico:' : 'Filter testbenches by physical domain:'}
                 </div>
                 <div
                   role="group"
                   aria-label={lang === 'es' ? 'Filtro de módulos de laboratorio' : 'Laboratory module filter'}
-                  className="flex flex-wrap items-center gap-1 p-1 rounded-xl bg-[#0B101B] border border-slate-800/90 w-fit"
+                  className="flex flex-wrap items-center justify-center gap-1.5 p-1.5 rounded-xl bg-[#0B101B]/95 border border-slate-800/90 shadow-xl backdrop-blur-md max-w-full"
                 >
                   <button
                     type="button"
                     onClick={() => setCategoryFilter('all')}
-                    className={`min-h-[2.375rem] px-3 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
+                    className={`min-h-[2.375rem] px-3.5 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
                       categoryFilter === 'all'
-                        ? 'bg-cyan-400 text-slate-950 shadow-sm'
+                        ? 'bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20'
                         : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
                     }`}
                   >
@@ -584,9 +587,9 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setCategoryFilter('circuits')}
-                    className={`min-h-[2.375rem] px-3 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
+                    className={`min-h-[2.375rem] px-3.5 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
                       categoryFilter === 'circuits'
-                        ? 'bg-cyan-400 text-slate-950 shadow-sm'
+                        ? 'bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20'
                         : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
                     }`}
                   >
@@ -595,9 +598,9 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setCategoryFilter('space')}
-                    className={`min-h-[2.375rem] px-3 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
+                    className={`min-h-[2.375rem] px-3.5 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
                       categoryFilter === 'space'
-                        ? 'bg-cyan-400 text-slate-950 shadow-sm'
+                        ? 'bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20'
                         : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
                     }`}
                   >
@@ -606,9 +609,9 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setCategoryFilter('mechanics')}
-                    className={`min-h-[2.375rem] px-3 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
+                    className={`min-h-[2.375rem] px-3.5 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
                       categoryFilter === 'mechanics'
-                        ? 'bg-cyan-400 text-slate-950 shadow-sm'
+                        ? 'bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20'
                         : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
                     }`}
                   >
@@ -617,9 +620,9 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => setCategoryFilter('kinematics')}
-                    className={`min-h-[2.375rem] px-3 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
+                    className={`min-h-[2.375rem] px-3.5 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
                       categoryFilter === 'kinematics'
-                        ? 'bg-cyan-400 text-slate-950 shadow-sm'
+                        ? 'bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20'
                         : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
                     }`}
                   >
