@@ -841,7 +841,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
       <div className="space-y-3 lg:space-y-0 lg:relative w-full">
         <div
           data-tour="space-3d-stage"
-          className="relative w-full h-[340px] sm:h-[440px] lg:h-[580px] rounded-xl bg-[#05070E] border border-slate-800 overflow-hidden"
+          className="relative w-full fluid-stage-box rounded-xl bg-[#05070E] border border-slate-800 overflow-hidden"
         >
           {/* Contenedor aislado del Canvas WebGL */}
           <div
@@ -864,11 +864,11 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
         </div>
 
         {/* Collapsible Unified Control Dock (Flujo normal en móvil/tablet, flotante inferior en escritorio lg+) */}
-        <div className="w-full lg:absolute lg:bottom-4 lg:left-1/2 lg:-translate-x-1/2 lg:w-[94%] lg:max-w-[920px] flex flex-col items-center z-10">
+        <div className="w-full lg:absolute lg:bottom-4 lg:left-1/2 lg:-translate-x-1/2 lg:w-[94%] lg:max-w-[57.5rem] flex flex-col items-center z-10">
           <button
             type="button"
             onClick={() => setDockCollapsed((prev) => !prev)}
-            className="flex items-center gap-1.5 px-3.5 py-1 rounded-t-lg bg-[#0D1322] border border-b-0 border-slate-700 text-xs font-mono text-cyan-300 hover:text-white transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 min-h-[2.75rem] lg:min-h-0 lg:py-1 rounded-t-lg bg-[#0D1322] border border-b-0 border-slate-700 text-xs font-mono text-cyan-300 hover:text-white transition-colors cursor-pointer"
           >
             {dockCollapsed ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             <span>{dockCollapsed ? t.showControls : t.hideControls}</span>
@@ -1109,7 +1109,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
         </div>
 
         {/* Sliders Keplerianos: Masa Estelar M, Semieje Mayor a, Excentricidad e */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+        <div className="fluid-auto-grid text-xs">
           <div className="p-3 rounded-lg bg-[#07090E] border border-slate-800">
             <div className="flex justify-between mb-1">
               <label htmlFor="kepler-mass-slider" className="text-slate-300 font-mono">
@@ -1202,7 +1202,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
         </div>
 
         {/* Telemetría Analítica de las 4 Leyes Celestes con Equivalencias Reales */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+        <div className="fluid-metrics-grid text-xs font-mono">
           <div className="p-3 rounded-lg bg-[#07090E] border border-slate-800">
             <span className="text-[10px] text-slate-400 block">1ª LEY (PERIHELIO / AFELIO)</span>
             <span className="text-sm font-bold text-white">
@@ -1247,7 +1247,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
             <span className="font-mono font-bold text-purple-300">
               🚦 Diagnóstico Orbital para Estudiantes y Fórmula de Kepler Paso a Paso:
             </span>
-            <span className="font-mono text-[11px] text-cyan-300 bg-[#0B101E] px-2.5 py-0.5 rounded border border-slate-800">
+            <span className="font-mono text-[11px] text-cyan-300 bg-[#0B101E] px-2.5 py-1 rounded border border-slate-800 break-words whitespace-normal max-w-full">
               {`T = √(a³ / M) = √(${semiMajorAxisAU.toFixed(2)}³ / ${centralMassSolar.toFixed(2)}) = ${keplerMetrics.orbitalPeriodYears.toFixed(2)} años`}
             </span>
           </div>
@@ -1277,7 +1277,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
 
       {/* Guía Pedagógica Interactiva del Laboratorio Espacial 3D (Animada al Hacer Scroll) */}
       <ScrollReveal direction="up" delayMs={140}>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="fluid-auto-grid">
         <div className="p-4 rounded-xl bg-[#0D1322] border border-slate-800 space-y-1.5">
           <div className="flex items-center gap-2 text-xs font-mono font-bold text-purple-400 uppercase">
             <BookOpen className="w-4 h-4" />

@@ -805,7 +805,7 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
       <div className="space-y-3 lg:space-y-0 lg:relative w-full">
         <div
           data-tour="mechanics-3d-stage"
-          className="relative w-full h-[340px] sm:h-[440px] lg:h-[560px] rounded-xl bg-[#060A12] border border-slate-800 overflow-hidden"
+          className="relative w-full fluid-stage-box rounded-xl bg-[#060A12] border border-slate-800 overflow-hidden"
         >
           <div ref={mountRef} data-testid="mechanics-3d-canvas" className="w-full h-full" />
 
@@ -860,11 +860,11 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
         </div>
 
         {/* Collapsible Control Dock (Flujo normal debajo del lienzo en móvil/tablet, flotante en escritorio lg+) */}
-        <div className="w-full lg:absolute lg:bottom-4 lg:left-1/2 lg:-translate-x-1/2 lg:w-[94%] lg:max-w-[920px] flex flex-col items-center z-10">
+        <div className="w-full lg:absolute lg:bottom-4 lg:left-1/2 lg:-translate-x-1/2 lg:w-[94%] lg:max-w-[57.5rem] flex flex-col items-center z-10">
           <button
             type="button"
             onClick={() => setDockCollapsed((prev) => !prev)}
-            className="flex items-center gap-1.5 px-3.5 py-1 rounded-t-lg bg-[#0D1322] border border-b-0 border-slate-700 text-xs font-mono text-emerald-300 hover:text-white transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 min-h-[2.75rem] lg:min-h-0 lg:py-1 rounded-t-lg bg-[#0D1322] border border-b-0 border-slate-700 text-xs font-mono text-emerald-300 hover:text-white transition-colors cursor-pointer"
           >
             {dockCollapsed ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             <span>{dockCollapsed ? t.showControls : t.hideControls}</span>
@@ -1072,7 +1072,7 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
           <span className="font-mono font-bold text-emerald-300">
             📐 Fórmula del Péndulo Paso a Paso con tus Datos + Experimento del Mito de Galileo:
           </span>
-          <span className="font-mono text-[11px] text-cyan-300 bg-[#0B101E] px-2.5 py-0.5 rounded border border-slate-800">
+          <span className="font-mono text-[11px] text-cyan-300 bg-[#0B101E] px-2.5 py-1 rounded border border-slate-800 break-words whitespace-normal max-w-full">
             {`T = 2π · √(L / g) = 6.283 · √(${length.toFixed(2)} m / ${gravity.toFixed(2)} m/s²) = ${liveEnergy.theoreticalPeriod.toFixed(2)} s`}
           </span>
         </div>
@@ -1084,7 +1084,7 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
 
       {/* Explicación Pedagógica Intuitiva del Laboratorio 3 (Animada al Hacer Scroll) */}
       <ScrollReveal direction="up" delayMs={150}>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="fluid-auto-grid">
         <div className="p-4 rounded-xl bg-[#0D1322] border border-slate-800 space-y-1.5">
           <div className="flex items-center gap-2 text-xs font-mono font-bold text-emerald-400 uppercase">
             <BookOpen className="w-4 h-4" />

@@ -54,6 +54,7 @@ import {
   ValidationResult,
 } from './circuit-challenges';
 import { CircuitWorkbench3D } from './CircuitWorkbench3D';
+import { CircuitBuilderView } from './builder/CircuitBuilderView';
 import { ScrollReveal } from '../../components/QuantumAnimations';
 import { TourGuiado, TourStep } from '../../components/TourGuiado';
 
@@ -266,6 +267,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
 }) => {
   const t = dictionary[lang];
 
+  const [labMode, setLabMode] = useState<'guided' | 'builder'>('guided');
   const [activeSubTab, setActiveSubTab] = useState<'sandbox' | 'challenges'>('sandbox');
   const [cockpitTab, setCockpitTab] = useState<CockpitTabId>('controls');
   const [viewDimension, setViewDimension] = useState<'3d' | '2d'>('3d');
@@ -1417,6 +1419,50 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
 
   return (
     <div className="space-y-6 quantum-hero-enter">
+      {/* Selector Superior de Modo de Laboratorio: Guiado (3R DC) vs Taller de Construcción Libre */}
+      <div
+        data-testid="circuit-lab-mode-switcher"
+        className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-[#090D18] border border-slate-800"
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            data-testid="tab-guided-lab"
+            onClick={() => setLabMode('guided')}
+            className={`touch-target flex items-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-mono font-bold transition-colors cursor-pointer ${
+              labMode === 'guided'
+                ? 'bg-cyan-500 text-slate-950 shadow-sm'
+                : 'bg-[#111827] text-slate-300 hover:text-white border border-slate-800'
+            }`}
+          >
+            <span>🔬 Laboratorio Guiado (3 Resistencias DC)</span>
+          </button>
+
+          <button
+            type="button"
+            data-testid="tab-free-builder"
+            onClick={() => setLabMode('builder')}
+            className={`touch-target flex items-center gap-2 px-4 py-2 rounded-lg text-xs sm:text-sm font-mono font-bold transition-colors cursor-pointer ${
+              labMode === 'builder'
+                ? 'bg-cyan-500 text-slate-950 shadow-sm'
+                : 'bg-[#111827] text-slate-300 hover:text-white border border-slate-800'
+            }`}
+          >
+            <span>🛠️ Taller de Construcción Libre 3D</span>
+          </button>
+        </div>
+
+        <span className="text-[11px] font-mono text-slate-400">
+          {labMode === 'guided'
+            ? 'Modo 1: Banco 3D Guiado · Multímetro LCD · Telemetría · 4 Gráficas · Test 10 Preguntas'
+            : 'Modo 2: Banco de Prototipado 3D (WebGL) · Solver Nodal MNA · Almacén Lateral Arrastrable'}
+        </span>
+      </div>
+
+      {labMode === 'builder' ? (
+        <CircuitBuilderView lang={lang} />
+      ) : (
+        <>
       {/* Cabecera de Cabina de Laboratorio (Cockpit Header) */}
       <div
         data-tour="circuits-cockpit-header"
@@ -1778,8 +1824,8 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
               </div>
             </div>
 
-            {/* Interactive 3D WebGL Workbench or 2D Schematic Canvas (Ancho Completo Panorámico) */}
-            <div className="relative w-full h-[360px] sm:h-[460px] lg:h-[540px] bg-[#070B14]">
+            {/* Interactive 3D WebGL Workbench or 2D Schematic Canvas (Ancho Completo Panorámico Fluido) */}
+            <div className="relative w-full fluid-stage-box bg-[#070B14]">
               {viewDimension === '3d' && (
                 <div className="hidden sm:flex absolute bottom-2.5 left-2.5 right-2.5 z-10 pointer-events-none flex-wrap items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-[#050811]/90 border border-slate-800/90 text-[11px] font-mono text-slate-300">
                   <span>
@@ -2003,8 +2049,8 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
               </div>
             </div>
 
-            {/* 4 Pantallas LCD de Telemetría Principal */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+            {/* 4 Pantallas LCD de Telemetría Principal (CSS Grid Fluido) */}
+            <div className="fluid-metrics-grid">
               <div className="p-2.5 sm:p-3 rounded-lg bg-[#050811] border-2 border-cyan-500/50">
                 <span className="text-[10px] font-mono text-cyan-300 block uppercase truncate">
                   SONDAS ({multimeterMode === 'V' ? 'V⎓' : multimeterMode === 'OHM' ? 'Ω' : 'A⎓'})
@@ -2143,7 +2189,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
               <button
                 type="button"
                 onClick={() => setRevealAllBranches((v) => !v)}
-                className="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-cyan-300 border border-slate-700 cursor-pointer h-[34px]"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 min-h-[2.75rem] rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-cyan-300 border border-slate-700 cursor-pointer"
               >
                 {revealAllBranches ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 <span>{revealAllBranches ? 'Modo Práctica: Ocultar no medidas' : 'Mostrar todas las ramas'}</span>
@@ -3282,7 +3328,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                 <span className="font-mono font-bold text-cyan-300">
                   🚦 Diagnóstico Eléctrico para Estudiantes y Ley de Ohm Paso a Paso:
                 </span>
-                <span className="font-mono text-[11px] text-amber-300 bg-[#0B101E] px-2.5 py-0.5 rounded border border-slate-800">
+                <span className="font-mono text-[11px] text-amber-300 bg-[#0B101E] px-2.5 py-1 rounded border border-slate-800 break-words whitespace-normal max-w-full">
                   {`I_T = V_F / R_eq = ${topologyResult.sourceVoltage.toFixed(1)} V / ${
                     Number.isFinite(topologyResult.equivalentResistance)
                       ? `${topologyResult.equivalentResistance.toFixed(2)} Ω`
@@ -3323,7 +3369,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
 
       {/* Guía Pedagógica Interactiva de Parámetros del Laboratorio de Circuitos (Estilo Modo Sistema Solar) */}
       <ScrollReveal direction="up" delayMs={60}>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="fluid-auto-grid">
           <div className="p-4 rounded-xl bg-[#0D1322] border border-slate-800 space-y-1.5">
             <div className="flex items-center gap-2 text-xs font-mono font-bold text-cyan-400 uppercase">
               <BookOpen className="w-4 h-4" />
@@ -3478,6 +3524,8 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
           )}
         </section>
       </ScrollReveal>
+        </>
+      )}
     </div>
   );
 };

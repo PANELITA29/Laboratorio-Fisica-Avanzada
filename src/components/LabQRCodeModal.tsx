@@ -9,50 +9,58 @@ interface LabQRCodeModalProps {
   lang: Language;
 }
 
-const VERCEL_OFFICIAL_URL = 'https://laboratorio-fisica-avanzada.vercel.app';
+const DEPLOYMENT_BASE_URL = 'https://laboratorio-fisica-avanzada.vercel.app';
 
 export const LabQRCodeModal: React.FC<LabQRCodeModalProps> = ({ isOpen, onClose, lang }) => {
-  const [targetUrl, setTargetUrl] = useState<string>(VERCEL_OFFICIAL_URL);
+  const [encodedUrl, setEncodedUrl] = useState<string>(DEPLOYMENT_BASE_URL);
   const [qrSvgMarkup, setQrSvgMarkup] = useState<string>('');
-  const [copied, setCopied] = useState<boolean>(false);
+  const [hasCopiedUrl, setHasCopiedUrl] = useState<boolean>(false);
 
   useEffect(() => {
-    let active = true;
-    const urlToEncode = targetUrl.trim() || VERCEL_OFFICIAL_URL;
+    let isMounted = true;
+    const sanitizedUrl = encodedUrl.trim() || DEPLOYMENT_BASE_URL;
     QRCode.toString(
-      urlToEncode,
+      sanitizedUrl,
       {
         type: 'svg',
-        margin: 3,
-        width: 240,
+        margin: 2,
+        width: 220,
         errorCorrectionLevel: 'H',
         color: {
           dark: '#000000',
           light: '#FFFFFF',
         },
       },
-      (err, svgStr) => {
-        if (!err && active && svgStr) {
-          setQrSvgMarkup(svgStr);
+      (error, generatedSvg) => {
+        if (!error && isMounted && generatedSvg) {
+          setQrSvgMarkup(generatedSvg);
         }
       }
     );
     return () => {
-      active = false;
+      isMounted = false;
     };
-  }, [targetUrl]);
+  }, [encodedUrl]);
 
   const handleCopyUrl = async () => {
     try {
-      await navigator.clipboard.writeText(targetUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
+      await navigator.clipboard.writeText(encodedUrl);
+      setHasCopiedUrl(true);
+      setTimeout(() => setHasCopiedUrl(false), 1600);
     } catch {
-      setCopied(false);
+      setHasCopiedUrl(false);
     }
   };
 
   if (!isOpen) return null;
+
+  const moduleDeepLinks = [
+    { label: 'Índice', url: DEPLOYMENT_BASE_URL },
+    { label: 'Circuitos DC', url: `${DEPLOYMENT_BASE_URL}/?lab=circuits` },
+    { label: 'Gravitación 3D', url: `${DEPLOYMENT_BASE_URL}/?lab=space` },
+    { label: 'Oscilaciones RK4', url: `${DEPLOYMENT_BASE_URL}/?lab=mechanics` },
+    { label: 'Cinemática 2D', url: `${DEPLOYMENT_BASE_URL}/?lab=kinematics` },
+  ];
 
   return (
     <div
@@ -61,139 +69,101 @@ export const LabQRCodeModal: React.FC<LabQRCodeModalProps> = ({ isOpen, onClose,
       aria-modal="true"
       aria-labelledby="qr-modal-title"
     >
-      <div className="w-full max-w-lg rounded-2xl bg-[#0B0F1A] border border-cyan-500/40 shadow-2xl overflow-hidden my-4 sm:my-8">
-        {/* Header */}
-        <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-[#0F1626] border-b border-slate-800 flex items-center justify-between gap-3">
+      <div className="w-full max-w-md rounded-xl bg-[#0B0F19] border border-slate-700 overflow-hidden my-4">
+        <div className="px-4 sm:px-5 py-3.5 bg-[#0E1422] border-b border-slate-800 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <QrCode className="w-5 h-5 text-cyan-400 shrink-0" />
+            <QrCode className="w-4 h-4 text-cyan-400 shrink-0" />
             <div>
-              <span className="text-[10px] sm:text-[11px] font-mono uppercase tracking-wider text-cyan-400 block">
-                ACCESO MÓVIL INMEDIATO · WEB OFICIAL VERCEL
-              </span>
-              <h2 id="qr-modal-title" className="text-base sm:text-lg font-bold text-white">
-                {lang === 'es'
-                  ? 'Escanea para Abrir el Laboratorio 3D en Vercel'
-                  : 'Scan to Launch the 3D Laboratory on Vercel'}
+              <h2 id="qr-modal-title" className="text-sm sm:text-base font-bold text-white">
+                {lang === 'es' ? 'Acceso Directo por Código QR' : 'Direct QR Code Access'}
               </h2>
+              <span className="text-[11px] font-mono text-slate-300 block">
+                {lang === 'es' ? 'Sincronización directa hacia navegadores móviles · PWA' : 'Direct mobile browser synchronization · PWA'}
+              </span>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label={lang === 'es' ? 'Cerrar Código QR' : 'Close QR Code'}
-            className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+            aria-label={lang === 'es' ? 'Cerrar ventana QR' : 'Close QR modal'}
+            className="touch-target rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Body */}
-        <div className="p-4 sm:p-6 space-y-4 sm:space-y-5 text-center">
-          <p className="text-xs text-slate-300 leading-relaxed">
+        <div className="p-4 sm:p-5 space-y-4 text-center">
+          <p className="text-xs text-slate-300 leading-relaxed mx-auto">
             {lang === 'es'
-              ? 'Apunta la cámara de cualquier teléfono móvil o tablet hacia este código QR para entrar directamente a la web oficial en Vercel y experimentar con los 3 laboratorios en 3D (Circuitos DC, Espacio-Tiempo de Einstein y Péndulos RK4).'
-              : 'Point any smartphone or tablet camera at this QR code to open the official Vercel web app and interact live with all 3 3D laboratories.'}
+              ? 'Escanea el código con la cámara de tu teléfono o tablet para abrir el módulo seleccionado directamente en navegador móvil.'
+              : 'Scan with your phone or tablet camera to open the selected module directly on mobile.'}
           </p>
 
-          {/* Scannable QR Frame (Pure White Background for Instant Camera Recognition) */}
-          <div className="mx-auto w-56 h-56 sm:w-64 sm:h-64 p-3 rounded-2xl bg-white border-4 border-cyan-400 shadow-2xl flex items-center justify-center">
+          <div className="mx-auto w-52 h-52 sm:w-56 sm:h-56 p-3 rounded-xl bg-white border border-slate-300 flex items-center justify-center">
             {qrSvgMarkup ? (
               <div
                 data-testid="lab-qr-svg"
-                className="w-full h-full [&>svg]:w-full [&>svg]:h-full rounded-lg overflow-hidden"
+                className="w-full h-full [&>svg]:w-full [&>svg]:h-full"
                 dangerouslySetInnerHTML={{ __html: qrSvgMarkup }}
               />
             ) : (
-              <span className="text-xs font-mono text-slate-900 font-bold">Generando QR...</span>
+              <span className="text-xs font-mono text-slate-900">Generando SVG...</span>
             )}
           </div>
 
-          {/* Direct Lab Deep-Link Presets on Vercel */}
-          <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
-            <button
-              type="button"
-              onClick={() => setTargetUrl(VERCEL_OFFICIAL_URL)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-mono border cursor-pointer transition-colors ${
-                targetUrl === VERCEL_OFFICIAL_URL
-                  ? 'bg-cyan-500 text-slate-950 border-cyan-300 font-bold'
-                  : 'bg-slate-800 hover:bg-slate-700 text-cyan-300 border-slate-700'
-              }`}
-            >
-              Web Vercel (Inicio)
-            </button>
-            <button
-              type="button"
-              onClick={() => setTargetUrl(`${VERCEL_OFFICIAL_URL}/?lab=circuits`)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-mono border cursor-pointer transition-colors ${
-                targetUrl === `${VERCEL_OFFICIAL_URL}/?lab=circuits`
-                  ? 'bg-amber-400 text-slate-950 border-amber-300 font-bold'
-                  : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border-slate-700'
-              }`}
-            >
-              Vercel: Circuitos 3D
-            </button>
-            <button
-              type="button"
-              onClick={() => setTargetUrl(`${VERCEL_OFFICIAL_URL}/?lab=space`)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-mono border cursor-pointer transition-colors ${
-                targetUrl === `${VERCEL_OFFICIAL_URL}/?lab=space`
-                  ? 'bg-purple-500 text-white border-purple-300 font-bold'
-                  : 'bg-slate-800 hover:bg-slate-700 text-purple-300 border-slate-700'
-              }`}
-            >
-              Vercel: Espacio 3D
-            </button>
-            <button
-              type="button"
-              onClick={() => setTargetUrl(`${VERCEL_OFFICIAL_URL}/?lab=mechanics`)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-mono border cursor-pointer transition-colors ${
-                targetUrl === `${VERCEL_OFFICIAL_URL}/?lab=mechanics`
-                  ? 'bg-emerald-400 text-slate-950 border-emerald-300 font-bold'
-                  : 'bg-slate-800 hover:bg-slate-700 text-emerald-300 border-slate-700'
-              }`}
-            >
-              Vercel: Péndulos 3D
-            </button>
+          <div className="flex flex-wrap items-center justify-center gap-1.5">
+            {moduleDeepLinks.map((routeOption) => (
+              <button
+                key={routeOption.url}
+                type="button"
+                onClick={() => setEncodedUrl(routeOption.url)}
+                className={`min-h-[2.25rem] px-2.5 py-1 rounded text-[11px] font-mono border cursor-pointer transition-colors ${
+                  encodedUrl === routeOption.url
+                    ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-semibold'
+                    : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-800'
+                }`}
+              >
+                {routeOption.label}
+              </button>
+            ))}
           </div>
 
-          {/* Editable URL + Copy Button */}
           <div className="space-y-1.5 text-left">
-            <label htmlFor="qr-url-input" className="block text-[11px] font-mono text-slate-400">
-              {lang === 'es' ? 'Enlace de Vercel codificado en el QR:' : 'Vercel URL encoded in QR:'}
+            <label htmlFor="qr-url-input" className="block text-[11px] font-mono text-slate-300">
+              {lang === 'es' ? 'URL codificada:' : 'Encoded URL:'}
             </label>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
               <input
                 id="qr-url-input"
                 type="text"
-                value={targetUrl}
-                onChange={(e) => setTargetUrl(e.target.value)}
-                className="flex-1 rounded-lg bg-[#07090E] border border-slate-700 px-3 py-2 text-xs font-mono text-cyan-300 focus:outline-none focus:border-cyan-400"
+                value={encodedUrl}
+                onChange={(e) => setEncodedUrl(e.target.value)}
+                className="min-h-[2.75rem] flex-1 rounded-lg bg-[#07090E] border border-slate-700 px-3 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-400"
               />
               <button
                 type="button"
                 onClick={handleCopyUrl}
-                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-cyan-500 text-slate-950 font-bold text-xs hover:bg-cyan-400 transition-colors cursor-pointer shrink-0"
+                className="min-h-[2.75rem] flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-100 font-mono text-xs border border-slate-700 transition-colors cursor-pointer shrink-0"
               >
-                {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copied ? 'Copiado' : 'Copiar'}</span>
+                {hasCopiedUrl ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{hasCopiedUrl ? 'Copiado' : 'Copiar'}</span>
               </button>
             </div>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-4 sm:px-6 py-3.5 bg-[#0F1626] border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-1.5 text-emerald-400 font-mono">
-            <Smartphone className="w-4 h-4 shrink-0" />
-            <span>Compatible con iOS / Android (PWA)</span>
+        <div className="px-4 sm:px-5 py-3 bg-[#0E1422] border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-1.5 text-slate-300 font-mono">
+            <Smartphone className="w-3.5 h-3.5 shrink-0 text-cyan-400" />
+            <span>PWA Offline-First</span>
           </div>
           <a
-            href={targetUrl}
+            href={encodedUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1 text-cyan-400 hover:text-cyan-300 font-mono"
           >
-            <span>Abrir web en Vercel</span>
+            <span>Abrir enlace</span>
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
         </div>
@@ -206,93 +176,88 @@ export const HubQRCodeBanner: React.FC<{
   lang: Language;
   onOpenModal: () => void;
 }> = ({ lang, onOpenModal }) => {
-  const [svgStr, setSvgStr] = useState<string>('');
-  const liveUrl = VERCEL_OFFICIAL_URL;
+  const [qrPreviewSvg, setQrPreviewSvg] = useState<string>('');
 
   useEffect(() => {
-    let active = true;
+    let isMounted = true;
     QRCode.toString(
-      liveUrl,
+      DEPLOYMENT_BASE_URL,
       {
         type: 'svg',
-        margin: 3,
-        width: 168,
-        errorCorrectionLevel: 'H',
+        margin: 2,
+        width: 128,
+        errorCorrectionLevel: 'M',
         color: {
           dark: '#000000',
           light: '#FFFFFF',
         },
       },
-      (err, str) => {
-        if (!err && active && str) setSvgStr(str);
+      (error, generatedSvg) => {
+        if (!error && isMounted && generatedSvg) setQrPreviewSvg(generatedSvg);
       }
     );
     return () => {
-      active = false;
+      isMounted = false;
     };
-  }, [liveUrl]);
+  }, []);
 
   return (
     <section
       data-testid="hub-qr-section"
-      className="rounded-2xl bg-[#0B101E] border border-cyan-500/40 p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-6"
+      className="rounded-xl workbench-panel fluid-section-pad flex flex-col md:flex-row items-start md:items-center justify-between gap-5"
     >
-      <div className="space-y-3 max-w-2xl">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-cyan-950/80 border border-cyan-500/40 text-xs font-mono text-cyan-300">
-          <QrCode className="w-3.5 h-3.5" />
-          <span>ACCESO MÓVIL OFICIAL EN VERCEL · ESCANEA Y EXPERIMENTA EN 3D</span>
+      <div className="space-y-2 max-w-2xl">
+        <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-slate-300">
+          <Smartphone className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+          <span>{lang === 'es' ? 'Sincronización con Instrumentos Táctiles' : 'Touch Instrument Synchronization'}</span>
+          <span aria-hidden="true" className="text-slate-600">·</span>
+          <span className="text-cyan-300">PWA Offline-First</span>
         </div>
-        <h2 className="text-2xl font-bold text-white">
+        <h2 className="fluid-title-md font-bold text-white">
           {lang === 'es'
-            ? '¿Quieres probar el Laboratorio 3D en tu celular ahora mismo?'
-            : 'Want to try the 3D Laboratory on your phone right now?'}
+            ? 'Ejecución en Dispositivos Táctiles y Tablets de Laboratorio'
+            : 'Execution on Lab Touch Devices & Tablets'}
         </h2>
         <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
           {lang === 'es'
-            ? 'Escanea este código QR con la cámara de tu teléfono para abrir directamente https://laboratorio-fisica-avanzada.vercel.app en tiempo real. Puedes manipular el banco óptico de circuitos DC, deformar la malla relativista del espacio-tiempo o experimentar con péndulos 3D desde tu celular.'
-            : 'Scan this QR code with your phone camera to open https://laboratorio-fisica-avanzada.vercel.app in real time.'}
+            ? 'Los cuatro motores numéricos WebGL y Canvas 2D admiten gestos multitáctiles directos para posicionar puntas de prueba, rotar cámaras orbitales y calibrar gravedad o densidad atmosférica en campo.'
+            : 'All four WebGL and 2D Canvas numerical engines support direct multi-touch gestures for probe placement, orbital camera rotation, and live gravity or atmospheric density calibration.'}
         </p>
-        <div className="pt-1 flex flex-wrap items-center gap-3">
+        <div className="pt-1.5 flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={onOpenModal}
-            className="px-4 py-2.5 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer"
+            className="min-h-[2.75rem] inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800/90 hover:bg-cyan-400 hover:text-slate-950 border border-slate-700 hover:border-cyan-400 text-slate-100 font-mono font-semibold text-xs instrument-transition cursor-pointer"
           >
-            <QrCode className="w-4 h-4" />
-            <span>
-              {lang === 'es'
-                ? 'Ampliar Código QR / Elegir Laboratorio'
-                : 'Enlarge QR Code / Pick Laboratory'}
-            </span>
+            <QrCode className="w-3.5 h-3.5 text-cyan-400 group-hover:text-slate-950" />
+            <span>{lang === 'es' ? 'Generar ruta QR por módulo' : 'Generate module QR route'}</span>
           </button>
-          <a
-            href={liveUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs font-mono text-cyan-300 hover:text-cyan-200 underline break-all"
-          >
-            {liveUrl}
-          </a>
+          <span className="text-xs font-mono text-slate-300 break-all">
+            {DEPLOYMENT_BASE_URL}
+          </span>
         </div>
       </div>
 
-      <div
+      <button
+        type="button"
         onClick={onOpenModal}
-        title="Haz clic para ampliar el Código QR"
-        className="shrink-0 flex flex-col items-center justify-center p-3.5 rounded-2xl bg-white border-4 border-cyan-400 hover:border-cyan-300 transition-colors cursor-pointer shadow-2xl"
+        aria-label={lang === 'es' ? 'Ampliar código QR' : 'Expand QR code'}
+        className="p-2.5 rounded-lg bg-white border border-slate-300 shrink-0 cursor-pointer flex flex-col items-center gap-1 self-center md:self-auto hover:border-cyan-400 instrument-transition"
       >
-        <div className="w-36 h-36 flex items-center justify-center bg-white rounded-lg overflow-hidden">
-          {svgStr ? (
-            <div
-              data-testid="hub-qr-svg"
-              className="w-full h-full [&>svg]:w-full [&>svg]:h-full"
-              dangerouslySetInnerHTML={{ __html: svgStr }}
-            />
-          ) : (
-            <span className="text-xs font-mono text-slate-900 font-bold">QR...</span>
-          )}
-        </div>
-      </div>
+        {qrPreviewSvg ? (
+          <div
+            className="w-24 h-24 [&>svg]:w-full [&>svg]:h-full"
+            dangerouslySetInnerHTML={{ __html: qrPreviewSvg }}
+          />
+        ) : (
+          <div className="w-24 h-24 flex items-center justify-center text-[10px] font-mono text-slate-900">
+            QR
+          </div>
+        )}
+        <span className="text-[10px] font-mono font-semibold text-slate-900">
+          {lang === 'es' ? 'Ampliar QR' : 'Expand QR'}
+        </span>
+      </button>
     </section>
   );
 };
