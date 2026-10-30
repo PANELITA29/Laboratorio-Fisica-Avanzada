@@ -497,27 +497,31 @@ export function createKeplerianCustomSystem(params: {
   eccentricity: number;
   isHohmannTransferActive: boolean;
   G?: number;
+  isBlackHole?: boolean;
 }): CelestialBody[] {
   const G = params.G ?? DEFAULT_G;
   const mSun = 1000 * Math.max(0.2, params.centralMassSolar);
   const aScene = 14 * Math.max(0.4, params.semiMajorAxisAU);
   const e = Math.max(0, Math.min(0.85, params.eccentricity));
 
+  // Si está activo el Agujero Negro, usar su masa relativista efectiva para la órbita inicial
+  const effectiveCentralMass = params.isBlackHole ? mSun * 1.85 : mSun;
+
   // Colocar el planeta en su perihelio r_p = a * (1 - e)
   const rPeri = aScene * (1 - e);
   // Por la ecuación Vis-Viva en el perihelio: v_p = sqrt(G * M * (1 + e) / (a * (1 - e)))
-  let vPeri = Math.sqrt(((G * mSun) / aScene) * ((1 + e) / Math.max(0.08, 1 - e)));
+  let vPeri = Math.sqrt(((G * effectiveCentralMass) / aScene) * ((1 + e) / Math.max(0.08, 1 - e)));
 
   const rOuterMars = aScene * 1.52;
-  const vOuterMars = Math.sqrt((G * mSun) / rOuterMars);
+  const vOuterMars = Math.sqrt((G * effectiveCentralMass) / rOuterMars);
 
   // Si se activa la maniobra de Hohmann, inyectar el planeta/sonda en la elipse de transferencia hacia rOuterMars
   if (params.isHohmannTransferActive) {
     const aTrans = 0.5 * (rPeri + rOuterMars);
-    vPeri = Math.sqrt(G * mSun * (2 / rPeri - 1 / aTrans));
+    vPeri = Math.sqrt(G * effectiveCentralMass * (2 / rPeri - 1 / aTrans));
   }
 
-  return [
+  const baseBodies: CelestialBody[] = [
     {
       id: 'sun',
       nameEs: `Sol (${params.centralMassSolar.toFixed(1)} M☉)`,
@@ -554,6 +558,10 @@ export function createKeplerianCustomSystem(params: {
       acceleration: { x: 0, y: 0, z: 0 },
     },
   ];
+
+  return params.isBlackHole
+    ? convertCentralBodyToBlackHole(baseBodies, true)
+    : baseBodies;
 }
 
 // ============================================================================
@@ -595,6 +603,8 @@ export function convertCentralBodyToBlackHole(
     const origRadius = b.baseRadius ?? b.radius;
 
     if (enableBlackHole) {
+      const solarEquiv = origMass / 1000;
+      const scaledBhRadius = Math.max(1.8, Math.min(4.6, 2.8 * Math.cbrt(origMass / 1200)));
       return {
         ...b,
         baseMass: origMass,
@@ -603,10 +613,10 @@ export function convertCentralBodyToBlackHole(
         baseColor: origColor,
         baseRadius: origRadius,
         isBlackHole: true,
-        nameEs: 'Agujero Negro (Gargantúa)',
-        nameEn: 'Black Hole (Gargantua)',
-        mass: Math.max(origMass * 1.85, 2200),
-        radius: 2.8,
+        nameEs: `Agujero Negro (${solarEquiv.toFixed(1)} M☉)`,
+        nameEn: `Black Hole (${solarEquiv.toFixed(1)} M☉)`,
+        mass: origMass * 1.85,
+        radius: scaledBhRadius,
         color: '#A855F7',
         emissive: true,
       };
@@ -622,6 +632,39 @@ export function convertCentralBodyToBlackHole(
       radius: origRadius,
     };
   });
+}
+
+/**
+ * Actualiza en tiempo real la masa y el radio del astro central (Sol o Agujero Negro)
+ * sin perder el modo Agujero Negro ni destruir los planetas actualmente en órbita.
+ */
+export function scaleCentralBodyMass(
+  bodies: CelestialBody[],
+  centralMassSolar: number,
+  isBlackHole: boolean
+): CelestialBody[] {
+  if (bodies.length === 0) return bodies;
+  const clampedSolar = Math.max(0.2, centralMassSolar);
+  const newBaseMass = 1200 * clampedSolar;
+  const newBaseRadius = Math.min(4.2, 2.6 * Math.cbrt(clampedSolar));
+
+  const updated = bodies.map((b, idx) => {
+    if (idx !== 0) return b;
+    return {
+      ...b,
+      baseMass: newBaseMass,
+      baseRadius: newBaseRadius,
+      baseNameEs: `Sol (${clampedSolar.toFixed(1)} M☉)`,
+      baseNameEn: `Sun (${clampedSolar.toFixed(1)} M☉)`,
+      baseColor: '#F59E0B',
+      mass: newBaseMass,
+      radius: newBaseRadius,
+      nameEs: `Sol (${clampedSolar.toFixed(1)} M☉)`,
+      nameEn: `Sun (${clampedSolar.toFixed(1)} M☉)`,
+    };
+  });
+
+  return convertCentralBodyToBlackHole(updated, isBlackHole);
 }
 
 /**

@@ -108,19 +108,36 @@ test('SpaceScene3D custom GLSL ShaderMaterial initializes uniforms and updates N
 
 import {
   convertCentralBodyToBlackHole,
+  scaleCentralBodyMass,
   triggerPlanetaryCollisionCourse,
   detectAndResolveCollisions,
 } from './space-engine';
 
-test('Black Hole conversion and Supernova planetary collision detection', () => {
+test('Black Hole conversion, mass scaling, and Supernova planetary collision detection', () => {
   const solarBodies = createSpacePreset('solar', 1.0, 1.0);
   const bhBodies = convertCentralBodyToBlackHole(solarBodies, true);
   assert.equal(bhBodies[0].isBlackHole, true);
   assert.ok(bhBodies[0].mass > solarBodies[0].mass);
 
-  const restoredBodies = convertCentralBodyToBlackHole(bhBodies, false);
+  // Cambiar la masa del Agujero Negro mediante las barras de simulación conserva isBlackHole=true y escala su masa
+  const heavierBhBodies = scaleCentralBodyMass(bhBodies, 2.2, true);
+  assert.equal(heavierBhBodies[0].isBlackHole, true);
+  assert.ok(heavierBhBodies[0].mass > bhBodies[0].mass);
+  assert.equal(heavierBhBodies.length, solarBodies.length);
+
+  // Cambiar parámetros keplerianos con isBlackHole=true mantiene el Agujero Negro en lugar de regresar al Sol
+  const keplerBh = createKeplerianCustomSystem({
+    centralMassSolar: 1.8,
+    semiMajorAxisAU: 1.4,
+    eccentricity: 0.35,
+    isHohmannTransferActive: false,
+    G: 1.5,
+    isBlackHole: true,
+  });
+  assert.equal(keplerBh[0].isBlackHole, true);
+
+  const restoredBodies = convertCentralBodyToBlackHole(heavierBhBodies, false);
   assert.equal(restoredBodies[0].isBlackHole, false);
-  assert.equal(restoredBodies[0].mass, solarBodies[0].mass);
 
   // Provocar colisión planetaria total y verificar que se activa allOrbitersCollided (Supernova)
   let crashingBodies = triggerPlanetaryCollisionCourse(bhBodies);
@@ -141,5 +158,6 @@ test('Black Hole conversion and Supernova planetary collision detection', () => 
   assert.equal(supernovaTriggered, true);
   assert.equal(crashingBodies.length, 1);
 });
+
 
 

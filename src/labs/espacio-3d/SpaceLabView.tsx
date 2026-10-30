@@ -29,6 +29,7 @@ import {
   computeKeplerAndHohmannAnalytics,
   createKeplerianCustomSystem,
   convertCentralBodyToBlackHole,
+  scaleCentralBodyMass,
   triggerPlanetaryCollisionCourse,
   detectAndResolveCollisions,
 } from './space-engine';
@@ -290,8 +291,9 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
   const applyPreset = (
     newPreset: SpacePresetId,
     newFactor: number = insertionFactor,
-    keepBlackHole: boolean = isBlackHole
+    keepBlackHole?: boolean
   ) => {
+    const activeBlackHole = keepBlackHole !== undefined ? keepBlackHole : controlsStateRef.current.isBlackHole;
     setPreset(newPreset);
     setInsertionFactor(newFactor);
     setTargetBodyIndex(1);
@@ -302,27 +304,36 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
     totalCollisionEnergyRef.current = 0;
 
     let baseBodies = createSpacePreset(newPreset, newFactor, gravityG);
-    if (keepBlackHole) {
-      baseBodies = convertCentralBodyToBlackHole(baseBodies, true);
+    if (centralMassSolar !== 1.0 || activeBlackHole) {
+      baseBodies = scaleCentralBodyMass(baseBodies, centralMassSolar, activeBlackHole);
     }
     bodiesRef.current = baseBodies;
     resetTriggerRef.current += 1;
   };
 
   const handleToggleBlackHole = (forceValue?: boolean) => {
-    const nextBlackHole = forceValue !== undefined ? forceValue : !isBlackHole;
+    const nextBlackHole = forceValue !== undefined ? forceValue : !controlsStateRef.current.isBlackHole;
     setIsBlackHole(nextBlackHole);
+    controlsStateRef.current.isBlackHole = nextBlackHole;
     bodiesRef.current = convertCentralBodyToBlackHole(bodiesRef.current, nextBlackHole);
+    resetTriggerRef.current += 1;
+  };
+
+  const handleCentralMassChange = (newMassSolar: number) => {
+    setCentralMassSolar(newMassSolar);
+    const activeBlackHole = controlsStateRef.current.isBlackHole;
+    bodiesRef.current = scaleCentralBodyMass(bodiesRef.current, newMassSolar, activeBlackHole);
     resetTriggerRef.current += 1;
   };
 
   const handleTriggerCollisionCataclysm = () => {
     setIsPaused(false);
+    const activeBlackHole = controlsStateRef.current.isBlackHole;
     // Si solo queda 1 cuerpo porque ya habían chocado todos, regeneramos los planetas en curso de colisión
     if (bodiesRef.current.length <= 1) {
       let fresh = createSpacePreset(preset, 0.25, gravityG);
-      if (isBlackHole) {
-        fresh = convertCentralBodyToBlackHole(fresh, true);
+      if (centralMassSolar !== 1.0 || activeBlackHole) {
+        fresh = scaleCentralBodyMass(fresh, centralMassSolar, activeBlackHole);
       }
       bodiesRef.current = triggerPlanetaryCollisionCourse(fresh);
       setSupernovaAlert({ active: false, totalEnergyGJ: 0, absorbedPlanets: [] });
@@ -342,9 +353,10 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
     absorbedHistoryRef.current = [];
     totalCollisionEnergyRef.current = 0;
 
+    const activeBlackHole = controlsStateRef.current.isBlackHole;
     let nextBodies = createSpacePreset(preset, val, gravityG);
-    if (isBlackHole) {
-      nextBodies = convertCentralBodyToBlackHole(nextBodies, true);
+    if (centralMassSolar !== 1.0 || activeBlackHole) {
+      nextBodies = scaleCentralBodyMass(nextBodies, centralMassSolar, activeBlackHole);
     }
     bodiesRef.current = nextBodies;
     resetTriggerRef.current += 1;
@@ -1427,7 +1439,34 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
               </div>
 
               {/* Row 2: Orbital Sliders & Playback Controls */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4 items-center">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 sm:gap-4 items-center">
+                <div>
+                  <div className="flex items-center justify-between gap-1 text-xs mb-1">
+                    <label htmlFor="central-mass-top-slider" className="text-slate-300 whitespace-nowrap truncate">
+                      {isBlackHole
+                        ? lang === 'es'
+                          ? 'Masa Agujero Negro (M☉)'
+                          : 'Black Hole Mass (M☉)'
+                        : lang === 'es'
+                        ? 'Masa Astro Central (M☉)'
+                        : 'Central Mass (M☉)'}
+                    </label>
+                    <span className="font-mono font-bold text-fuchsia-300 tabular-nums whitespace-nowrap shrink-0">
+                      {centralMassSolar.toFixed(2)} M☉
+                    </span>
+                  </div>
+                  <input
+                    id="central-mass-top-slider"
+                    type="range"
+                    min={0.4}
+                    max={2.5}
+                    step={0.1}
+                    value={centralMassSolar}
+                    onChange={(e) => handleCentralMassChange(parseFloat(e.target.value))}
+                    className="w-full accent-fuchsia-400 cursor-pointer"
+                  />
+                </div>
+
                 <div>
                   <div className="flex items-center justify-between gap-1 text-xs mb-1">
                     <label htmlFor="insertion-vel-slider" className="text-slate-300 whitespace-nowrap truncate">
@@ -1465,7 +1504,14 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
                     max={2.0}
                     step={0.05}
                     value={gravityG}
-                    onChange={(e) => setGravityG(parseFloat(e.target.value))}
+                    onChange={(e) => {
+                      const nextG = parseFloat(e.target.value);
+                      setGravityG(nextG);
+                      if (controlsStateRef.current.isBlackHole && bodiesRef.current.length > 0 && !bodiesRef.current[0].isBlackHole) {
+                        bodiesRef.current = convertCentralBodyToBlackHole(bodiesRef.current, true);
+                        resetTriggerRef.current += 1;
+                      }
+                    }}
                     className="w-full accent-purple-400 cursor-pointer"
                   />
                 </div>
@@ -1542,6 +1588,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
                 eccentricity,
                 isHohmannTransferActive: nextHohmann,
                 G: gravityG,
+                isBlackHole: controlsStateRef.current.isBlackHole,
               });
               resetTriggerRef.current += 1;
             }}
@@ -1562,7 +1609,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
           <div className="p-3 rounded-lg bg-[#07090E] border border-slate-800">
             <div className="flex justify-between mb-1">
               <label htmlFor="kepler-mass-slider" className="text-slate-300 font-mono">
-                Masa Estrella Central (M☉)
+                {isBlackHole ? 'Masa Agujero Negro (M☉)' : 'Masa Estrella Central (M☉)'}
               </label>
               <span className="font-mono font-bold text-amber-300">{centralMassSolar.toFixed(2)} M☉</span>
             </div>
@@ -1575,15 +1622,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
               value={centralMassSolar}
               onChange={(e) => {
                 const m = parseFloat(e.target.value);
-                setCentralMassSolar(m);
-                bodiesRef.current = createKeplerianCustomSystem({
-                  centralMassSolar: m,
-                  semiMajorAxisAU,
-                  eccentricity,
-                  isHohmannTransferActive: hohmannActive,
-                  G: gravityG,
-                });
-                resetTriggerRef.current += 1;
+                handleCentralMassChange(m);
               }}
               className="w-full accent-amber-400 cursor-pointer"
             />
@@ -1612,6 +1651,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
                   eccentricity,
                   isHohmannTransferActive: hohmannActive,
                   G: gravityG,
+                  isBlackHole: controlsStateRef.current.isBlackHole,
                 });
                 resetTriggerRef.current += 1;
               }}
@@ -1642,6 +1682,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
                   eccentricity: eVal,
                   isHohmannTransferActive: hohmannActive,
                   G: gravityG,
+                  isBlackHole: controlsStateRef.current.isBlackHole,
                 });
                 resetTriggerRef.current += 1;
               }}
