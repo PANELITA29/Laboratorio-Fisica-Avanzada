@@ -1140,7 +1140,7 @@ export default function App() {
                               <div>
                                 <div className="card-swap-head flex items-center justify-between px-4 py-2.5 bg-[#0D1424]/95 border-b border-slate-800">
                                   <div className="flex items-center gap-2.5 min-w-0">
-                                    <LabCoverBadge labId={mod.id} size="sm" />
+                                    <LabCoverBadge labId={mod.id} size="sm" isActive={activeMod?.id === mod.id} />
                                     <div className="truncate">
                                       <div className="font-mono text-xs font-bold text-white tracking-wide truncate">
                                         {mod.code} · {mod.title}

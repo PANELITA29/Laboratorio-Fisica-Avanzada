@@ -1,0 +1,225 @@
+/**
+ * LabCoverIcons.css — Micro-interacciones y animaciones de entrada a 60 FPS
+ * Diseñado con aceleración por hardware (transform y opacity exclusivamente)
+ * Curva física: cubic-bezier(0.16, 1, 0.3, 1) [Ease-Out Expo]
+ */
+
+/* Animación de entrada de la caja del badge cuando la carta aparece al frente */
+@keyframes labBadgeEntry {
+  0% {
+    transform: scale(0.86) translateY(2px);
+    opacity: 0.8;
+  }
+  60% {
+    transform: scale(1.08) translateY(-1px);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Expansión y florecimiento del resplandor de fondo */
+@keyframes labGlowBloom {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.2;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(1.15);
+    opacity: 0.6;
+  }
+}
+
+/* Pulso sutil y continuo del aura energética cuando está en reposo frontal */
+@keyframes labAuraBreath {
+  0%, 100% {
+    transform: scale(1.12);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.28);
+    opacity: 0.75;
+  }
+}
+
+/* Animación del icono vectorial SVG interno */
+@keyframes labIconPop {
+  0% {
+    transform: scale(0.82) rotate(-4deg);
+    opacity: 0.7;
+  }
+  65% {
+    transform: scale(1.06) rotate(1deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+/* Rayo de alta tensión (Electrodinámica MOD-01) */
+@keyframes circuitSpark {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 2px rgba(34, 211, 238, 0.5));
+  }
+  50% {
+    transform: scale(1.08);
+    filter: drop-shadow(0 0 6px rgba(103, 232, 249, 0.9));
+  }
+}
+
+/* Corona solar y gravedad (MOD-02) */
+@keyframes celestialSunFlare {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.14);
+    opacity: 1;
+  }
+}
+
+/* Péndulos acoplados (MOD-03) */
+@keyframes pendulumHarmonic {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(3deg);
+  }
+  75% {
+    transform: rotate(-3deg);
+  }
+}
+
+/* Retícula táctica HUD (MOD-04) */
+@keyframes reticleLockIn {
+  0% {
+    transform: scale(0.8) rotate(-15deg);
+    opacity: 0.6;
+  }
+  70% {
+    transform: scale(1.05) rotate(2deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+/* Clases base con aceleración GPU */
+.lab-cover-badge {
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+.lab-cover-badge-glow {
+  transform: translateZ(0);
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+.lab-icon-svg {
+  transform: translateZ(0);
+  will-change: transform;
+  transform-origin: center center;
+}
+
+/* Activación cuando la carta está en el frente de CardSwap ([data-front]) */
+.card-swap-slot[data-front] .lab-cover-badge {
+  animation: labBadgeEntry 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.card-swap-slot[data-front] .lab-cover-badge-glow {
+  animation: 
+    labGlowBloom 600ms cubic-bezier(0.16, 1, 0.3, 1) both,
+    labAuraBreath 3.2s ease-in-out infinite 600ms;
+}
+
+.card-swap-slot[data-front] .lab-icon-svg {
+  animation: labIconPop 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Micro-animaciones SVG especializadas por dominio cuando está al frente */
+.card-swap-slot[data-front] .lab-anim-spark {
+  animation: circuitSpark 2.4s ease-in-out infinite 480ms;
+  transform-origin: center;
+}
+
+.card-swap-slot[data-front] .lab-anim-sun {
+  animation: celestialSunFlare 3s ease-in-out infinite 480ms;
+  transform-origin: 16px 16px;
+}
+
+.card-swap-slot[data-front] .lab-anim-pendulum {
+  animation: pendulumHarmonic 3.6s ease-in-out infinite 480ms;
+  transform-origin: 16px 7px;
+}
+
+.card-swap-slot[data-front] .lab-anim-reticle {
+  animation: reticleLockIn 550ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: center;
+}
+
+/* Activación por prop explícita isActive={true} (para cuadrícula o selección) */
+.lab-cover-badge.is-active {
+  animation: labBadgeEntry 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.lab-cover-badge.is-active .lab-cover-badge-glow {
+  animation: 
+    labGlowBloom 600ms cubic-bezier(0.16, 1, 0.3, 1) both,
+    labAuraBreath 3.2s ease-in-out infinite 600ms;
+}
+
+.lab-cover-badge.is-active .lab-icon-svg {
+  animation: labIconPop 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.lab-cover-badge.is-active .lab-anim-spark {
+  animation: circuitSpark 2.4s ease-in-out infinite 480ms;
+  transform-origin: center;
+}
+
+.lab-cover-badge.is-active .lab-anim-sun {
+  animation: celestialSunFlare 3s ease-in-out infinite 480ms;
+  transform-origin: 16px 16px;
+}
+
+.lab-cover-badge.is-active .lab-anim-pendulum {
+  animation: pendulumHarmonic 3.6s ease-in-out infinite 480ms;
+  transform-origin: 16px 7px;
+}
+
+.lab-cover-badge.is-active .lab-anim-reticle {
+  animation: reticleLockIn 550ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: center;
+}
+
+/* Accesibilidad: desactivar animaciones si el usuario prefiere movimiento reducido */
+@media (prefers-reduced-motion: reduce) {
+  .lab-cover-badge,
+  .lab-cover-badge-glow,
+  .lab-icon-svg,
+  .card-swap-slot[data-front] .lab-cover-badge,
+  .card-swap-slot[data-front] .lab-cover-badge-glow,
+  .card-swap-slot[data-front] .lab-icon-svg,
+  .lab-anim-spark,
+  .lab-anim-sun,
+  .lab-anim-pendulum,
+  .lab-anim-reticle {
+    animation: none !important;
+    transition: none !important;
+  }
+}

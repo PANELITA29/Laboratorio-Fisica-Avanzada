@@ -1,4 +1,5 @@
 import React from 'react';
+import './LabCoverIcons.css';
 
 export type LabId = 'circuits' | 'space' | 'mechanics' | 'kinematics';
 
@@ -74,7 +75,7 @@ export const CircuitsLabIcon: React.FC<{ size?: number; className?: string }> = 
     viewBox="0 0 32 32"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
-    className={`inline-block ${className}`}
+    className={`lab-icon-svg inline-block ${className}`}
   >
     <defs>
       <linearGradient id="cir-grad" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
@@ -96,7 +97,7 @@ export const CircuitsLabIcon: React.FC<{ size?: number; className?: string }> = 
     <circle cx="22" cy="16" r="2" fill="#22d3ee" filter="url(#cir-glow)" />
     <circle cx="16" cy="10" r="2" fill="#38bdf8" />
     <circle cx="16" cy="22" r="2" fill="#38bdf8" />
-    {/* Rayo central de alta tensión con gradiente */}
+    {/* Rayo central de alta tensión con gradiente y pulso dinámico */}
     <path
       d="M 17.5 7 L 11.5 16 H 16.5 L 14.5 25 L 21.5 15 H 16.5 L 17.5 7 Z"
       fill="url(#cir-grad)"
@@ -104,6 +105,7 @@ export const CircuitsLabIcon: React.FC<{ size?: number; className?: string }> = 
       strokeWidth="1.2"
       strokeLinejoin="round"
       filter="url(#cir-glow)"
+      className="lab-anim-spark"
     />
   </svg>
 );
@@ -121,7 +123,7 @@ export const SpaceLabIcon: React.FC<{ size?: number; className?: string }> = ({
     viewBox="0 0 32 32"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
-    className={`inline-block ${className}`}
+    className={`lab-icon-svg inline-block ${className}`}
   >
     <defs>
       <linearGradient id="space-sun" x1="12" y1="12" x2="20" y2="20" gradientUnits="userSpaceOnUse">
@@ -158,8 +160,8 @@ export const SpaceLabIcon: React.FC<{ size?: number; className?: string }> = ({
       strokeWidth="1.2"
       strokeOpacity="0.7"
     />
-    {/* Astro central masivo con brillo coronal */}
-    <circle cx="16" cy="16" r="5" fill="url(#space-sun)" filter="url(#space-glow)" />
+    {/* Astro central masivo con brillo coronal dinámico */}
+    <circle cx="16" cy="16" r="5" fill="url(#space-sun)" filter="url(#space-glow)" className="lab-anim-sun" />
     <circle cx="16" cy="16" r="2.5" fill="#fef08a" />
     {/* Satélite en órbita con vector velocidad */}
     <circle cx="26" cy="11" r="2.2" fill="#38bdf8" filter="url(#space-glow)" />
@@ -182,7 +184,7 @@ export const MechanicsLabIcon: React.FC<{ size?: number; className?: string }> =
     viewBox="0 0 32 32"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
-    className={`inline-block ${className}`}
+    className={`lab-icon-svg inline-block ${className}`}
   >
     <defs>
       <linearGradient id="mech-grad" x1="4" y1="8" x2="28" y2="24" gradientUnits="userSpaceOnUse">
@@ -198,22 +200,25 @@ export const MechanicsLabIcon: React.FC<{ size?: number; className?: string }> =
     <rect x="2" y="2" width="28" height="28" rx="8" stroke="#d97706" strokeWidth="1.2" strokeOpacity="0.4" />
     {/* Viga soporte de péndulos */}
     <line x1="6" y1="7" x2="26" y2="7" stroke="#64748b" strokeWidth="2" strokeLinecap="round" />
-    {/* Hilos oscilatorios divergentes */}
-    <line x1="11" y1="7" x2="8" y2="20" stroke="#94a3b8" strokeWidth="1.2" />
-    <line x1="21" y1="7" x2="24" y2="18" stroke="#94a3b8" strokeWidth="1.2" />
-    {/* Resorte de acoplamiento elástico k_c */}
-    <path
-      d="M 8 18 L 11 16 L 14 19 L 17 16 L 20 19 L 24 17"
-      fill="none"
-      stroke="#f59e0b"
-      strokeWidth="1.4"
-      strokeLinejoin="round"
-    />
-    {/* Masas oscilantes con resplandor */}
-    <circle cx="8" cy="21" r="3" fill="url(#mech-grad)" filter="url(#mech-glow)" />
-    <circle cx="8" cy="21" r="1.2" fill="#fffbeb" />
-    <circle cx="24" cy="18" r="3" fill="#38bdf8" filter="url(#mech-glow)" />
-    <circle cx="24" cy="18" r="1.2" fill="#f0fdf4" />
+    {/* Grupo oscilatorio acoplado con micro-animación armónica */}
+    <g className="lab-anim-pendulum">
+      {/* Hilos oscilatorios divergentes */}
+      <line x1="11" y1="7" x2="8" y2="20" stroke="#94a3b8" strokeWidth="1.2" />
+      <line x1="21" y1="7" x2="24" y2="18" stroke="#94a3b8" strokeWidth="1.2" />
+      {/* Resorte de acoplamiento elástico k_c */}
+      <path
+        d="M 8 18 L 11 16 L 14 19 L 17 16 L 20 19 L 24 17"
+        fill="none"
+        stroke="#f59e0b"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      {/* Masas oscilantes con resplandor */}
+      <circle cx="8" cy="21" r="3" fill="url(#mech-grad)" filter="url(#mech-glow)" />
+      <circle cx="8" cy="21" r="1.2" fill="#fffbeb" />
+      <circle cx="24" cy="18" r="3" fill="#38bdf8" filter="url(#mech-glow)" />
+      <circle cx="24" cy="18" r="1.2" fill="#f0fdf4" />
+    </g>
     {/* Onda senoidal armónica de fondo */}
     <path
       d="M 5 27 Q 10 23 16 27 T 27 27"
@@ -239,7 +244,7 @@ export const KinematicsLabIcon: React.FC<{ size?: number; className?: string }> 
     viewBox="0 0 32 32"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
-    className={`inline-block ${className}`}
+    className={`lab-icon-svg inline-block ${className}`}
   >
     <defs>
       <linearGradient id="kin-grad" x1="4" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
@@ -253,13 +258,15 @@ export const KinematicsLabIcon: React.FC<{ size?: number; className?: string }> 
     </defs>
     {/* Chasis exterior */}
     <rect x="2" y="2" width="28" height="28" rx="8" stroke="#059669" strokeWidth="1.2" strokeOpacity="0.4" />
-    {/* Retícula de calibración HUD táctica */}
-    <circle cx="16" cy="16" r="11" stroke="#10b981" strokeWidth="1" strokeDasharray="3 2" strokeOpacity="0.5" />
-    <circle cx="16" cy="16" r="4.5" stroke="#34d399" strokeWidth="1.2" strokeOpacity="0.7" />
-    <line x1="16" y1="3" x2="16" y2="8" stroke="#10b981" strokeWidth="1.4" />
-    <line x1="16" y1="24" x2="16" y2="29" stroke="#10b981" strokeWidth="1.4" />
-    <line x1="3" y1="16" x2="8" y2="16" stroke="#10b981" strokeWidth="1.4" />
-    <line x1="24" y1="16" x2="29" y2="16" stroke="#10b981" strokeWidth="1.4" />
+    {/* Retícula de calibración HUD táctica con animación de bloqueo de blanco */}
+    <g className="lab-anim-reticle">
+      <circle cx="16" cy="16" r="11" stroke="#10b981" strokeWidth="1" strokeDasharray="3 2" strokeOpacity="0.5" />
+      <circle cx="16" cy="16" r="4.5" stroke="#34d399" strokeWidth="1.2" strokeOpacity="0.7" />
+      <line x1="16" y1="3" x2="16" y2="8" stroke="#10b981" strokeWidth="1.4" />
+      <line x1="16" y1="24" x2="16" y2="29" stroke="#10b981" strokeWidth="1.4" />
+      <line x1="3" y1="16" x2="8" y2="16" stroke="#10b981" strokeWidth="1.4" />
+      <line x1="24" y1="16" x2="29" y2="16" stroke="#10b981" strokeWidth="1.4" />
+    </g>
     {/* Trayectoria balística parabólica con flecha de velocidad */}
     <path
       d="M 5 24 Q 15 6 27 15"
@@ -309,8 +316,16 @@ export const LabCoverBadge: React.FC<{
   size?: 'sm' | 'md' | 'lg';
   showCode?: boolean;
   code?: string;
+  isActive?: boolean;
   className?: string;
-}> = ({ labId, size = 'md', showCode = false, code, className = '' }) => {
+}> = ({
+  labId,
+  size = 'md',
+  showCode = false,
+  code,
+  isActive = false,
+  className = '',
+}) => {
   const theme = LAB_THEMES[labId] || LAB_THEMES.circuits;
 
   const sizeStyles = {
@@ -329,10 +344,15 @@ export const LabCoverBadge: React.FC<{
   }[size];
 
   return (
-    <div className={`relative flex items-center gap-2 ${className}`}>
-      {/* Resplandor ambiental de fondo */}
+    <div
+      className={`lab-cover-badge relative flex items-center gap-2 ${
+        isActive ? 'is-active' : ''
+      } ${className}`}
+      data-lab-id={labId}
+    >
+      {/* Resplandor ambiental dinámico de fondo */}
       <div
-        className="absolute inset-0 rounded-xl blur-md opacity-60 pointer-events-none transform scale-110"
+        className="lab-cover-badge-glow absolute inset-0 rounded-xl blur-md opacity-60 pointer-events-none transform scale-110"
         style={{ backgroundColor: theme.glow }}
         aria-hidden="true"
       />
@@ -349,3 +369,4 @@ export const LabCoverBadge: React.FC<{
     </div>
   );
 };
+
