@@ -967,7 +967,10 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
         const st = sol.componentStates[cId];
         const bInfo = branchById[cId];
         const isBurned = st?.isBurnedOut || bInfo?.isBurnedOut || false;
-        const powerWatts = bInfo ? bInfo.power : st?.power ?? 0;
+        const currentVal = Math.abs(st?.current ?? (bInfo?.current ?? topRes.totalCurrent));
+        const powerWatts = bInfo ? bInfo.power : (st?.power && st.power > 0 ? st.power : currentVal * currentVal * 15);
+        const bulbBrightness = st?.brightness ?? (powerWatts > 0 ? Math.min(1.6, Math.max(0.15, powerWatts / 15.0)) : 0);
+        const hasCurrent = circuitActive && (powerWatts >= 0.01 || currentVal >= 0.005 || bulbBrightness > 0.01);
 
         if (isBurned) {
           // Filamento fundido por superar 15.0 W: cristal ahumado oscuro y filamento apagado/rojo ceniza
@@ -977,7 +980,7 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
           bulbObj.filamentMat.color.setHex(0xef4444);
           bulbObj.filamentMat.emissiveIntensity = 0.4;
           bulbObj.light.intensity = 0;
-        } else if (!circuitActive || powerWatts < 0.01) {
+        } else if (!circuitActive || !hasCurrent) {
           bulbObj.glassMat.color.setHex(0x1e293b);
           bulbObj.glassMat.emissiveIntensity = 0;
           bulbObj.filamentMat.color.setHex(0x475569);
@@ -985,13 +988,13 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
           bulbObj.light.intensity = 0;
         } else {
           // Brillo térmico proporcional a P = I² * R respecto a 15.0 W nominales
-          const normBr = Math.min(1.6, Math.max(0.15, powerWatts / 15.0));
+          const normBr = Math.min(1.8, Math.max(0.2, bulbBrightness > 0 ? bulbBrightness * 1.3 : powerWatts / 15.0));
           bulbObj.glassMat.color.setHex(0xfef08a);
           bulbObj.glassMat.emissive.setHex(0xfacc15);
-          bulbObj.glassMat.emissiveIntensity = normBr * 2.5;
+          bulbObj.glassMat.emissiveIntensity = normBr * 2.8;
           bulbObj.filamentMat.color.setHex(0xffffff);
-          bulbObj.filamentMat.emissiveIntensity = normBr * 3.5;
-          bulbObj.light.intensity = normBr * 6.0;
+          bulbObj.filamentMat.emissiveIntensity = normBr * 3.8;
+          bulbObj.light.intensity = normBr * 6.5;
         }
       });
 

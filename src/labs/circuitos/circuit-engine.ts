@@ -1204,7 +1204,7 @@ export function buildTopologyComponents3D(params: {
       makeBranch('res-2', 'R2', t2, ' (Rama 2)', 'n2', 'n4', r2, f2),
       { id: 'wire-sup2', type: 'wire', label: 'Bus +', nodeA: 'n2', nodeB: 'n3', resistance: 0 },
       makeBranch('res-3', 'R3', t3, ' (Rama 3)', 'n3', 'n5', r3, f3),
-      { id: 'bulb-1', type: 'bulb', label: 'Bombilla Testigo', nodeA: 'n5', nodeB: 'n4', resistance: 15, maxPower: 60, isIndicator: true },
+      { id: 'bulb-1', type: 'bulb', label: 'Bombilla', nodeA: 'n5', nodeB: 'n4', resistance: 15, maxPower: 60, isIndicator: true },
       { id: 'sw-1', type: 'switch', label: 'SW Maestro', nodeA: 'n4', nodeB: 'n0', resistance: 0, isClosed: isPowered },
     ];
   }
@@ -1216,18 +1216,18 @@ export function buildTopologyComponents3D(params: {
       makeBranch('res-2', 'R2', t2, ' (Paralelo)', 'n2', 'n4', r2, f2),
       { id: 'wire-bif', type: 'wire', label: 'Nodo Bif.', nodeA: 'n2', nodeB: 'n3', resistance: 0 },
       makeBranch('res-3', 'R3', t3, ' (Paralelo)', 'n3', 'n5', r3, f3),
-      { id: 'bulb-1', type: 'bulb', label: 'Bombilla Testigo', nodeA: 'n5', nodeB: 'n4', resistance: 15, maxPower: 60, isIndicator: true },
+      { id: 'bulb-1', type: 'bulb', label: 'Bombilla', nodeA: 'n5', nodeB: 'n4', resistance: 15, maxPower: 60, isIndicator: true },
       { id: 'sw-1', type: 'switch', label: 'SW Maestro', nodeA: 'n4', nodeB: 'n0', resistance: 0, isClosed: isPowered },
     ];
   }
 
-  // Topología Serie: Fuente DC + R1 + R2 + R3 + Bombilla Testigo + Interruptor Maestro
+  // Topología Serie: Fuente DC + R1 + R2 + R3 + Bombilla + Interruptor Maestro
   return [
     { id: 'bat-1', type: 'battery', label: 'Fuente DC', nodeA: 'n0', nodeB: 'n1', voltage: sourceVoltage, resistance: 0 },
     makeBranch('res-1', 'R1', t1, '', 'n1', 'n2', r1, f1),
     makeBranch('res-2', 'R2', t2, '', 'n2', 'n3', r2, f2),
     makeBranch('res-3', 'R3', t3, '', 'n3', 'n5', r3, f3),
-    { id: 'bulb-1', type: 'bulb', label: 'Bombilla Testigo', nodeA: 'n5', nodeB: 'n4', resistance: 15, maxPower: 60, isIndicator: true },
+    { id: 'bulb-1', type: 'bulb', label: 'Bombilla', nodeA: 'n5', nodeB: 'n4', resistance: 15, maxPower: 60, isIndicator: true },
     { id: 'sw-1', type: 'switch', label: 'SW Maestro', nodeA: 'n4', nodeB: 'n0', resistance: 0, isClosed: isPowered },
   ];
 }
