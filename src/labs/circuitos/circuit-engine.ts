@@ -21,7 +21,7 @@ export interface CircuitComponent {
   maxPower?: number; // En Vatios (para bombilla)
   isClosed?: boolean; // Para interruptor (switch)
   isBurnedOut?: boolean; // Estado de filamento fundido
-  isIndicator?: boolean; // Si true, la bombilla actúa como testigo amperimétrico de baja impedancia
+  isIndicator?: boolean; // Si true, la bombilla actúa con baja impedancia
   faultState?: BranchFaultState; // Estado dinámico por rama: ON | OPEN | SHORT
 }
 
@@ -1184,7 +1184,7 @@ export function buildTopologyComponents3D(params: {
     type: cType,
     label:
       cType === 'bulb'
-        ? `Bombilla ${branchKey}${suffix}`
+        ? 'Bombilla'
         : cType === 'wire'
         ? `Cable ${branchKey} (${fault === 'OPEN' ? 'Suelto' : 'Unido'})`
         : `${branchKey}${suffix}`,

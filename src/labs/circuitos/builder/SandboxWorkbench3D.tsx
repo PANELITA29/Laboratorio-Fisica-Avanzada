@@ -823,31 +823,31 @@ export const SandboxWorkbench3D: React.FC<SandboxWorkbench3DProps> = ({
           const isLit = brightness > 0.02 && !comp.isBurnedOut;
           const filMat = trackMat(
             new THREE.MeshStandardMaterial({
-              color: comp.isBurnedOut ? 0xef4444 : isLit ? 0xfef08a : 0x94a3b8,
-              emissive: comp.isBurnedOut ? 0x7f1d1d : 0xf59e0b,
-              emissiveIntensity: isLit ? Math.min(4.0, 0.8 + brightness * 2.8) : 0,
-              roughness: 0.3,
+              color: comp.isBurnedOut ? 0xef4444 : isLit ? 0xffea00 : 0x334155,
+              emissive: comp.isBurnedOut ? 0x7f1d1d : 0xffea00,
+              emissiveIntensity: isLit ? 2.5 : 0,
+              roughness: 0.2,
             })
           );
           const filMesh = new THREE.Mesh(filGeo, filMat);
           filMesh.position.set(0, 1.38, 0);
           compGroup.add(filMesh);
 
-          // Ampolla esférica de vidrio translúcido (depthWrite: false según guía Three.js)
+          // Ampolla esférica de vidrio translúcido
           const globeGeo = trackGeo(new THREE.SphereGeometry(0.96, 28, 28));
           const globeMat = trackMat(
             new THREE.MeshStandardMaterial({
               color: comp.isBurnedOut
-                ? 0x1e293b
+                ? 0x1f2937
                 : isLit
                 ? 0xfef08a
-                : 0xe2e8f0,
-              emissive: isLit ? 0xfacc15 : 0x000000,
-              emissiveIntensity: isLit ? Math.min(2.2, brightness * 1.45) : 0,
+                : 0x1e293b,
+              emissive: isLit ? 0xf59e0b : 0x000000,
+              emissiveIntensity: isLit ? 0.8 : 0,
               transparent: true,
-              opacity: comp.isBurnedOut ? 0.72 : isLit ? 0.68 : 0.35,
-              roughness: 0.12,
-              metalness: 0.08,
+              opacity: comp.isBurnedOut ? 0.6 : isLit ? 0.85 : 0.55,
+              roughness: 0.15,
+              metalness: 0.05,
               depthWrite: false,
             })
           );
@@ -856,13 +856,8 @@ export const SandboxWorkbench3D: React.FC<SandboxWorkbench3DProps> = ({
           compGroup.add(globeMesh);
 
           if (isLit) {
-            const bulbLight = new THREE.PointLight(
-              0xfde047,
-              Math.min(5.0, brightness * 3.6),
-              12,
-              1.6
-            );
-            bulbLight.position.set(0, 1.7, 0);
+            const bulbLight = new THREE.PointLight(0xfbbf24, 2.5, 6.0);
+            bulbLight.position.set(0, 1.58, 0);
             compGroup.add(bulbLight);
           }
         } else if (comp.type === 'buzzer') {

@@ -199,7 +199,7 @@ export function createCircuitPreset(presetName: 'ohm' | 'divider' | 'parallel' |
       { id: 'res-1', type: 'resistor', label: 'R1', nodeA: 'n1', nodeB: 'n2', resistance: 100, faultState: 'ON' },
       { id: 'res-2', type: 'resistor', label: 'R2', nodeA: 'n2', nodeB: 'n3', resistance: 100, faultState: 'ON' },
       { id: 'res-3', type: 'resistor', label: 'R3', nodeA: 'n3', nodeB: 'n5', resistance: 100, faultState: 'ON' },
-      { id: 'bulb-1', type: 'bulb', label: 'Bombilla 100Ω', nodeA: 'n5', nodeB: 'n4', resistance: 100, maxPower: 25, isIndicator: false },
+      { id: 'bulb-1', type: 'bulb', label: 'Bombilla', nodeA: 'n5', nodeB: 'n4', resistance: 100, maxPower: 25, isIndicator: false },
       { id: 'sw-1', type: 'switch', label: 'SW Maestro', nodeA: 'n4', nodeB: 'n0', resistance: 0, isClosed: true },
     ];
   }
@@ -385,7 +385,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
     const nextType: ComponentType = currentComp.type === 'bulb' ? 'resistor' : 'bulb';
     updateComponentById(compId, {
       type: nextType,
-      label: nextType === 'bulb' ? `Bombilla ${branchId}` : branchId,
+      label: nextType === 'bulb' ? 'Bombilla' : branchId,
       resistance: currentComp.resistance > 0 ? currentComp.resistance : 20,
       maxPower: nextType === 'bulb' ? MAX_RATED_POWER_WATTS : undefined,
       faultState: 'ON',
@@ -2390,7 +2390,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                             ? `✂️ Cable ${branch.id} (Sin Resistor · Suelto)`
                             : `🔗 Cable ${branch.id} (Unido Directo · 0 Ω)`
                           : branch.compType === 'bulb'
-                          ? `💡 Bombilla ${branch.id}: ${diagnosisMission ? '??? Ω' : `${branch.val} Ω`}`
+                          ? `💡 Bombilla: ${diagnosisMission ? '??? Ω' : `${branch.val} Ω`}`
                           : `Resistencia ${branch.id}: ${diagnosisMission ? '??? Ω' : `${branch.val} Ω`}`}
                       </label>
 
@@ -2399,7 +2399,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                           type="button"
                           data-testid={`toggle-bulb-${branch.id}`}
                           onClick={() => toggleBranchBulbType(branch.id)}
-                          title="Sustituir entre Resistencia Cerámica y Bombilla Incandescente (Máx 15.0W)"
+                          title="Sustituir entre Resistencia Cerámica y Bombilla (Máx 15.0W)"
                           className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
                             branch.compType === 'bulb'
                               ? 'bg-amber-400/20 border-amber-400 text-amber-300'
@@ -2407,7 +2407,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
                           }`}
                         >
                           <Lightbulb className="w-3 h-3" />
-                          <span>{branch.compType === 'bulb' ? 'Bombilla 15W' : 'Usar Bombilla'}</span>
+                          <span>{branch.compType === 'bulb' ? 'Bombilla' : 'Usar Bombilla'}</span>
                         </button>
                       )}
 

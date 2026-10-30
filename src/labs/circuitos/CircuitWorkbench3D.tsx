@@ -668,9 +668,9 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
           socketMesh.position.y = 0.35;
 
           const filamentMat = new THREE.MeshStandardMaterial({
-            color: 0xfde047,
-            emissive: 0xf59e0b,
-            emissiveIntensity: 0.2,
+            color: 0x334155,
+            emissive: 0xffea00,
+            emissiveIntensity: 0,
             roughness: 0.2,
           });
           const filamentMesh = new THREE.Mesh(
@@ -680,22 +680,23 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
           filamentMesh.position.y = 1.35;
 
           const glassMat = new THREE.MeshStandardMaterial({
-            color: 0xfef08a,
-            emissive: 0xfacc15,
-            emissiveIntensity: 0.1,
+            color: 0x1e293b,
+            emissive: 0xf59e0b,
+            emissiveIntensity: 0,
             roughness: 0.15,
             metalness: 0.05,
             transparent: true,
-            opacity: 0.85,
+            opacity: 0.55,
           });
           const globeMesh = new THREE.Mesh(new THREE.SphereGeometry(1.02, 24, 24), glassMat);
           globeMesh.position.y = 1.42;
 
-          const bulbLight = new THREE.PointLight(0xfde047, 0, 12);
-          bulbLight.position.y = 1.6;
+          // Luz puntual en el centro del bulbo
+          const bulbLight = new THREE.PointLight(0xfbbf24, 0, 6.0);
+          bulbLight.position.set(0, 1.42, 0);
 
           [socketMesh, filamentMesh, globeMesh].forEach((m) => {
-            m.userData = { compId: comp.id, compType: comp.type, compLabel: comp.label };
+            m.userData = { compId: comp.id, compType: comp.type, compLabel: comp.type === 'bulb' ? 'Bombilla' : comp.label };
             compGroup.add(m);
             interactableMeshes.push(m);
           });
@@ -815,7 +816,8 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
             controls.enabled = false;
             const compObj = propsRef.current.components.find((c) => c.id === compId);
             dragStartOhms = compObj?.resistance ?? 20;
-            setDraggedCompLabel(`${compLabel || compId} (${dragStartOhms} Ω)`);
+            const displayName = compObj?.type === 'bulb' ? 'Bombilla' : (compLabel || compId);
+            setDraggedCompLabel(`${displayName} (${dragStartOhms} Ω)`);
             if (compObj) {
               const pA = NODE_3D_COORDS[compObj.nodeA];
               const pB = NODE_3D_COORDS[compObj.nodeB];
@@ -852,10 +854,11 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
             ? 'ON'
             : compObj.faultState ?? 'ON';
 
+          const baseDisplay = compObj.type === 'bulb' ? 'Bombilla' : compObj.label;
           setDraggedCompLabel(
             pulledOffPosts
-              ? `${compObj.label}: DESCONECTADA (ABRIR)`
-              : `${compObj.label}: ${nextOhms} Ω (Ajuste Dinámico MNA)`
+              ? `${baseDisplay}: DESCONECTADA (ABRIR)`
+              : `${baseDisplay}: ${nextOhms} Ω (Ajuste Dinámico MNA)`
           );
 
           if (nextOhms !== compObj.resistance || nextFault !== (compObj.faultState ?? 'ON')) {
@@ -970,31 +973,55 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
         const currentVal = Math.abs(st?.current ?? (bInfo?.current ?? topRes.totalCurrent));
         const powerWatts = bInfo ? bInfo.power : (st?.power && st.power > 0 ? st.power : currentVal * currentVal * 15);
         const bulbBrightness = st?.brightness ?? (powerWatts > 0 ? Math.min(1.6, Math.max(0.15, powerWatts / 15.0)) : 0);
-        const hasCurrent = circuitActive && (powerWatts >= 0.01 || currentVal >= 0.005 || bulbBrightness > 0.01);
+        const hasCurrent = circuitActive && (currentVal > 0.005 || powerWatts >= 0.01 || bulbBrightness > 0.01);
 
         if (isBurned) {
           // Filamento fundido por superar 15.0 W: cristal ahumado oscuro y filamento apagado/rojo ceniza
           bulbObj.glassMat.color.setHex(0x1f2937);
           bulbObj.glassMat.emissive.setHex(0x7f1d1d);
           bulbObj.glassMat.emissiveIntensity = 0.25;
+          bulbObj.glassMat.opacity = 0.6;
+          bulbObj.glassMat.roughness = 0.3;
           bulbObj.filamentMat.color.setHex(0xef4444);
-          bulbObj.filamentMat.emissiveIntensity = 0.4;
+          bulbObj.filamentMat.emissive.setHex(0x7f1d1d);
+          bulbObj.filamentMat.emissiveIntensity = 0.3;
           bulbObj.light.intensity = 0;
         } else if (!circuitActive || !hasCurrent) {
+          // Cuando no circula corriente (I = 0 o switch abierto):
+          // emissiveIntensity: 0, filamento gris oscuro (0x334155), vidrio ahumado opaco (0x1e293b, opacity: 0.55) y luz puntual apagada (intensity = 0)
           bulbObj.glassMat.color.setHex(0x1e293b);
+          bulbObj.glassMat.emissive.setHex(0xf59e0b);
           bulbObj.glassMat.emissiveIntensity = 0;
-          bulbObj.filamentMat.color.setHex(0x475569);
+          bulbObj.glassMat.opacity = 0.55;
+          bulbObj.glassMat.roughness = 0.15;
+
+          bulbObj.filamentMat.color.setHex(0x334155);
+          bulbObj.filamentMat.emissive.setHex(0xffea00);
           bulbObj.filamentMat.emissiveIntensity = 0;
+
+          bulbObj.light.color.setHex(0xfbbf24);
+          bulbObj.light.distance = 6.0;
           bulbObj.light.intensity = 0;
         } else {
-          // Brillo térmico proporcional a P = I² * R respecto a 15.0 W nominales
-          const normBr = Math.min(1.8, Math.max(0.2, bulbBrightness > 0 ? bulbBrightness * 1.3 : powerWatts / 15.0));
+          // Cuando circula corriente (I > 0.005 A):
+          // Filamento incandescente: emissive: 0xffea00, emissiveIntensity: 2.5
+          // Vidrio exterior radiante: color 0xfef08a, emissive: 0xf59e0b, emissiveIntensity: 0.8, opacity: 0.85, roughness: 0.15
+          // PointLight(0xfbbf24, 2.5, 6.0) proporcional a la corriente
+          const currentFactor = Math.min(1.8, Math.max(0.35, currentVal / 0.18));
+
+          bulbObj.filamentMat.color.setHex(0xffea00);
+          bulbObj.filamentMat.emissive.setHex(0xffea00);
+          bulbObj.filamentMat.emissiveIntensity = 2.5 * currentFactor;
+
           bulbObj.glassMat.color.setHex(0xfef08a);
-          bulbObj.glassMat.emissive.setHex(0xfacc15);
-          bulbObj.glassMat.emissiveIntensity = normBr * 2.8;
-          bulbObj.filamentMat.color.setHex(0xffffff);
-          bulbObj.filamentMat.emissiveIntensity = normBr * 3.8;
-          bulbObj.light.intensity = normBr * 6.5;
+          bulbObj.glassMat.emissive.setHex(0xf59e0b);
+          bulbObj.glassMat.emissiveIntensity = 0.8 * currentFactor;
+          bulbObj.glassMat.opacity = 0.85;
+          bulbObj.glassMat.roughness = 0.15;
+
+          bulbObj.light.color.setHex(0xfbbf24);
+          bulbObj.light.distance = 6.0;
+          bulbObj.light.intensity = 2.5 * currentFactor;
         }
       });
 
@@ -1097,7 +1124,7 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
               >
                 <span className="font-bold text-cyan-300">
                   {b.componentType === 'bulb'
-                    ? `💡 ${b.branchId}`
+                    ? '💡 Bombilla'
                     : b.componentType === 'wire'
                     ? b.faultState === 'OPEN'
                       ? `✂️ Cable ${b.branchId}`
