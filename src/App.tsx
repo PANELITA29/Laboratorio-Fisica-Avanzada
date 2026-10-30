@@ -11,7 +11,6 @@ import {
   Activity,
   Volume2,
   VolumeX,
-  ArrowLeft,
   Play,
   BookOpen,
   Award,
@@ -128,37 +127,6 @@ export default function App() {
   };
 
   const verifiedChallengesCount = Object.keys(completedChallenges).length;
-
-  const engineSpecifications = [
-    {
-      code: 'MOD-01',
-      domain: lang === 'es' ? 'Electrodinámica DC' : 'DC Electrodynamics',
-      solver: 'Gauss-Seidel / Kirchhoff Nodal',
-      equations: 'V = I·R, ∑I = 0, ∑ΔV = 0',
-      targetView: 'circuits' as ActiveModuleView,
-    },
-    {
-      code: 'MOD-02',
-      domain: lang === 'es' ? 'Gravitación N-Cuerpos' : 'N-Body Gravitation',
-      solver: 'Velocity Verlet Simpléctico',
-      equations: 'F = G·M·m/r², T² = a³/M',
-      targetView: 'space' as ActiveModuleView,
-    },
-    {
-      code: 'MOD-03',
-      domain: lang === 'es' ? 'Oscilaciones y Ondas' : 'Oscillations & Waves',
-      solver: 'Runge-Kutta 4to Orden (RK4)',
-      equations: 'T = 2π√(L/g), E = K + U',
-      targetView: 'mechanics' as ActiveModuleView,
-    },
-    {
-      code: 'MOD-04',
-      domain: lang === 'es' ? 'Cinemática y Balística 2D' : '2D Kinematics & Ballistics',
-      solver: 'Runge-Kutta 4 (RK4) + Rayleigh',
-      equations: 'F_d = -½ρ·Cd·A·|v_rel|·v_rel, E = Ec + Ep',
-      targetView: 'kinematics' as ActiveModuleView,
-    },
-  ];
 
   return (
     <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#07090E] text-slate-100 flex flex-col pb-16 md:pb-0 relative">
@@ -452,18 +420,6 @@ export default function App() {
       <div className="bg-[#0A0E17] border-b border-slate-800/80 py-1 no-print">
         <div className="fluid-container flex items-center justify-between gap-1.5 sm:gap-2 text-xs">
           <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-            {activeView !== 'hub' && (
-              <button
-                type="button"
-                onClick={() => selectModuleView('hub')}
-                className="min-h-[2rem] flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium instrument-transition cursor-pointer whitespace-nowrap shrink-0"
-              >
-                <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
-                <span className="hidden sm:inline">{translations.backToHub}</span>
-                <span className="sm:hidden">{lang === 'es' ? 'Módulos' : 'Modules'}</span>
-              </button>
-            )}
-
             {/* Menú desplegable secundario de Perfil de Investigador / Red Activa */}
             <div className="relative min-w-0">
               <button
@@ -581,169 +537,94 @@ export default function App() {
       >
         {activeView === 'hub' && (
           <div id="portal-hub-view" className="space-y-8 sm:space-y-10">
-            <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch pt-1">
-              <div className="lg:col-span-6 flex flex-col justify-between space-y-5">
-                <div className="space-y-3.5">
-                  <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-slate-300">
-                    <span className="text-cyan-300 font-semibold">
-                      {lang === 'es' ? 'Suite de Instrumentación Numérica' : 'Numerical Instrumentation Suite'}
-                    </span>
-                    <span aria-hidden="true" className="text-slate-600">·</span>
-                    <span>WebGL2 &amp; Canvas 2D</span>
-                    <span aria-hidden="true" className="text-slate-600">·</span>
-                    <span>Δt = 16.67 ms</span>
-                  </div>
-
-                  <h1 className="fluid-title-xl font-bold tracking-tight text-white max-w-[22ch]">
-                    <span className="block">{translations.heroTitleLine1}</span>
-                    <span className="block text-slate-300 font-normal mt-1.5 text-[0.72em] leading-snug">
-                      {translations.heroTitleLine2}
-                    </span>
-                  </h1>
-
-                  <p className="text-xs sm:text-sm text-[#CBD5E1] leading-relaxed max-w-[62ch]">
-                    {translations.heroDescription}
-                  </p>
+            <section className="max-w-4xl flex flex-col justify-between space-y-5 pt-1">
+              <div className="space-y-3.5">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-slate-300">
+                  <span className="text-cyan-300 font-semibold">
+                    {lang === 'es' ? 'Suite de Instrumentación Numérica' : 'Numerical Instrumentation Suite'}
+                  </span>
+                  <span aria-hidden="true" className="text-slate-600">·</span>
+                  <span>WebGL2 &amp; Canvas 2D</span>
+                  <span aria-hidden="true" className="text-slate-600">·</span>
+                  <span>Δt = 16.67 ms</span>
                 </div>
 
-                <div className="pt-1 space-y-2">
-                  <div className="text-xs font-mono text-slate-300">
-                    {lang === 'es' ? 'Filtrar bancos de prueba por dominio físico:' : 'Filter testbenches by physical domain:'}
-                  </div>
-                  <div
-                    role="group"
-                    aria-label={lang === 'es' ? 'Filtro de módulos de laboratorio' : 'Laboratory module filter'}
-                    className="flex flex-wrap items-center gap-1 p-1 rounded-xl bg-[#0B101B] border border-slate-800/90 w-fit"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setCategoryFilter('all')}
-                      className={`min-h-[2.375rem] px-3 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
-                        categoryFilter === 'all'
-                          ? 'bg-cyan-400 text-slate-950 shadow-sm'
-                          : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-                      }`}
-                    >
-                      {translations.filterAll}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCategoryFilter('circuits')}
-                      className={`min-h-[2.375rem] px-3 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
-                        categoryFilter === 'circuits'
-                          ? 'bg-cyan-400 text-slate-950 shadow-sm'
-                          : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-                      }`}
-                    >
-                      {lang === 'es' ? 'Circuitos DC' : 'DC Circuits'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCategoryFilter('space')}
-                      className={`min-h-[2.375rem] px-3 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
-                        categoryFilter === 'space'
-                          ? 'bg-cyan-400 text-slate-950 shadow-sm'
-                          : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-                      }`}
-                    >
-                      {lang === 'es' ? 'Gravitación 3D' : '3D Gravitation'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCategoryFilter('mechanics')}
-                      className={`min-h-[2.375rem] px-3 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
-                        categoryFilter === 'mechanics'
-                          ? 'bg-cyan-400 text-slate-950 shadow-sm'
-                          : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-                      }`}
-                    >
-                      {lang === 'es' ? 'Oscilaciones RK4' : 'RK4 Oscillations'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCategoryFilter('kinematics')}
-                      className={`min-h-[2.375rem] px-3 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
-                        categoryFilter === 'kinematics'
-                          ? 'bg-cyan-400 text-slate-950 shadow-sm'
-                          : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-                      }`}
-                    >
-                      {lang === 'es' ? 'Cinemática 2D' : '2D Kinematics'}
-                    </button>
-                  </div>
-                </div>
+                <h1 className="fluid-title-xl font-bold tracking-tight text-white max-w-[22ch]">
+                  <span className="block">{translations.heroTitleLine1}</span>
+                  <span className="block text-slate-300 font-normal mt-1.5 text-[0.72em] leading-snug">
+                    {translations.heroTitleLine2}
+                  </span>
+                </h1>
+
+                <p className="text-xs sm:text-sm text-[#CBD5E1] leading-relaxed max-w-[62ch]">
+                  {translations.heroDescription}
+                </p>
               </div>
 
-              <div className="lg:col-span-6 rounded-xl workbench-panel overflow-hidden flex flex-col justify-between">
-                <div className="px-4 py-3 bg-[#0E1525] border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs font-mono font-semibold text-white">
-                    {lang === 'es'
-                      ? 'Arquitectura de los Solucionadores Numéricos'
-                      : 'Numerical Solver Architecture'}
-                  </span>
-                  <span className="text-xs font-mono text-cyan-300">
-                    {lang === 'es' ? 'Paso fijo Δt = 16.67 ms · 60 FPS' : 'Fixed step Δt = 16.67 ms · 60 FPS'}
-                  </span>
+              <div className="pt-1 space-y-2">
+                <div className="text-xs font-mono text-slate-300">
+                  {lang === 'es' ? 'Filtrar bancos de prueba por dominio físico:' : 'Filter testbenches by physical domain:'}
                 </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-800/90 border-b border-slate-800 bg-[#080C15]">
-                  <div className="p-3 space-y-0.5">
-                    <div className="text-[11px] font-mono text-slate-300">
-                      {lang === 'es' ? 'Orden Temporal' : 'Time Order'}
-                    </div>
-                    <div className="text-sm font-mono font-bold text-cyan-300">RK4 O(h⁴)</div>
-                  </div>
-                  <div className="p-3 space-y-0.5">
-                    <div className="text-[11px] font-mono text-slate-300">
-                      {lang === 'es' ? 'Invariante Orbital' : 'Orbital Invariant'}
-                    </div>
-                    <div className="text-sm font-mono font-bold text-amber-300">Verlet O(h²)</div>
-                  </div>
-                  <div className="p-3 space-y-0.5">
-                    <div className="text-[11px] font-mono text-slate-300">
-                      {lang === 'es' ? 'Álgebra Nodal' : 'Nodal Algebra'}
-                    </div>
-                    <div className="text-sm font-mono font-bold text-emerald-300">G·V = I_s</div>
-                  </div>
-                  <div className="p-3 space-y-0.5">
-                    <div className="text-[11px] font-mono text-slate-300">
-                      {lang === 'es' ? 'Verificación' : 'Verification'}
-                    </div>
-                    <div className="text-sm font-mono font-bold text-white">
-                      {verifiedChallengesCount}/6 {lang === 'es' ? 'Retos' : 'Labs'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="divide-y divide-slate-800/80 text-xs flex-1 flex flex-col justify-center">
-                  {engineSpecifications.map((spec) => (
-                    <div
-                      key={spec.code}
-                      className="px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 hover:bg-[#0E1525]/70 instrument-transition"
-                    >
-                      <div className="space-y-0.5 min-w-0">
-                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                          <LabCoverIcon labId={spec.targetView as LabId} size={18} className="shrink-0 mr-0.5" />
-                          <span className="font-mono text-xs font-semibold text-cyan-300">
-                            {spec.code}
-                          </span>
-                          <span aria-hidden="true" className="text-slate-600">·</span>
-                          <span className="font-semibold text-white">{spec.domain}</span>
-                          <span aria-hidden="true" className="text-slate-600">·</span>
-                          <span className="text-slate-300 font-mono text-[11px]">{spec.solver}</span>
-                        </div>
-                        <div className="font-mono text-[11px] text-slate-300 truncate">{spec.equations}</div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => selectModuleView(spec.targetView)}
-                        className="min-h-[2.25rem] self-start sm:self-center px-3 py-1 rounded-lg bg-slate-800/90 hover:bg-cyan-400 hover:text-slate-950 border border-slate-700 hover:border-cyan-400 text-slate-100 font-mono font-semibold text-[11px] instrument-transition cursor-pointer shrink-0"
-                      >
-                        {lang === 'es' ? 'Abrir →' : 'Open →'}
-                      </button>
-                    </div>
-                  ))}
+                <div
+                  role="group"
+                  aria-label={lang === 'es' ? 'Filtro de módulos de laboratorio' : 'Laboratory module filter'}
+                  className="flex flex-wrap items-center gap-1 p-1 rounded-xl bg-[#0B101B] border border-slate-800/90 w-fit"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setCategoryFilter('all')}
+                    className={`min-h-[2.375rem] px-3 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
+                      categoryFilter === 'all'
+                        ? 'bg-cyan-400 text-slate-950 shadow-sm'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                  >
+                    {translations.filterAll}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCategoryFilter('circuits')}
+                    className={`min-h-[2.375rem] px-3 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
+                      categoryFilter === 'circuits'
+                        ? 'bg-cyan-400 text-slate-950 shadow-sm'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                  >
+                    {lang === 'es' ? 'Circuitos DC' : 'DC Circuits'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCategoryFilter('space')}
+                    className={`min-h-[2.375rem] px-3 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
+                      categoryFilter === 'space'
+                        ? 'bg-cyan-400 text-slate-950 shadow-sm'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                  >
+                    {lang === 'es' ? 'Gravitación 3D' : '3D Gravitation'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCategoryFilter('mechanics')}
+                    className={`min-h-[2.375rem] px-3 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
+                      categoryFilter === 'mechanics'
+                        ? 'bg-cyan-400 text-slate-950 shadow-sm'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                  >
+                    {lang === 'es' ? 'Oscilaciones RK4' : 'RK4 Oscillations'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCategoryFilter('kinematics')}
+                    className={`min-h-[2.375rem] px-3 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
+                      categoryFilter === 'kinematics'
+                        ? 'bg-cyan-400 text-slate-950 shadow-sm'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                  >
+                    {lang === 'es' ? 'Cinemática 2D' : '2D Kinematics'}
+                  </button>
                 </div>
               </div>
             </section>
