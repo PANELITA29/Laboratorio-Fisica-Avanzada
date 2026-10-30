@@ -37,6 +37,7 @@ import { LabQRCodeModal, HubQRCodeBanner } from './components/LabQRCodeModal';
 import { ScrollReveal } from './components/QuantumAnimations';
 import CardSwap, { Card, CardSwapRef } from './components/CardSwap';
 import DotField from './components/DotField';
+import { LabCoverIcon, LabCoverBadge, LAB_THEMES, LabId } from './components/LabCoverIcons';
 import { CircuitLabView } from './labs/circuitos/CircuitLabView';
 import { SpaceLabView } from './labs/espacio-3d/SpaceLabView';
 import { MechanicsLabView } from './labs/mecanica-3d/MechanicsLabView';
@@ -689,6 +690,7 @@ export default function App() {
                     >
                       <div className="space-y-0.5 min-w-0">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <LabCoverIcon labId={spec.targetView as LabId} size={18} className="shrink-0 mr-0.5" />
                           <span className="font-mono text-xs font-semibold text-cyan-300">
                             {spec.code}
                           </span>
@@ -733,60 +735,47 @@ export default function App() {
                   playBtnText: translations.card1PlayBtn,
                   objectivesBtnText: translations.card1ObjectivesBtn,
                   svgRender: (
-                    <svg viewBox="0 0 420 160" className="w-full h-full px-6 py-3">
-                      <rect
-                        x="56"
-                        y="24"
-                        width="304"
-                        height="96"
-                        rx="5"
-                        fill="none"
-                        stroke="#475569"
-                        strokeWidth="1.75"
-                      />
-                      <line x1="56" y1="56" x2="56" y2="88" stroke="#070A12" strokeWidth="4" />
-                      <line x1="42" y1="68" x2="70" y2="68" stroke="#22D3EE" strokeWidth="2.5" />
-                      <line x1="48" y1="78" x2="64" y2="78" stroke="#94A3B8" strokeWidth="2" />
-                      <text x="36" y="58" fill="#67E8F9" fontSize="10" fontFamily="JetBrains Mono, monospace">
-                        +V_F
-                      </text>
-                      <rect
-                        x="126"
-                        y="14"
-                        width="58"
-                        height="20"
-                        rx="3"
-                        fill="#0F172A"
-                        stroke="#22D3EE"
-                        strokeWidth="1.75"
-                      />
-                      <rect x="136" y="15" width="5" height="18" fill="#EF4444" />
-                      <rect x="146" y="15" width="5" height="18" fill="#A855F7" />
-                      <rect x="156" y="15" width="5" height="18" fill="#F59E0B" />
-                      <text x="140" y="48" fill="#CBD5E1" fontSize="10" fontFamily="JetBrains Mono, monospace">
-                        R₁ (EIA)
-                      </text>
-                      <line x1="252" y1="24" x2="252" y2="120" stroke="#475569" strokeWidth="1.75" />
-                      <circle cx="252" cy="24" r="3.5" fill="#22D3EE" />
-                      <circle cx="252" cy="120" r="3.5" fill="#22D3EE" />
-                      <rect
-                        x="240"
-                        y="52"
-                        width="24"
-                        height="40"
-                        rx="3"
-                        fill="#0F172A"
-                        stroke="#38BDF8"
-                        strokeWidth="1.75"
-                      />
-                      <text x="270" y="76" fill="#CBD5E1" fontSize="10" fontFamily="JetBrains Mono, monospace">
-                        R₂
-                      </text>
-                      <circle cx="360" cy="72" r="16" fill="#0F172A" stroke="#F59E0B" strokeWidth="2" />
-                      <circle cx="360" cy="72" r="7" fill="#F59E0B" fillOpacity="0.85" />
-                      <text x="314" y="76" fill="#FDE68A" fontSize="10" fontFamily="JetBrains Mono, monospace">
-                        P≤15W
-                      </text>
+                    <svg viewBox="0 0 420 160" className="w-full h-full px-4 py-2">
+                      <defs>
+                        <linearGradient id="circ-line-grad" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="#22d3ee" />
+                          <stop offset="100%" stopColor="#38bdf8" />
+                        </linearGradient>
+                        <filter id="c-glow" x="-20%" y="-20%" width="140%" height="140%">
+                          <feGaussianBlur stdDeviation="2" result="blur" />
+                          <feMerge>
+                            <feMergeNode in="blur" />
+                            <feMergeNode in="SourceGraphic" />
+                          </feMerge>
+                        </filter>
+                      </defs>
+                      <rect x="10" y="10" width="400" height="140" rx="10" fill="#070c18" stroke="#1e293b" strokeWidth="1" />
+                      <path d="M 50 80 H 110 M 170 80 H 230 M 230 40 V 120 M 230 40 H 330 M 230 120 H 330 M 330 40 V 120" stroke="#334155" strokeWidth="2.5" strokeLinecap="round" />
+                      <path d="M 50 80 H 110 M 170 80 H 230" stroke="url(#circ-line-grad)" strokeWidth="1.8" strokeLinecap="round" />
+                      <circle cx="50" cy="80" r="16" fill="#0f172a" stroke="#22d3ee" strokeWidth="2" filter="url(#c-glow)" />
+                      <text x="44" y="76" fill="#67e8f9" fontSize="12" fontWeight="bold" fontFamily="monospace">+</text>
+                      <text x="46" y="90" fill="#94a3b8" fontSize="11" fontFamily="monospace">-</text>
+                      <text x="32" y="112" fill="#22d3ee" fontSize="10" fontFamily="JetBrains Mono, monospace" fontWeight="bold">V_F = 12V</text>
+                      <rect x="110" y="68" width="60" height="24" rx="4" fill="#0f172a" stroke="#22d3ee" strokeWidth="1.8" />
+                      <rect x="120" y="69" width="6" height="22" rx="1" fill="#ef4444" />
+                      <rect x="132" y="69" width="6" height="22" rx="1" fill="#a855f7" />
+                      <rect x="144" y="69" width="6" height="22" rx="1" fill="#f59e0b" />
+                      <rect x="156" y="69" width="6" height="22" rx="1" fill="#eab308" />
+                      <text x="124" y="58" fill="#e2e8f0" fontSize="10" fontFamily="JetBrains Mono, monospace" fontWeight="bold">R₁ (27kΩ)</text>
+                      <circle cx="230" cy="40" r="4.5" fill="#22d3ee" filter="url(#c-glow)" />
+                      <circle cx="230" cy="80" r="3.5" fill="#38bdf8" />
+                      <circle cx="230" cy="120" r="4.5" fill="#22d3ee" filter="url(#c-glow)" />
+                      <circle cx="330" cy="80" r="4" fill="#38bdf8" />
+                      <text x="206" y="36" fill="#67e8f9" fontSize="10" fontFamily="JetBrains Mono, monospace">V_A</text>
+                      <rect x="256" y="28" width="48" height="24" rx="4" fill="#0f172a" stroke="#38bdf8" strokeWidth="1.8" />
+                      <text x="272" y="44" fill="#cbd5e1" fontSize="10" fontFamily="JetBrains Mono, monospace" fontWeight="bold">R₂</text>
+                      <rect x="256" y="108" width="48" height="24" rx="4" fill="#0f172a" stroke="#38bdf8" strokeWidth="1.8" />
+                      <text x="272" y="124" fill="#cbd5e1" fontSize="10" fontFamily="JetBrains Mono, monospace" fontWeight="bold">R₃</text>
+                      <circle cx="370" cy="80" r="18" fill="#0f172a" stroke="#f59e0b" strokeWidth="2" filter="url(#c-glow)" />
+                      <text x="362" y="78" fill="#fde68a" fontSize="11" fontWeight="bold" fontFamily="monospace">P_L</text>
+                      <text x="355" y="90" fill="#f59e0b" fontSize="8" fontFamily="monospace">≤15W</text>
+                      <path d="M 85 74 L 95 80 L 85 86" fill="#22d3ee" />
+                      <text x="82" y="68" fill="#22d3ee" fontSize="9" fontFamily="JetBrains Mono, monospace">I_T</text>
                     </svg>
                   )
                 },
@@ -808,40 +797,59 @@ export default function App() {
                   playBtnText: translations.card2PlayBtn,
                   objectivesBtnText: translations.card2ObjectivesBtn,
                   svgRender: (
-                    <svg viewBox="0 0 420 160" className="w-full h-full px-6 py-3">
-                      <path d="M 36 112 Q 210 148 384 112" fill="none" stroke="#334155" strokeWidth="1.5" />
-                      <path d="M 76 118 Q 210 142 344 118" fill="none" stroke="#1E293B" strokeWidth="1.25" />
+                    <svg viewBox="0 0 420 160" className="w-full h-full px-4 py-2">
+                      <defs>
+                        <radialGradient id="sun-rad" cx="50%" cy="50%" r="50%">
+                          <stop offset="0%" stopColor="#fef08a" />
+                          <stop offset="40%" stopColor="#f59e0b" />
+                          <stop offset="100%" stopColor="#ea580c" stopOpacity="0.1" />
+                        </radialGradient>
+                        <filter id="sp-glow" x="-30%" y="-30%" width="160%" height="160%">
+                          <feGaussianBlur stdDeviation="3" result="blur" />
+                          <feMerge>
+                            <feMergeNode in="blur" />
+                            <feMergeNode in="SourceGraphic" />
+                          </feMerge>
+                        </filter>
+                      </defs>
+                      <rect x="10" y="10" width="400" height="140" rx="10" fill="#060914" stroke="#1e293b" strokeWidth="1" />
+                      <ellipse cx="160" cy="80" rx="140" ry="50" fill="none" stroke="#1e293b" strokeWidth="1" />
+                      <ellipse cx="160" cy="80" rx="110" ry="38" fill="none" stroke="#1e293b" strokeWidth="1" strokeDasharray="3 3" />
                       <ellipse
-                        cx="210"
-                        cy="74"
-                        rx="124"
-                        ry="40"
-                        transform="rotate(-9 210 74)"
+                        cx="185"
+                        cy="80"
+                        rx="135"
+                        ry="48"
+                        transform="rotate(-8 185 80)"
                         fill="none"
-                        stroke="#38BDF8"
-                        strokeWidth="1.75"
+                        stroke="#38bdf8"
+                        strokeWidth="1.8"
                         strokeDasharray="6 4"
                       />
                       <ellipse
-                        cx="196"
-                        cy="74"
-                        rx="76"
-                        ry="25"
-                        transform="rotate(-9 196 74)"
+                        cx="160"
+                        cy="80"
+                        rx="75"
+                        ry="28"
+                        transform="rotate(-8 160 80)"
                         fill="none"
-                        stroke="#22D3EE"
-                        strokeWidth="2"
+                        stroke="#818cf8"
+                        strokeWidth="1.5"
                       />
-                      <circle cx="176" cy="76" r="17" fill="#F59E0B" />
-                      <circle cx="268" cy="56" r="7" fill="#22D3EE" />
-                      <line x1="268" y1="56" x2="234" y2="62" stroke="#F43F5E" strokeWidth="2" />
-                      <line x1="268" y1="56" x2="280" y2="30" stroke="#10B981" strokeWidth="2" />
-                      <text x="286" y="38" fill="#6EE7B7" fontSize="10" fontFamily="JetBrains Mono, monospace">
-                        v_t
-                      </text>
-                      <text x="222" y="54" fill="#FDA4AF" fontSize="10" fontFamily="JetBrains Mono, monospace">
-                        F_g
-                      </text>
+                      <circle cx="160" cy="80" r="28" fill="url(#sun-rad)" opacity="0.4" />
+                      <circle cx="160" cy="80" r="18" fill="#f59e0b" filter="url(#sp-glow)" />
+                      <circle cx="160" cy="80" r="7" fill="#fef08a" />
+                      <text x="148" y="115" fill="#fde68a" fontSize="10" fontFamily="JetBrains Mono, monospace" fontWeight="bold">M_central</text>
+                      <circle cx="285" cy="62" r="7" fill="#38bdf8" filter="url(#sp-glow)" />
+                      <circle cx="285" cy="62" r="2.5" fill="#ffffff" />
+                      <line x1="285" y1="62" x2="310" y2="35" stroke="#10b981" strokeWidth="2.2" strokeLinecap="round" />
+                      <polygon points="310,35 302,42 308,46" fill="#10b981" />
+                      <text x="316" y="42" fill="#6ee7b7" fontSize="10" fontFamily="JetBrains Mono, monospace" fontWeight="bold">v_t (Verlet)</text>
+                      <line x1="285" y1="62" x2="238" y2="70" stroke="#f43f5e" strokeWidth="2.2" strokeLinecap="round" />
+                      <polygon points="238,70 248,66 247,73" fill="#f43f5e" />
+                      <text x="235" y="60" fill="#fda4af" fontSize="10" fontFamily="JetBrains Mono, monospace" fontWeight="bold">F_g = GMm/r²</text>
+                      <circle cx="65" cy="95" r="9" fill="#a855f7" stroke="#c084fc" strokeWidth="1.5" />
+                      <text x="45" y="118" fill="#c084fc" fontSize="9" fontFamily="JetBrains Mono, monospace">Apocentro</text>
                     </svg>
                   )
                 },
@@ -866,21 +874,51 @@ export default function App() {
                   playBtnText: lang === 'es' ? 'Abrir Banco RK4' : 'Open RK4 Bench',
                   objectivesBtnText: translations.card1ObjectivesBtn,
                   svgRender: (
-                    <svg viewBox="0 0 420 160" className="w-full h-full px-6 py-3">
-                      <line x1="96" y1="24" x2="324" y2="24" stroke="#64748B" strokeWidth="3" />
-                      <line x1="158" y1="24" x2="128" y2="104" stroke="#94A3B8" strokeWidth="2" />
-                      <line x1="262" y1="24" x2="292" y2="104" stroke="#94A3B8" strokeWidth="2" />
+                    <svg viewBox="0 0 420 160" className="w-full h-full px-4 py-2">
+                      <defs>
+                        <linearGradient id="bob-gold" x1="0" y1="0" x2="1" y2="1">
+                          <stop offset="0%" stopColor="#fef08a" />
+                          <stop offset="60%" stopColor="#f59e0b" />
+                          <stop offset="100%" stopColor="#b45309" />
+                        </linearGradient>
+                        <filter id="m-glow" x="-20%" y="-20%" width="140%" height="140%">
+                          <feGaussianBlur stdDeviation="2" result="blur" />
+                          <feMerge>
+                            <feMergeNode in="blur" />
+                            <feMergeNode in="SourceGraphic" />
+                          </feMerge>
+                        </filter>
+                      </defs>
+                      <rect x="10" y="10" width="400" height="140" rx="10" fill="#090c14" stroke="#1e293b" strokeWidth="1" />
+                      <line x1="70" y1="26" x2="350" y2="26" stroke="#475569" strokeWidth="4" strokeLinecap="round" />
+                      <circle cx="140" cy="26" r="4" fill="#94a3b8" />
+                      <circle cx="280" cy="26" r="4" fill="#94a3b8" />
+                      <line x1="140" y1="26" x2="110" y2="108" stroke="#cbd5e1" strokeWidth="1.8" strokeLinecap="round" />
+                      <line x1="280" y1="26" x2="310" y2="108" stroke="#cbd5e1" strokeWidth="1.8" strokeLinecap="round" />
                       <path
-                        d="M 142 64 L 166 56 L 188 70 L 210 56 L 232 70 L 254 56 L 278 64"
+                        d="M 125 68 L 140 60 L 155 76 L 170 60 L 185 76 L 200 60 L 215 76 L 230 60 L 245 76 L 260 60 L 275 76 L 295 68"
                         fill="none"
-                        stroke="#F59E0B"
-                        strokeWidth="2"
+                        stroke="#f59e0b"
+                        strokeWidth="2.2"
+                        strokeLinejoin="round"
+                        filter="url(#m-glow)"
                       />
-                      <circle cx="128" cy="104" r="12" fill="#F59E0B" />
-                      <circle cx="292" cy="104" r="12" fill="#22D3EE" />
-                      <text x="192" y="50" fill="#FDE68A" fontSize="10" fontFamily="JetBrains Mono, monospace">
-                        k_c · Δx
-                      </text>
+                      <text x="195" y="52" fill="#fde68a" fontSize="10" fontFamily="JetBrains Mono, monospace" fontWeight="bold">k_c · Δx</text>
+                      <circle cx="110" cy="108" r="14" fill="url(#bob-gold)" filter="url(#m-glow)" />
+                      <circle cx="110" cy="108" r="5" fill="#ffffff" />
+                      <circle cx="310" cy="108" r="14" fill="#38bdf8" filter="url(#m-glow)" />
+                      <circle cx="310" cy="108" r="5" fill="#f0f9ff" />
+                      <text x="96" y="136" fill="#fde68a" fontSize="10" fontFamily="JetBrains Mono, monospace">m₁, θ₁(t)</text>
+                      <text x="296" y="136" fill="#7dd3fc" fontSize="10" fontFamily="JetBrains Mono, monospace">m₂, θ₂(t)</text>
+                      <path
+                        d="M 30 144 Q 70 128 110 144 T 190 144 T 270 144 T 350 144 T 390 144"
+                        fill="none"
+                        stroke="#fbbf24"
+                        strokeWidth="1.6"
+                        strokeDasharray="4 2"
+                        opacity="0.85"
+                      />
+                      <text x="325" y="146" fill="#f59e0b" fontSize="9" fontFamily="JetBrains Mono, monospace">RK4 · E=K+U</text>
                     </svg>
                   )
                 },
@@ -905,40 +943,59 @@ export default function App() {
                   playBtnText: lang === 'es' ? 'Iniciar Laboratorio' : 'Start Laboratory',
                   objectivesBtnText: translations.card1ObjectivesBtn,
                   svgRender: (
-                    <svg viewBox="0 0 420 160" className="w-full h-full px-6 py-3">
-                      <line x1="36" y1="118" x2="368" y2="118" stroke="#475569" strokeWidth="2" />
-                      <rect
-                        x="46"
-                        y="82"
-                        width="26"
-                        height="36"
-                        rx="3"
-                        fill="#0F172A"
-                        stroke="#38BDF8"
-                        strokeWidth="1.75"
-                      />
+                    <svg viewBox="0 0 420 160" className="w-full h-full px-4 py-2">
+                      <defs>
+                        <linearGradient id="kin-grad-line" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="#34d399" />
+                          <stop offset="100%" stopColor="#059669" />
+                        </linearGradient>
+                        <filter id="k-glow" x="-20%" y="-20%" width="140%" height="140%">
+                          <feGaussianBlur stdDeviation="2" result="blur" />
+                          <feMerge>
+                            <feMergeNode in="blur" />
+                            <feMergeNode in="SourceGraphic" />
+                          </feMerge>
+                        </filter>
+                      </defs>
+                      <rect x="10" y="10" width="400" height="140" rx="10" fill="#070e12" stroke="#1e293b" strokeWidth="1" />
+                      <line x1="30" y1="126" x2="390" y2="126" stroke="#334155" strokeWidth="2.5" />
+                      <line x1="120" y1="126" x2="120" y2="132" stroke="#475569" strokeWidth="1.5" />
+                      <line x1="210" y1="126" x2="210" y2="132" stroke="#475569" strokeWidth="1.5" />
+                      <line x1="300" y1="126" x2="300" y2="132" stroke="#475569" strokeWidth="1.5" />
+                      <text x="110" y="144" fill="#64748b" fontSize="8" fontFamily="monospace">100m</text>
+                      <text x="200" y="144" fill="#64748b" fontSize="8" fontFamily="monospace">200m</text>
+                      <text x="290" y="144" fill="#64748b" fontSize="8" fontFamily="monospace">300m</text>
+                      <rect x="36" y="86" width="30" height="40" rx="4" fill="#0f172a" stroke="#38bdf8" strokeWidth="1.8" />
+                      <line x1="51" y1="92" x2="78" y2="68" stroke="#22d3ee" strokeWidth="5" strokeLinecap="round" />
+                      <text x="30" y="80" fill="#38bdf8" fontSize="9" fontFamily="JetBrains Mono, monospace">h₀=15m</text>
                       <path
-                        d="M 68 80 Q 204 8 338 118"
+                        d="M 78 68 Q 230 -10 380 126"
                         fill="none"
-                        stroke="#22D3EE"
-                        strokeWidth="2.25"
+                        stroke="#eab308"
+                        strokeWidth="1.6"
+                        strokeDasharray="5 4"
+                        opacity="0.7"
                       />
+                      <text x="320" y="55" fill="#fde047" fontSize="9" fontFamily="JetBrains Mono, monospace">Vacío (ρ=0)</text>
                       <path
-                        d="M 68 80 Q 168 32 254 118"
+                        d="M 78 68 Q 185 24 286 126"
                         fill="none"
-                        stroke="#F59E0B"
-                        strokeWidth="2.25"
-                        strokeDasharray="6 4"
+                        stroke="url(#kin-grad-line)"
+                        strokeWidth="2.6"
+                        strokeLinecap="round"
+                        filter="url(#k-glow)"
                       />
-                      <circle cx="204" cy="44" r="6" fill="#10B981" />
-                      <circle cx="254" cy="118" r="6" fill="#F59E0B" />
-                      <circle cx="338" cy="118" r="6" fill="#EF4444" />
-                      <text x="216" y="42" fill="#6EE7B7" fontSize="10" fontFamily="JetBrains Mono, monospace">
-                        y_max (v_y=0)
-                      </text>
-                      <text x="150" y="96" fill="#FDE68A" fontSize="10" fontFamily="JetBrains Mono, monospace">
-                        Con arrastre ρ
-                      </text>
+                      <circle cx="178" cy="46" r="6" fill="#10b981" filter="url(#k-glow)" />
+                      <circle cx="178" cy="46" r="2.5" fill="#ffffff" />
+                      <text x="188" y="44" fill="#a7f3d0" fontSize="10" fontFamily="JetBrains Mono, monospace" fontWeight="bold">y_max (v_y=0)</text>
+                      <line x1="178" y1="46" x2="214" y2="46" stroke="#38bdf8" strokeWidth="2" strokeLinecap="round" />
+                      <polygon points="214,46 206,42 206,50" fill="#38bdf8" />
+                      <text x="216" y="43" fill="#7dd3fc" fontSize="9" fontFamily="monospace">v_x</text>
+                      <line x1="178" y1="46" x2="152" y2="40" stroke="#f43f5e" strokeWidth="2" strokeLinecap="round" />
+                      <polygon points="152,40 160,37 160,45" fill="#f43f5e" />
+                      <text x="135" y="38" fill="#fda4af" fontSize="9" fontFamily="monospace">F_drag</text>
+                      <circle cx="286" cy="126" r="6" fill="#f59e0b" filter="url(#k-glow)" />
+                      <text x="264" y="118" fill="#fde68a" fontSize="10" fontFamily="JetBrains Mono, monospace" fontWeight="bold">Impacto (x_f)</text>
                     </svg>
                   )
                 }
@@ -1083,9 +1140,7 @@ export default function App() {
                               <div>
                                 <div className="card-swap-head flex items-center justify-between px-4 py-2.5 bg-[#0D1424]/95 border-b border-slate-800">
                                   <div className="flex items-center gap-2.5 min-w-0">
-                                    <div className="w-7 h-7 rounded-lg bg-cyan-950/80 border border-cyan-500/40 text-cyan-400 flex items-center justify-center shrink-0">
-                                      <mod.icon className="w-4 h-4" />
-                                    </div>
+                                    <LabCoverBadge labId={mod.id} size="sm" />
                                     <div className="truncate">
                                       <div className="font-mono text-xs font-bold text-white tracking-wide truncate">
                                         {mod.code} · {mod.title}
@@ -1169,13 +1224,14 @@ export default function App() {
                               key={m.id}
                               type="button"
                               onClick={() => selectModuleView(m.id)}
-                              className={`px-2.5 py-1 rounded-md border text-[11px] font-semibold instrument-transition cursor-pointer ${
+                              className={`px-2.5 py-1 rounded-md border text-[11px] font-semibold instrument-transition cursor-pointer flex items-center gap-1.5 ${
                                 activeMod?.id === m.id
                                   ? 'bg-cyan-400/20 text-cyan-300 border-cyan-500/40'
                                   : 'bg-slate-900/60 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
                               }`}
                             >
-                              {m.code} · {m.title.split(':')[0]}
+                              <LabCoverIcon labId={m.id} size={14} className="shrink-0" />
+                              <span>{m.code} · {m.title.split(':')[0]}</span>
                             </button>
                           ))}
                         </div>
@@ -1205,14 +1261,17 @@ export default function App() {
                                 className="relative aspect-[21/9] schematic-grid-bg border-b border-slate-800 flex items-center justify-center cursor-pointer group overflow-hidden"
                               >
                                 {mod.svgRender}
-                                <div className="absolute top-2.5 left-3.5 font-mono text-[11px] text-cyan-300 bg-[#070A12]/90 px-2.5 py-0.5 rounded border border-slate-800">
-                                  {mod.equationsHeader}
+                                <div className="absolute top-2.5 left-3.5 flex items-center gap-2">
+                                  <LabCoverBadge labId={mod.id} size="sm" />
+                                  <span className="font-mono text-[11px] text-cyan-300 bg-[#070A12]/90 px-2.5 py-0.5 rounded border border-slate-800 backdrop-blur-md">
+                                    {mod.equationsHeader}
+                                  </span>
                                 </div>
-                                <div className="absolute bottom-2.5 right-3.5 font-mono text-[11px] text-slate-300 bg-[#070A12]/90 px-2.5 py-0.5 rounded border border-slate-800">
+                                <div className="absolute bottom-2.5 right-3.5 font-mono text-[11px] text-slate-300 bg-[#070A12]/90 px-2.5 py-0.5 rounded border border-slate-800 backdrop-blur-md">
                                   {mod.equationsFooter}
                                 </div>
                                 <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 instrument-transition flex items-center justify-center">
-                                  <span className="px-4 py-2 rounded-lg bg-cyan-400 text-slate-950 font-mono font-bold text-xs flex items-center gap-1.5">
+                                  <span className="px-4 py-2 rounded-lg bg-cyan-400 text-slate-950 font-mono font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-cyan-500/25">
                                     <Play className="w-3.5 h-3.5 fill-current" />
                                     {mod.playBtnText}
                                   </span>
@@ -1221,9 +1280,12 @@ export default function App() {
 
                               <div className="fluid-section-pad space-y-3">
                                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
-                                  <span className="text-cyan-300 font-semibold">
-                                    {mod.number}. {mod.title}
-                                  </span>
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <LabCoverBadge labId={mod.id} size="sm" />
+                                    <span className="text-cyan-300 font-semibold truncate">
+                                      {mod.number}. {mod.title}
+                                    </span>
+                                  </div>
                                   <span className="text-slate-300">{mod.subtitle}</span>
                                 </div>
                                 <h3 className="fluid-title-md font-bold text-white">{mod.title}</h3>

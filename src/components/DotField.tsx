@@ -26,15 +26,14 @@ export const getDeviceProfile = (): DevicePerformanceProfile => {
       pixelBudget: 6e6
     };
   }
-  const isTouch = 'ontouchstart' in window || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
+  const isTouch = 'ontouchstart' in window || (typeof navigator !== 'undefined' && (navigator.maxTouchPoints || 0) > 0);
   const isNarrowScreen = window.innerWidth <= 768;
   const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  const isMobile = isNarrowScreen || (isTouch && isMobileUA);
+  const isMobile = Boolean(isNarrowScreen || (isTouch && isMobileUA));
 
   const cores = navigator.hardwareConcurrency || 4;
-  // @ts-expect-error non-standard deviceMemory in Chromium / Android
   const memory = (navigator as unknown as { deviceMemory?: number }).deviceMemory || 4;
-  const isLowEnd = isMobile && (cores <= 4 || memory <= 4);
+  const isLowEnd = Boolean(isMobile && (cores <= 4 || memory <= 4));
 
   return {
     isMobile,
