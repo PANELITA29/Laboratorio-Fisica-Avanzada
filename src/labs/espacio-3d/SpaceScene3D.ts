@@ -257,6 +257,9 @@ export function deformPlanetGeometryForSpaghettification(
   }
 
   const effectivePinch = Math.max(0, Math.min(1.0, pinchIntensity));
+  // Acotar el estiramiento geométrico real a un elipsoide/gota de marea físicamente limpio (máx ~2.05x el radio base)
+  const boundedStretch = Math.min(2.05, 1.0 + (Math.min(4.2, stretchFactor) - 1.0) * 0.31);
+  const baseTransverse = 1.0 / Math.sqrt(boundedStretch);
   const count = posAttr.count;
 
   for (let i = 0; i < count; i++) {
@@ -268,21 +271,21 @@ export function deformPlanetGeometryForSpaghettification(
     // Coordenada longitudinal normalizada en [-1, 1] a lo largo del vector de marea (+X apunta al Agujero Negro)
     const nx = Math.max(-1, Math.min(1, bx * rInv));
 
-    // Asimetría relativista: el extremo más cercano al horizonte de sucesos (nx > 0) sufre mayor gradiente GM/r³
-    const frontPull = nx >= 0 ? 1.0 + effectivePinch * 0.65 * nx * nx : 1.0 + effectivePinch * 0.28 * nx * nx;
-    const longitudinalScale = (1.0 + (stretchFactor - 1.0) * 0.42) * frontPull;
+    // Asimetría relativista suave (forma de gota / lágrima de Roche hacia el horizonte de sucesos)
+    const frontPull = nx >= 0 ? 1.0 + effectivePinch * 0.24 * nx * nx : 1.0 + effectivePinch * 0.1 * nx * nx;
+    const longitudinalScale = Math.min(2.08, boundedStretch * frontPull);
 
-    // Estricción transversal (necking) en el centro y afilamiento en las puntas del filamento de espaguetización
-    const necking = 1.0 - effectivePinch * 0.48 * Math.exp(-nx * nx * 3.2);
-    const tipTaper = 1.0 - effectivePinch * 0.35 * Math.pow(Math.abs(nx), 1.6);
+    // Compresión transversal conservando volumen + ligero cuello de marea sin convertir el planeta en una aguja
+    const necking = Math.max(0.48, baseTransverse * (1.0 - effectivePinch * 0.22 * Math.exp(-nx * nx * 2.6)));
+    const tipTaper = 1.0 - effectivePinch * 0.16 * Math.pow(Math.abs(nx), 1.8);
     const ripple =
-      effectivePinch > 0.15
-        ? Math.sin(nx * 7.5 - timeSec * 10.0) * 0.08 * effectivePinch * baseRadius
+      effectivePinch > 0.2
+        ? Math.sin(nx * 6.0 - timeSec * 8.0) * 0.035 * effectivePinch * baseRadius
         : 0;
 
-    arr[idx] = bx * longitudinalScale + effectivePinch * 0.22 * baseRadius * (nx * nx * Math.sign(nx));
-    arr[idx + 1] = by * necking * tipTaper + ripple * 0.5;
-    arr[idx + 2] = bz * necking * tipTaper - ripple * 0.5;
+    arr[idx] = bx * longitudinalScale + effectivePinch * 0.08 * baseRadius * (nx * nx * Math.sign(nx));
+    arr[idx + 1] = by * necking * tipTaper + ripple * 0.4;
+    arr[idx + 2] = bz * necking * tipTaper - ripple * 0.4;
   }
 
   posAttr.needsUpdate = true;

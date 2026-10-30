@@ -234,7 +234,17 @@ test('Binary Black Holes preset, 3D Tidal Spaghettification across Schwarzschild
     maxLongitudinalX = Math.max(maxLongitudinalX, Math.abs(posAttr.getX(i)));
   }
   assert.ok(maxLongitudinalX > 1.15 * 1.8);
+  // Regression check: never allow a planet mesh to stretch into a giant spike (> 2.3x base radius)
+  assert.ok(maxLongitudinalX < 1.15 * 2.3);
   assert.ok(computeSchwarzschildRadius(780, 1.0, true) >= 4.4);
+  assert.ok(computeSchwarzschildRadius(11000, 1.0, true) <= 6.8);
+
+  // Regression check: converting Sun to a heavy Black Hole (e.g. 4.5 M☉) keeps Earth (r=16) outside r_s
+  const heavyBhSystem = scaleCentralBodyMass(createSpacePreset('solar', 1.0, 1.0), 4.5, true);
+  const heavyRelMetrics = computeRelativisticAndTidalMetrics(heavyBhSystem, 1.0);
+  assert.equal(heavyRelMetrics.isCrossingSchwarzschild, false);
+  assert.ok(heavyRelMetrics.horizonDistanceRatio > 2.0);
+  assert.ok(heavyRelMetrics.maxTidalStretch <= 1.25);
 
   // Verificar creador de planetas con clic en el plano orbital 3D (y = 0)
   const withSpawned = spawnCustomPlanetOnPlane(binaryBodies, 19.5, -14.0, 1.2, 1.0);

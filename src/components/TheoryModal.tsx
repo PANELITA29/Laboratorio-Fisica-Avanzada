@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, X, Zap, GitMerge, AlertTriangle, Orbit, Lightbulb } from 'lucide-react';
+import { BookOpen, X, Zap, GitMerge, AlertTriangle, Orbit, Lightbulb, FlaskConical } from 'lucide-react';
 import { Language } from '../assets/js/i18n';
 
 interface TheoryModalProps {
@@ -8,7 +8,7 @@ interface TheoryModalProps {
   lang: Language;
 }
 
-type TheoryTab = 'ohm' | 'kirchhoff' | 'topologies' | 'faults' | 'kepler' | 'analogies';
+type TheoryTab = 'ohm' | 'kirchhoff' | 'topologies' | 'faults' | 'kepler' | 'chemistry' | 'analogies';
 
 export const TheoryModal: React.FC<TheoryModalProps> = ({ isOpen, onClose, lang }) => {
   const [activeTab, setActiveTab] = useState<TheoryTab>('ohm');
@@ -21,7 +21,8 @@ export const TheoryModal: React.FC<TheoryModalProps> = ({ isOpen, onClose, lang 
     { id: 'topologies', labelEs: '3. Topologías 3D', labelEn: '3. 3D Topologies', icon: <BookOpen className="w-3.5 h-3.5" /> },
     { id: 'faults', labelEs: '4. Modos de Falla', labelEn: '4. Fault Modes', icon: <AlertTriangle className="w-3.5 h-3.5" /> },
     { id: 'kepler', labelEs: '5. Kepler y Hohmann', labelEn: '5. Kepler & Hohmann', icon: <Orbit className="w-3.5 h-3.5" /> },
-    { id: 'analogies', labelEs: '6. Analogías Hidráulicas', labelEn: '6. Hydraulic Analogies', icon: <Lightbulb className="w-3.5 h-3.5" /> },
+    { id: 'chemistry', labelEs: '6. Estequiometría y PV=nRT', labelEn: '6. Stoichiometry & PV=nRT', icon: <FlaskConical className="w-3.5 h-3.5" /> },
+    { id: 'analogies', labelEs: '7. Analogías Hidráulicas', labelEn: '7. Hydraulic Analogies', icon: <Lightbulb className="w-3.5 h-3.5" /> },
   ];
 
   return (
@@ -231,6 +232,34 @@ export const TheoryModal: React.FC<TheoryModalProps> = ({ isOpen, onClose, lang 
                   <p>
                     La <strong>Transferencia de Hohmann</strong> conecta dos órbitas circulares <span className="font-mono">r₁ → r₂</span> mediante una semielipse tangente con semieje <span className="font-mono text-white">a_trans = (r₁ + r₂)/2</span> aplicando dos impulsos <span className="font-mono text-emerald-300">Δv₁</span> y <span className="font-mono text-emerald-300">Δv₂</span>.
                   </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'chemistry' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl bg-[#0F172A] border border-purple-500/30 space-y-2">
+                  <span className="text-[11px] font-mono text-purple-400 uppercase">ESTEQUIOMETRÍA Y TERMOQUÍMICA</span>
+                  <h3 className="text-sm font-bold text-white">Reactivo Limitante, Avance (ξ) y Entalpía (ΔH°)</h3>
+                  <p>
+                    En toda ecuación química balanceada <span className="font-mono text-white">ν_A A + ν_B B → ν_C C + ν_D D</span>, el <strong>reactivo limitante</strong> es aquel con menor cociente estequiométrico <span className="font-mono text-purple-300">ξ = min(n_A/ν_A, n_B/ν_B)</span> y determina el calor liberado:
+                  </p>
+                  <div className="p-2.5 rounded-lg bg-[#07090E] border border-slate-800 font-mono text-purple-300 text-center">
+                    Q_reacción = ξ · (-ΔH°)   |   pH = -log₁₀[H₃O⁺]
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-[#0F172A] border border-pink-500/30 space-y-2">
+                  <span className="text-[11px] font-mono text-pink-400 uppercase">TEORÍA CINÉTICA DE LOS GASES</span>
+                  <h3 className="text-sm font-bold text-white">Ley de Gases Ideales y Rapidez de Maxwell-Boltzmann</h3>
+                  <p>
+                    La presión macroscópica <span className="font-mono text-white">P</span> resulta de las colisiones elásticas de <span className="font-mono text-white">n</span> moles de partículas contra las paredes del cilindro de volumen <span className="font-mono text-white">V</span> a temperatura absoluta <span className="font-mono text-white">T</span>:
+                  </p>
+                  <div className="p-2.5 rounded-lg bg-[#07090E] border border-slate-800 font-mono text-pink-300 text-center">
+                    P · V = n · R · T   |   v_rms = √(3 · R · T / M)
+                  </div>
                 </div>
               </div>
             </div>

@@ -1652,7 +1652,7 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
           <div className="flex items-center gap-2.5">
             <Flame className="w-5 h-5 text-orange-400 shrink-0" />
             <span>
-              <strong>¡Sobrecarga Térmica 3D por Efecto Joule ($P = I^2 \cdot R &gt; 5.0\text{ W}$)!</strong> Las resistencias sobrecargadas brillan al rojo vivo y emiten chispas balísticas 3D y humo térmico.
+              <strong>¡Sobrecarga Térmica 3D por Efecto Joule (P = I² · R &gt; 5.0 W)!</strong> Las resistencias sobrecargadas brillan al rojo vivo y emiten chispas balísticas 3D y humo térmico.
             </span>
           </div>
           <button

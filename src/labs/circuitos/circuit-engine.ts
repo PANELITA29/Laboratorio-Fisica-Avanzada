@@ -615,6 +615,7 @@ export interface BranchAnalyticalRow {
   current: number;
   power: number;
   isBurnedOut: boolean;
+  isOverloaded: boolean;
   brightness: number;
 }
 
@@ -704,6 +705,7 @@ export function analyzeWorkbenchCircuit(
         current: 0,
         power: 0,
         isBurnedOut: false,
+        isOverloaded: false,
         brightness: 0,
       };
     }
@@ -718,6 +720,7 @@ export function analyzeWorkbenchCircuit(
         : fault === 'SHORT' || isWireBranch
         ? 0
         : comp.resistance;
+    const branchPower = st ? st.power : 0;
 
     return {
       branchId,
@@ -730,8 +733,9 @@ export function analyzeWorkbenchCircuit(
       faultState: fault,
       voltageDrop: st ? Math.abs(st.voltageDrop) : 0,
       current: st ? Math.abs(st.current) : 0,
-      power: st ? st.power : 0,
+      power: branchPower,
       isBurnedOut: isBurned,
+      isOverloaded: branchPower > 5.0 && !isBurned,
       brightness: st ? st.brightness : 0,
     };
   };

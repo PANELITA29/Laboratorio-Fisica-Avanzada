@@ -60,6 +60,7 @@ export const LabQRCodeModal: React.FC<LabQRCodeModalProps> = ({ isOpen, onClose,
     { label: 'Gravitación 3D', url: `${DEPLOYMENT_BASE_URL}/?lab=space` },
     { label: 'Oscilaciones RK4', url: `${DEPLOYMENT_BASE_URL}/?lab=mechanics` },
     { label: 'Cinemática 2D', url: `${DEPLOYMENT_BASE_URL}/?lab=kinematics` },
+    { label: 'Química 3D', url: `${DEPLOYMENT_BASE_URL}/?lab=chemistry` },
   ];
 
   return (

@@ -1,7 +1,7 @@
 import React from 'react';
 import './LabCoverIcons.css';
 
-export type LabId = 'circuits' | 'space' | 'mechanics' | 'kinematics';
+export type LabId = 'circuits' | 'space' | 'mechanics' | 'kinematics' | 'chemistry';
 
 export interface LabTheme {
   primary: string;
@@ -59,6 +59,17 @@ export const LAB_THEMES: Record<LabId, LabTheme> = {
     gradient: 'from-emerald-500/25 via-teal-900/30 to-slate-950/80',
     accentHex: '#10b981',
     secondaryHex: '#34d399',
+  },
+  chemistry: {
+    primary: 'text-purple-400',
+    glow: 'rgba(168, 85, 247, 0.45)',
+    border: 'border-purple-500/40',
+    borderLight: 'border-purple-400/60',
+    bgBadge: 'bg-purple-950/80',
+    badgeText: 'text-purple-300',
+    gradient: 'from-purple-500/25 via-fuchsia-900/30 to-slate-950/80',
+    accentHex: '#a855f7',
+    secondaryHex: '#ec4899',
   },
 };
 
@@ -287,6 +298,55 @@ export const KinematicsLabIcon: React.FC<{ size?: number; className?: string }> 
 );
 
 /**
+ * Icono Ilustrado de Química 3D: Reactor Erlenmeyer, Enlaces Moleculares y Gases PV=nRT
+ */
+export const ChemistryLabIcon: React.FC<{ size?: number; className?: string }> = ({
+  size = 24,
+  className = '',
+}) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 32 32"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={`lab-icon-svg inline-block ${className}`}
+  >
+    <defs>
+      <linearGradient id="chem-liq" x1="8" y1="18" x2="24" y2="27" gradientUnits="userSpaceOnUse">
+        <stop stopColor="#c084fc" />
+        <stop offset="0.5" stopColor="#ec4899" />
+        <stop offset="1" stopColor="#7e22ce" />
+      </linearGradient>
+      <filter id="chem-glow" x="-20%" y="-20%" width="140%" height="140%">
+        <feGaussianBlur stdDeviation="1.1" result="blur" />
+        <feComposite in="SourceGraphic" in2="blur" operator="over" />
+      </filter>
+    </defs>
+    {/* Chasis exterior */}
+    <rect x="2" y="2" width="28" height="28" rx="8" stroke="#a855f7" strokeWidth="1.2" strokeOpacity="0.45" />
+    {/* Matraz Erlenmeyer de borosilicato */}
+    <path
+      d="M 13 6 H 19 M 14 6 V 11.5 L 7.5 23.5 C 6.8 24.8 7.7 26.5 9.2 26.5 H 22.8 C 24.3 26.5 25.2 24.8 24.5 23.5 L 18 11.5 V 6"
+      stroke="#e9d5ff"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Solución reactiva exotérmica con menisco */}
+    <path
+      d="M 9.6 20.5 Q 16 19.2 22.4 20.5 L 23.7 23.5 C 24.1 24.4 23.5 25.4 22.4 25.4 H 9.6 C 8.5 25.4 7.9 24.4 8.3 23.5 L 9.6 20.5 Z"
+      fill="url(#chem-liq)"
+      filter="url(#chem-glow)"
+    />
+    {/* Burbujas de gas desprendiéndose y átomos en colisión */}
+    <circle cx="14" cy="17.5" r="1.4" fill="#38bdf8" filter="url(#chem-glow)" />
+    <circle cx="17.8" cy="15" r="1.2" fill="#f472b6" />
+    <circle cx="15.5" cy="9.5" r="1.3" fill="#4ade80" filter="url(#chem-glow)" />
+  </svg>
+);
+
+/**
  * Renderizador de Icono Ilustrado según módulo
  */
 export const LabCoverIcon: React.FC<{
@@ -303,6 +363,8 @@ export const LabCoverIcon: React.FC<{
       return <MechanicsLabIcon size={size} className={className} />;
     case 'kinematics':
       return <KinematicsLabIcon size={size} className={className} />;
+    case 'chemistry':
+      return <ChemistryLabIcon size={size} className={className} />;
     default:
       return <CircuitsLabIcon size={size} className={className} />;
   }

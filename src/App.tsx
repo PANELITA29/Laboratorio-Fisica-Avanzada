@@ -24,6 +24,7 @@ import {
   ChevronLeft,
   ChevronRight,
   LayoutGrid,
+  FlaskConical,
 } from 'lucide-react';
 import { Language, dictionary } from './assets/js/i18n';
 import { audioSynth } from './assets/js/audio-synth';
@@ -42,6 +43,7 @@ import { CircuitLabView } from './labs/circuitos/CircuitLabView';
 import { SpaceLabView } from './labs/espacio-3d/SpaceLabView';
 import { MechanicsLabView } from './labs/mecanica-3d/MechanicsLabView';
 import { KinematicsLabView } from './labs/cinematica/KinematicsLabView';
+import { ChemistryLabView } from './labs/quimica-3d/ChemistryLabView';
 import {
   useLabGlobalStore,
   ActiveModuleView,
@@ -74,7 +76,7 @@ export default function App() {
   const [isColorCodeModalOpen, setIsColorCodeModalOpen] = useState<boolean>(false);
   const [isQRModalOpen, setIsQRModalOpen] = useState<boolean>(false);
   const [selectedObjectivesModule, setSelectedObjectivesModule] = useState<
-    'circuits' | 'space' | 'mechanics' | 'kinematics' | null
+    'circuits' | 'space' | 'mechanics' | 'kinematics' | 'chemistry' | null
   >(null);
   const [currentFrontLabIndex, setCurrentFrontLabIndex] = useState<number>(0);
   const cardSwapRef = useRef<CardSwapRef | null>(null);
@@ -263,6 +265,18 @@ export default function App() {
             </button>
             <button
               type="button"
+              data-testid="nav-tab-chemistry"
+              onClick={() => selectModuleView('chemistry')}
+              className={`min-h-[2.75rem] px-3 rounded-lg instrument-transition whitespace-nowrap shrink-0 cursor-pointer flex items-center ${
+                activeView === 'chemistry'
+                  ? 'text-cyan-300 font-semibold bg-slate-900 border border-slate-700'
+                  : 'hover:text-white'
+              }`}
+            >
+              Química 3D
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 setIsTheoryModalOpen(true);
                 setIsMobileMenuOpen(false);
@@ -378,6 +392,18 @@ export default function App() {
               </button>
               <button
                 type="button"
+                onClick={() => selectModuleView('chemistry')}
+                className={`min-h-[2.75rem] px-3.5 py-2.5 rounded-lg text-left text-xs font-semibold flex items-center justify-between instrument-transition cursor-pointer ${
+                  activeView === 'chemistry'
+                    ? 'bg-slate-900 text-cyan-300 border border-cyan-500/50'
+                    : 'bg-[#0C111D] text-slate-200 border border-slate-800'
+                }`}
+              >
+                <span>Química Computacional 3D</span>
+                <span className="text-[10px] font-mono text-slate-400">MOD-05</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   setIsTheoryModalOpen(true);
                   setIsMobileMenuOpen(false);
@@ -459,7 +485,7 @@ export default function App() {
                   <div className="flex items-center justify-between text-[11px]">
                     <span className="text-slate-400">{translations.scoreLabel}:</span>
                     <span className="text-amber-300 font-bold tabular-nums">
-                      {totalScore} PTS ({verifiedChallengesCount}/6 retos)
+                      {totalScore} PTS ({verifiedChallengesCount}/9 retos)
                     </span>
                   </div>
                 </div>
@@ -613,6 +639,18 @@ export default function App() {
                     }`}
                   >
                     {lang === 'es' ? 'Cinemática 2D' : '2D Kinematics'}
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="filter-chemistry"
+                    onClick={() => setCategoryFilter('chemistry')}
+                    className={`min-h-[2.375rem] px-3.5 py-1.5 rounded-lg text-[11px] font-mono font-semibold whitespace-nowrap instrument-transition cursor-pointer ${
+                      categoryFilter === 'chemistry'
+                        ? 'bg-cyan-400 text-slate-950 shadow-md shadow-cyan-500/20'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                  >
+                    {lang === 'es' ? 'Química 3D' : '3D Chemistry'}
                   </button>
                 </div>
               </div>
@@ -901,6 +939,63 @@ export default function App() {
                       <text x="264" y="118" fill="#fde68a" fontSize="10" fontFamily="JetBrains Mono, monospace" fontWeight="bold">Impacto (x_f)</text>
                     </svg>
                   )
+                },
+                {
+                  id: 'chemistry' as const,
+                  code: 'MOD-05',
+                  number: '05',
+                  title:
+                    lang === 'es'
+                      ? 'Laboratorio de Química Computacional 3D: Estequiometría y Gases PV=nRT'
+                      : '3D Computational Chemistry Lab: Stoichiometry & PV=nRT Gases',
+                  subtitle:
+                    lang === 'es'
+                      ? 'Reactor Termoquímico ΔH° · Gases Ideales y Van der Waals'
+                      : 'ΔH° Thermochemical Reactor · Ideal & Van der Waals Gases',
+                  solver: 'Lavoisier + Maxwell-Boltzmann',
+                  category: 'chemistry' as const,
+                  icon: FlaskConical,
+                  accentColor: '#a855f7',
+                  equationsHeader: 'P·V = n·R·T · ξ = min(n_i / ν_i)',
+                  equationsFooter: 'Q = ξ·|ΔH°| · v_rms = √(3RT / M)',
+                  description:
+                    lang === 'es'
+                      ? 'Reactor de borosilicato 3D con 5 ecuaciones químicas balanceadas, reactivo limitante, indicador universal de pH Yamada, detonaciones exotérmicas y cámara de gases ideales PV=nRT con pistón móvil.'
+                      : '3D borosilicate reactor with 5 balanced chemical equations, limiting reactant, Yamada universal pH indicator, exothermic detonations, and PV=nRT ideal gas chamber with movable piston.',
+                  badges: ['5 Reacciones Reales', 'Cámara PV=nRT 3D', 'Explosión Térmica'],
+                  extraBadge: lang === 'es' ? 'Indicador pH 0–14' : 'pH 0–14 Indicator',
+                  playBtnText: lang === 'es' ? 'Iniciar Laboratorio' : 'Start Laboratory',
+                  objectivesBtnText: translations.card1ObjectivesBtn,
+                  svgRender: (
+                    <svg viewBox="0 0 420 160" className="w-full h-full px-4 py-2">
+                      <rect x="10" y="10" width="400" height="140" rx="10" fill="#080814" stroke="#1e293b" strokeWidth="1" />
+                      {/* Matraz Erlenmeyer izquierdo */}
+                      <path
+                        d="M 88 38 L 112 38 L 112 62 L 142 122 L 58 122 L 88 62 Z"
+                        fill="#1e1b4b"
+                        stroke="#a855f7"
+                        strokeWidth="2"
+                      />
+                      <path d="M 66 105 L 134 105 L 140 120 L 60 120 Z" fill="#10b981" opacity="0.85" />
+                      <circle cx="92" cy="95" r="3.5" fill="#38bdf8" />
+                      <circle cx="108" cy="86" r="4.5" fill="#f472b6" />
+                      <circle cx="99" cy="72" r="3" fill="#c084fc" />
+                      <text x="58" y="138" fill="#d8b4fe" fontSize="9" fontFamily="monospace">
+                        2Na + 2H₂O → 2NaOH + H₂↑
+                      </text>
+                      {/* Cilindro de gas derecho */}
+                      <rect x="245" y="34" width="110" height="88" rx="6" fill="#0f172a" stroke="#38bdf8" strokeWidth="1.8" />
+                      <rect x="249" y="48" width="102" height="10" fill="#22d3ee" />
+                      <line x1="300" y1="22" x2="300" y2="48" stroke="#94a3b8" strokeWidth="5" />
+                      <circle cx="272" cy="78" r="4" fill="#38bdf8" />
+                      <circle cx="315" cy="92" r="4.5" fill="#f59e0b" />
+                      <circle cx="292" cy="104" r="4" fill="#a855f7" />
+                      <circle cx="332" cy="74" r="3.5" fill="#34d399" />
+                      <text x="252" y="138" fill="#7dd3fc" fontSize="9" fontFamily="monospace">
+                        PV = nRT · v_rms
+                      </text>
+                    </svg>
+                  ),
                 }
               ];
 
@@ -1015,7 +1110,7 @@ export default function App() {
                           verticalDistance={20}
                           depth={85}
                           skewAmount={0}
-                          visibleCards={Math.min(4, visibleModules.length)}
+                          visibleCards={Math.min(5, visibleModules.length)}
                           delay={4500}
                           speed={1.5}
                           bounce={0.22}
@@ -1345,6 +1440,15 @@ export default function App() {
             onCompleteChallenge={registerCompletedChallenge}
           />
         )}
+
+        {activeView === 'chemistry' && (
+          <ChemistryLabView
+            lang={lang}
+            onUpdateTelemetry={setActiveTelemetry}
+            completedChallenges={completedChallenges}
+            onCompleteChallenge={registerCompletedChallenge}
+          />
+        )}
       </main>
 
       {selectedObjectivesModule && (
@@ -1366,6 +1470,10 @@ export default function App() {
                     ? lang === 'es'
                       ? 'Objetivos Técnicos — Cinemática y Balística 2D'
                       : 'Technical Objectives — 2D Kinematics & Ballistics'
+                    : selectedObjectivesModule === 'chemistry'
+                    ? lang === 'es'
+                      ? 'Objetivos Técnicos — Química Computacional 3D y Gases PV=nRT'
+                      : 'Technical Objectives — 3D Computational Chemistry & PV=nRT Gases'
                     : lang === 'es'
                     ? 'Objetivos Técnicos — Oscilaciones y Ondas RK4'
                     : 'Technical Objectives — RK4 Oscillations & Waves'}
@@ -1392,6 +1500,13 @@ export default function App() {
                     'Analizar la desviación de la parábola ideal bajo arrastre cuadrático de Rayleigh F_d = -½ρ·Cd·A·|v_rel|·v_rel y viento.',
                     'Inspeccionar la transformación entre energía cinética Ec, potencial Ep y disipación térmica con la Sonda de Telemetría.',
                     'Resolver retos de artillería balística calculando ángulo θ, altura inicial h₀ y velocidad v₀ para impactar la diana.',
+                  ]
+                : selectedObjectivesModule === 'chemistry'
+                ? [
+                    'Determinar el reactivo limitante, el reactivo en exceso y el avance molar ξ = min(n_A/ν_A, n_B/ν_B) en 5 reacciones químicas reales.',
+                    'Titular ácido fuerte (HCl) y base fuerte (NaOH) hasta alcanzar la neutralización exacta pH = 7.00 con el indicador universal de Yamada.',
+                    'Analizar la entalpía exotérmica ΔH°, la reducción catalítica de la energía de activación E_a y la sobrecarga térmica explosiva 3D.',
+                    'Experimentar con la ecuación de estado PV = nRT, la corrección real de Van der Waals y la distribución molecular de Maxwell-Boltzmann v_rms.',
                   ]
                 : [
                     'Verificar el período del péndulo T = 2π √(L / g) bajo aceleraciones gravitatorias de la Luna, Marte, Tierra y Júpiter.',

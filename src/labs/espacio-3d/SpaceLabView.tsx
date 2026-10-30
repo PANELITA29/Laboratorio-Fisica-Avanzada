@@ -717,16 +717,16 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
       grp.userData.basePositions = new Float32Array(posAttr.array as Float32Array);
       grp.add(coreMesh);
 
-      // 2) Malla Wireframe Relativista superpuesta que hace evidente la deformación de los polígonos 3D (espaguetización)
+      // 2) Malla Wireframe Relativista sutil del color del planeta para apreciar la topología sin saturar de amarillo
       const wireOverlayMat = new THREE.MeshBasicMaterial({
-        color: 0xfef08a,
+        color: b.color,
         transparent: true,
-        opacity: 0.22,
+        opacity: 0.14,
         wireframe: true,
         depthWrite: false,
       });
       const wireOverlayMesh = new THREE.Mesh(coreGeo, wireOverlayMat);
-      wireOverlayMesh.scale.setScalar(1.015);
+      wireOverlayMesh.scale.setScalar(1.012);
       grp.add(wireOverlayMesh);
 
       // 3) Halo atmosférico o corona
@@ -737,6 +737,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
         depthWrite: false,
       });
       const haloMesh = new THREE.Mesh(new THREE.SphereGeometry(b.radius * 1.28, 20, 20), haloMat);
+      grp.userData.haloMesh = haloMesh;
       grp.add(haloMesh);
 
       // 4) Anillo ecuatorial / marcador polar
@@ -750,6 +751,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
         opacity: 0.55,
       });
       const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+      grp.userData.ringMesh = ringMesh;
       grp.add(ringMesh);
 
       return grp;
@@ -1192,15 +1194,29 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
         vis.group.position.set(b.position.x, b.position.y, b.position.z);
 
         const tidal = relMetrics.tidalByBodyId[b.id];
+        const haloMesh = vis.group.userData.haloMesh as THREE.Mesh | undefined;
+        const ringMesh = vis.group.userData.ringMesh as THREE.Mesh | undefined;
+
         if (tidal && tidal.stretchFactor > 1.04 && !b.isBlackHole && !b.isFixed) {
-          // Espaguetización 3D: alinear eje X del grupo hacia el Agujero Negro y aplicar deformación de malla BufferGeometry + escala tensorial
+          // Espaguetización 3D: orientar el eje +X hacia el Agujero Negro y deformar únicamente los vértices
+          // de la esfera sin duplicar vis.group.scale (evitando que el planeta se convierta en una aguja gigante).
           _tidalAxis.set(tidal.dirX, tidal.dirY, tidal.dirZ).normalize();
           vis.group.quaternion.setFromUnitVectors(_unitX, _tidalAxis);
-          vis.group.scale.set(
-            1.0 + (tidal.stretchFactor - 1.0) * 0.65,
-            tidal.transverseScale,
-            tidal.transverseScale
-          );
+
+          // Al cruzar dentro de r <= r_s, contraer gradualmente la escala global hacia el horizonte de sucesos
+          const horizonShrink = tidal.crossedSchwarzschild
+            ? Math.max(0.48, Math.min(1.0, 0.38 + 0.62 * tidal.distanceToHorizonRatio))
+            : 1.0;
+          vis.group.scale.setScalar(horizonShrink);
+
+          if (haloMesh) {
+            const visualStretch = Math.min(1.65, 1.0 + (tidal.stretchFactor - 1.0) * 0.22);
+            const invStretch = 1.0 / Math.sqrt(visualStretch);
+            haloMesh.scale.set(visualStretch, invStretch, invStretch);
+          }
+          if (ringMesh) {
+            ringMesh.visible = tidal.vertexPinchIntensity < 0.45;
+          }
 
           if (vis.deformableMesh && vis.basePositions) {
             deformPlanetGeometryForSpaghettification(
@@ -1220,11 +1236,11 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
             vis.deformableMat.emissive.setHex(
               tidal.crossedSchwarzschild ? 0xf43f5e : heatRatio > 0.25 ? 0xf97316 : 0x000000
             );
-            vis.deformableMat.emissiveIntensity = 0.15 + heatRatio * 2.2;
+            vis.deformableMat.emissiveIntensity = 0.15 + heatRatio * 1.85;
           }
 
-          // Filamento de acreción de plasma arrancado del cuerpo espaguetizado hacia el horizonte del Agujero Negro Binario
-          if (vis.tidalStreamLine && vis.tidalStreamPositions && tidal.distanceToHorizonRatio <= 1.55) {
+          // Filamento de acreción de plasma arrancado del cuerpo espaguetizado hacia el horizonte del Agujero Negro
+          if (vis.tidalStreamLine && vis.tidalStreamPositions && tidal.distanceToHorizonRatio <= 1.45) {
             vis.tidalStreamLine.visible = true;
             const streamArr = vis.tidalStreamPositions;
             const ax = tidal.attractorPosition.x;
@@ -1233,7 +1249,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
             for (let k = 0; k < TIDAL_STREAM_POINTS; k++) {
               const u = k / (TIDAL_STREAM_POINTS - 1);
               const spiralPhase = u * 8.5 - timeSec * 11.0;
-              const spiralAmp = (1.0 - u) * 0.45 * b.radius * tidal.vertexPinchIntensity;
+              const spiralAmp = (1.0 - u) * 0.35 * b.radius * tidal.vertexPinchIntensity;
               streamArr[k * 3] =
                 b.position.x + (ax - b.position.x) * u + Math.cos(spiralPhase) * spiralAmp;
               streamArr[k * 3 + 1] =
@@ -1249,7 +1265,15 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
           }
         } else {
           vis.group.scale.set(1, 1, 1);
+          vis.group.rotation.x = 0;
+          vis.group.rotation.z = 0;
           vis.group.rotation.y += b.isBlackHole ? 0.045 : 0.012;
+          if (haloMesh) {
+            haloMesh.scale.set(1, 1, 1);
+          }
+          if (ringMesh) {
+            ringMesh.visible = true;
+          }
           if (vis.wasDeformed && vis.deformableMesh && vis.basePositions) {
             deformPlanetGeometryForSpaghettification(
               vis.deformableMesh.geometry,

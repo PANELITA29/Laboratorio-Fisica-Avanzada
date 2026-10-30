@@ -430,6 +430,73 @@ class ProceduralAudioSynth {
     osc.start(now);
     osc.stop(now + 0.35);
   }
+
+  /**
+   * Efervescencia / burbujeo químico para desprendimiento de gas (H2, O2) en el Reactor 3D
+   */
+  public playChemicalBubbling(): void {
+    if (this.isMuted) return;
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const bubbleFreqs = [340, 480, 620, 790];
+    bubbleFreqs.forEach((baseFreq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const t0 = now + i * 0.045;
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(baseFreq, t0);
+      osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.65, t0 + 0.055);
+      gain.gain.setValueAtTime(0.09, t0);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.06);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.065);
+    });
+  }
+
+  /**
+   * Detonación química y fractura de vidrio borosilicato 3D en el Reactor Químico
+   */
+  public playGlassShatterExplosion(): void {
+    if (this.isMuted) return;
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+
+    // 1. Onda de choque exotérmica grave
+    const boomOsc = ctx.createOscillator();
+    const boomGain = ctx.createGain();
+    boomOsc.type = 'sawtooth';
+    boomOsc.frequency.setValueAtTime(165, now);
+    boomOsc.frequency.exponentialRampToValueAtTime(28, now + 0.85);
+    boomGain.gain.setValueAtTime(0.38, now);
+    boomGain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+    boomOsc.connect(boomGain);
+    boomGain.connect(ctx.destination);
+    boomOsc.start(now);
+    boomOsc.stop(now + 0.92);
+
+    // 2. Fragmentos cristalinos de alta frecuencia (cristal borosilicato rompiéndose)
+    const shardFreqs = [2650, 3420, 4180, 3110, 4890];
+    shardFreqs.forEach((freq, idx) => {
+      const shardOsc = ctx.createOscillator();
+      const shardGain = ctx.createGain();
+      const tStart = now + 0.04 + idx * 0.055;
+      shardOsc.type = 'triangle';
+      shardOsc.frequency.setValueAtTime(freq, tStart);
+      shardOsc.frequency.exponentialRampToValueAtTime(freq * 0.72, tStart + 0.12);
+      shardGain.gain.setValueAtTime(0.14, tStart);
+      shardGain.gain.exponentialRampToValueAtTime(0.001, tStart + 0.13);
+      shardOsc.connect(shardGain);
+      shardGain.connect(ctx.destination);
+      shardOsc.start(tStart);
+      shardOsc.stop(tStart + 0.14);
+    });
+  }
 }
 
 export const audioSynth = new ProceduralAudioSynth();

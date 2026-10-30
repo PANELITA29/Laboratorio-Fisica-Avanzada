@@ -156,12 +156,12 @@ export const dictionary: Record<Language, Translations> = {
     unmuteAudio: 'Activar 60Hz',
 
     heroKicker: 'SIMULACIÓN NUMÉRICA DETERMINISTA · WEBGL / CANVAS',
-    heroTitleLine1: 'Laboratorio de Física Computacional',
-    heroTitleLine2: 'Electrodinámica, Gravitación, Oscilaciones y Balística',
-    heroMotto: 'Resolución analítica en tiempo real mediante Leyes de Kirchhoff, Velocity Verlet y Runge-Kutta 4.',
+    heroTitleLine1: 'Laboratorio de Física y Química Computacional',
+    heroTitleLine2: 'Electrodinámica, Gravitación, Oscilaciones, Balística y Química 3D',
+    heroMotto: 'Resolución analítica en tiempo real mediante Leyes de Kirchhoff, Velocity Verlet, Runge-Kutta 4 y PV=nRT.',
     heroDescription:
-      'Cuatro bancos de prueba interactivos sin aproximaciones pregrabadas: análisis nodal DC con efectos térmicos Joule, dinámica orbital N-cuerpos, péndulos acoplados 3D y balística 2D con resistencia aerodinámica.',
-    filterAll: 'Todos (4)',
+      'Cinco bancos de prueba interactivos sin aproximaciones pregrabadas: análisis nodal DC con efectos térmicos Joule, dinámica orbital N-cuerpos, péndulos acoplados 3D, balística 2D y reactor estequiométrico / gases ideales 3D.',
+    filterAll: 'Todos (5)',
     filterCircuits: 'Electrodinámica DC',
     filterSpace: 'Mecánica Celeste',
 
@@ -307,12 +307,12 @@ export const dictionary: Record<Language, Translations> = {
     unmuteAudio: 'Enable 60Hz',
 
     heroKicker: 'DETERMINISTIC NUMERICAL SIMULATION · WEBGL / CANVAS',
-    heroTitleLine1: 'Computational Physics Laboratory',
-    heroTitleLine2: 'Electrodynamics, Gravitation, Oscillations & Ballistics',
-    heroMotto: 'Real-time analytical solving via Kirchhoff Nodal Analysis, Velocity Verlet, and 4th-Order Runge-Kutta.',
+    heroTitleLine1: 'Computational Physics & Chemistry Laboratory',
+    heroTitleLine2: 'Electrodynamics, Gravitation, Oscillations, Ballistics & 3D Chemistry',
+    heroMotto: 'Real-time analytical solving via Kirchhoff Nodal Analysis, Velocity Verlet, 4th-Order Runge-Kutta & PV=nRT.',
     heroDescription:
-      'Four interactive testbenches without pre-baked animations: DC nodal analysis with Joule thermal limits, N-body orbital dynamics, 3D coupled pendulums, and 2D ballistics with aerodynamic drag.',
-    filterAll: 'All (4)',
+      'Five interactive testbenches without pre-baked animations: DC nodal analysis with Joule thermal limits, N-body orbital dynamics, 3D coupled pendulums, 2D ballistics, and 3D stoichiometric reactor / ideal gases.',
+    filterAll: 'All (5)',
     filterCircuits: 'DC Electrodynamics',
     filterSpace: 'Celestial Mechanics',
 

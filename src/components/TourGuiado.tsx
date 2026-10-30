@@ -38,7 +38,7 @@ export interface TourStep {
 }
 
 interface TourGuiadoProps {
-  labId: 'circuits' | 'space' | 'mechanics';
+  labId: 'circuits' | 'space' | 'mechanics' | 'kinematics' | 'chemistry';
   lang: Language;
   steps: TourStep[];
 }

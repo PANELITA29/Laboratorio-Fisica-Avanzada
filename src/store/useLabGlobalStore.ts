@@ -11,9 +11,27 @@ import {
   spawnCustomPlanetOnPlane,
   injectBinarySchwarzschildSpaghettificationProbe,
 } from '../labs/espacio-3d/space-engine';
+import {
+  ChemistryWorkbenchMode,
+  ReactionPresetId,
+  GasSpeciesId,
+  REACTION_PRESETS,
+} from '../labs/quimica-3d/chemistry-engine';
 
-export type ActiveModuleView = 'hub' | 'circuits' | 'space' | 'mechanics' | 'kinematics';
-export type ModuleCategoryFilter = 'all' | 'circuits' | 'space' | 'mechanics' | 'kinematics';
+export type ActiveModuleView =
+  | 'hub'
+  | 'circuits'
+  | 'space'
+  | 'mechanics'
+  | 'kinematics'
+  | 'chemistry';
+export type ModuleCategoryFilter =
+  | 'all'
+  | 'circuits'
+  | 'space'
+  | 'mechanics'
+  | 'kinematics'
+  | 'chemistry';
 
 export interface ExternalResistorSync {
   target: 'R1' | 'R2' | 'R3';
@@ -40,6 +58,23 @@ export interface SpaceLabGlobalState {
   sceneRevision: number;
 }
 
+export interface ChemistryLabGlobalState {
+  mode: ChemistryWorkbenchMode;
+  reactionPreset: ReactionPresetId;
+  molesA: number;
+  molesB: number;
+  reactorTempK: number;
+  stirrerRpm: number;
+  catalystActive: boolean;
+  manualDetonated: boolean;
+  gasSpecies: GasSpeciesId;
+  gasMoles: number;
+  gasTempK: number;
+  gasVolumeLiters: number;
+  gasSparkIgnited: boolean;
+  vesselRevision: number;
+}
+
 export interface LabGlobalStore {
   // Estado global de navegación y plataforma
   lang: Language;
@@ -54,6 +89,9 @@ export interface LabGlobalStore {
 
   // Estado centralizado del Laboratorio de Gravitación 3D
   spaceLab: SpaceLabGlobalState;
+
+  // Estado centralizado del Laboratorio de Química 3D (Módulo 05)
+  chemistryLab: ChemistryLabGlobalState;
 
   // Acciones globales de aplicación
   setLang: (lang: Language) => void;
@@ -88,6 +126,23 @@ export interface LabGlobalStore {
   triggerSpaceCollisionCataclysm: () => void;
   injectSchwarzschildProbe: () => void;
   setSpaceBodies: (bodies: CelestialBody[], bumpRevision?: boolean) => void;
+
+  // Acciones atómicas del Laboratorio de Química 3D (Módulo 05)
+  setChemistryMode: (mode: ChemistryWorkbenchMode) => void;
+  setChemistryReactionPreset: (preset: ReactionPresetId) => void;
+  setChemistryMoles: (params: { molesA?: number; molesB?: number }) => void;
+  setChemistryReactorTemp: (tempK: number) => void;
+  setChemistryStirrerRpm: (rpm: number) => void;
+  setChemistryCatalystActive: (active?: boolean) => void;
+  triggerChemistryDetonation: () => void;
+  resetChemistryReactor: () => void;
+  setChemistryGasSpecies: (species: GasSpeciesId) => void;
+  setChemistryGasParams: (params: {
+    gasMoles?: number;
+    gasTempK?: number;
+    gasVolumeLiters?: number;
+  }) => void;
+  triggerChemistryGasSpark: () => void;
 }
 
 function getInitialActiveView(): ActiveModuleView {
@@ -98,6 +153,8 @@ function getInitialActiveView(): ActiveModuleView {
     if (requestedLab === 'space' || requestedLab === 'espacio-3d') return 'space';
     if (requestedLab === 'mechanics' || requestedLab === 'mecanica-3d') return 'mechanics';
     if (requestedLab === 'kinematics' || requestedLab === 'cinematica') return 'kinematics';
+    if (requestedLab === 'chemistry' || requestedLab === 'quimica' || requestedLab === 'quimica-3d')
+      return 'chemistry';
   }
   return 'hub';
 }
@@ -130,6 +187,23 @@ export const useLabGlobalStore = create<LabGlobalStore>((set) => ({
     showTrails: true,
     bodies: createSpacePreset('solar', 1.0, 1.0),
     sceneRevision: 1,
+  },
+
+  chemistryLab: {
+    mode: 'reactor',
+    reactionPreset: 'alkali-explosion',
+    molesA: REACTION_PRESETS['alkali-explosion'].defaultMolesA,
+    molesB: REACTION_PRESETS['alkali-explosion'].defaultMolesB,
+    reactorTempK: REACTION_PRESETS['alkali-explosion'].defaultTempK,
+    stirrerRpm: 360,
+    catalystActive: false,
+    manualDetonated: false,
+    gasSpecies: 'N2',
+    gasMoles: 2.5,
+    gasTempK: 320,
+    gasVolumeLiters: 12.0,
+    gasSparkIgnited: false,
+    vesselRevision: 1,
   },
 
   setLang: (lang) => set({ lang }),
@@ -380,6 +454,140 @@ export const useLabGlobalStore = create<LabGlobalStore>((set) => ({
         sceneRevision: bumpRevision
           ? state.spaceLab.sceneRevision + 1
           : state.spaceLab.sceneRevision,
+      },
+    })),
+
+  setChemistryMode: (mode) =>
+    set((state) => ({
+      chemistryLab: {
+        ...state.chemistryLab,
+        mode,
+      },
+    })),
+
+  setChemistryReactionPreset: (reactionPreset) =>
+    set((state) => {
+      const presetDef = REACTION_PRESETS[reactionPreset];
+      return {
+        chemistryLab: {
+          ...state.chemistryLab,
+          reactionPreset,
+          molesA: presetDef.defaultMolesA,
+          molesB: presetDef.defaultMolesB,
+          reactorTempK: presetDef.defaultTempK,
+          catalystActive: false,
+          manualDetonated: false,
+          vesselRevision: state.chemistryLab.vesselRevision + 1,
+        },
+      };
+    }),
+
+  setChemistryMoles: (params) =>
+    set((state) => ({
+      chemistryLab: {
+        ...state.chemistryLab,
+        molesA:
+          params.molesA !== undefined
+            ? Math.max(0, Math.min(6.0, params.molesA))
+            : state.chemistryLab.molesA,
+        molesB:
+          params.molesB !== undefined
+            ? Math.max(0, Math.min(6.0, params.molesB))
+            : state.chemistryLab.molesB,
+      },
+    })),
+
+  setChemistryReactorTemp: (reactorTempK) =>
+    set((state) => ({
+      chemistryLab: {
+        ...state.chemistryLab,
+        reactorTempK: Math.max(260, Math.min(1100, reactorTempK)),
+      },
+    })),
+
+  setChemistryStirrerRpm: (stirrerRpm) =>
+    set((state) => ({
+      chemistryLab: {
+        ...state.chemistryLab,
+        stirrerRpm: Math.max(0, Math.min(1200, stirrerRpm)),
+      },
+    })),
+
+  setChemistryCatalystActive: (active) =>
+    set((state) => ({
+      chemistryLab: {
+        ...state.chemistryLab,
+        catalystActive:
+          active !== undefined ? active : !state.chemistryLab.catalystActive,
+      },
+    })),
+
+  triggerChemistryDetonation: () =>
+    set((state) => ({
+      chemistryLab: {
+        ...state.chemistryLab,
+        molesA: Math.max(2.6, state.chemistryLab.molesA),
+        molesB: Math.max(3.2, state.chemistryLab.molesB),
+        reactorTempK: 920,
+        catalystActive: true,
+        manualDetonated: true,
+      },
+    })),
+
+  resetChemistryReactor: () =>
+    set((state) => {
+      const presetDef = REACTION_PRESETS[state.chemistryLab.reactionPreset];
+      return {
+        chemistryLab: {
+          ...state.chemistryLab,
+          molesA: presetDef.defaultMolesA,
+          molesB: presetDef.defaultMolesB,
+          reactorTempK: presetDef.defaultTempK,
+          catalystActive: false,
+          manualDetonated: false,
+          gasMoles: 2.5,
+          gasTempK: 320,
+          gasVolumeLiters: 12.0,
+          gasSparkIgnited: false,
+          vesselRevision: state.chemistryLab.vesselRevision + 1,
+        },
+      };
+    }),
+
+  setChemistryGasSpecies: (gasSpecies) =>
+    set((state) => ({
+      chemistryLab: {
+        ...state.chemistryLab,
+        gasSpecies,
+        gasSparkIgnited: false,
+        vesselRevision: state.chemistryLab.vesselRevision + 1,
+      },
+    })),
+
+  setChemistryGasParams: (params) =>
+    set((state) => ({
+      chemistryLab: {
+        ...state.chemistryLab,
+        gasMoles:
+          params.gasMoles !== undefined
+            ? Math.max(0.2, Math.min(12.0, params.gasMoles))
+            : state.chemistryLab.gasMoles,
+        gasTempK:
+          params.gasTempK !== undefined
+            ? Math.max(120, Math.min(1000, params.gasTempK))
+            : state.chemistryLab.gasTempK,
+        gasVolumeLiters:
+          params.gasVolumeLiters !== undefined
+            ? Math.max(2.0, Math.min(24.0, params.gasVolumeLiters))
+            : state.chemistryLab.gasVolumeLiters,
+      },
+    })),
+
+  triggerChemistryGasSpark: () =>
+    set((state) => ({
+      chemistryLab: {
+        ...state.chemistryLab,
+        gasSparkIgnited: true,
       },
     })),
 }));
