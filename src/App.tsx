@@ -21,6 +21,10 @@ import {
   X,
   Sliders,
   Crosshair,
+  Layers,
+  ChevronLeft,
+  ChevronRight,
+  LayoutGrid,
 } from 'lucide-react';
 import { Language, dictionary } from './assets/js/i18n';
 import { audioSynth } from './assets/js/audio-synth';
@@ -31,6 +35,7 @@ import { TheoryModal } from './components/TheoryModal';
 import { ColorCodeModal } from './components/ColorCodeModal';
 import { LabQRCodeModal, HubQRCodeBanner } from './components/LabQRCodeModal';
 import { ScrollReveal } from './components/QuantumAnimations';
+import CardSwap, { Card, CardSwapRef } from './components/CardSwap';
 import { CircuitLabView } from './labs/circuitos/CircuitLabView';
 import { SpaceLabView } from './labs/espacio-3d/SpaceLabView';
 import { MechanicsLabView } from './labs/mecanica-3d/MechanicsLabView';
@@ -70,6 +75,9 @@ export default function App() {
   const [selectedObjectivesModule, setSelectedObjectivesModule] = useState<
     'circuits' | 'space' | 'mechanics' | 'kinematics' | null
   >(null);
+  const [labDisplayMode, setLabDisplayMode] = useState<'swap' | 'grid'>('swap');
+  const [currentFrontLabIndex, setCurrentFrontLabIndex] = useState<number>(0);
+  const cardSwapRef = useRef<CardSwapRef | null>(null);
 
   const [completedChallenges, setCompletedChallenges] = useState<Record<string, boolean>>({});
   const [totalScore, setTotalScore] = useState<number>(0);
@@ -668,467 +676,569 @@ export default function App() {
               </div>
             </section>
 
-            <section
-              id="labs-3d-grid"
-              aria-label={lang === 'es' ? 'Bancos de Simulación Interactiva' : 'Interactive Simulation Workbenches'}
-              className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch"
-            >
-              {(categoryFilter === 'all' || categoryFilter === 'circuits') && (
-                <ScrollReveal className="h-full flex">
-                  <article className="w-full rounded-xl workbench-panel-interactive flex flex-col justify-between overflow-hidden">
+            {(() => {
+              const labModules = [
+                {
+                  id: 'circuits' as const,
+                  code: 'MOD-01',
+                  number: '01',
+                  title: lang === 'es' ? 'Electrodinámica y Redes DC' : 'DC Electrodynamics & Networks',
+                  subtitle: lang === 'es' ? 'Solver Nodal Matricial · Sandbox Libre' : 'Nodal Matrix Solver · Free Sandbox',
+                  solver: 'Gauss-Seidel / Kirchhoff Nodal',
+                  category: 'circuits' as const,
+                  icon: Zap,
+                  accentColor: '#22d3ee',
+                  equationsHeader: 'V_F = I_T · (R₁ + R₂∥R₃)',
+                  equationsFooter: 'LCK: ∑I = 0 · LVK: ∑ΔV = 0',
+                  description: translations.card1Desc,
+                  badges: translations.card1Badges,
+                  extraBadge: lang === 'es' ? 'Taller Libre de Nodos' : 'Free Node Workshop',
+                  playBtnText: translations.card1PlayBtn,
+                  objectivesBtnText: translations.card1ObjectivesBtn,
+                  svgRender: (
+                    <svg viewBox="0 0 420 160" className="w-full h-full px-6 py-3">
+                      <rect
+                        x="56"
+                        y="24"
+                        width="304"
+                        height="96"
+                        rx="5"
+                        fill="none"
+                        stroke="#475569"
+                        strokeWidth="1.75"
+                      />
+                      <line x1="56" y1="56" x2="56" y2="88" stroke="#070A12" strokeWidth="4" />
+                      <line x1="42" y1="68" x2="70" y2="68" stroke="#22D3EE" strokeWidth="2.5" />
+                      <line x1="48" y1="78" x2="64" y2="78" stroke="#94A3B8" strokeWidth="2" />
+                      <text x="36" y="58" fill="#67E8F9" fontSize="10" fontFamily="JetBrains Mono, monospace">
+                        +V_F
+                      </text>
+                      <rect
+                        x="126"
+                        y="14"
+                        width="58"
+                        height="20"
+                        rx="3"
+                        fill="#0F172A"
+                        stroke="#22D3EE"
+                        strokeWidth="1.75"
+                      />
+                      <rect x="136" y="15" width="5" height="18" fill="#EF4444" />
+                      <rect x="146" y="15" width="5" height="18" fill="#A855F7" />
+                      <rect x="156" y="15" width="5" height="18" fill="#F59E0B" />
+                      <text x="140" y="48" fill="#CBD5E1" fontSize="10" fontFamily="JetBrains Mono, monospace">
+                        R₁ (EIA)
+                      </text>
+                      <line x1="252" y1="24" x2="252" y2="120" stroke="#475569" strokeWidth="1.75" />
+                      <circle cx="252" cy="24" r="3.5" fill="#22D3EE" />
+                      <circle cx="252" cy="120" r="3.5" fill="#22D3EE" />
+                      <rect
+                        x="240"
+                        y="52"
+                        width="24"
+                        height="40"
+                        rx="3"
+                        fill="#0F172A"
+                        stroke="#38BDF8"
+                        strokeWidth="1.75"
+                      />
+                      <text x="270" y="76" fill="#CBD5E1" fontSize="10" fontFamily="JetBrains Mono, monospace">
+                        R₂
+                      </text>
+                      <circle cx="360" cy="72" r="16" fill="#0F172A" stroke="#F59E0B" strokeWidth="2" />
+                      <circle cx="360" cy="72" r="7" fill="#F59E0B" fillOpacity="0.85" />
+                      <text x="314" y="76" fill="#FDE68A" fontSize="10" fontFamily="JetBrains Mono, monospace">
+                        P≤15W
+                      </text>
+                    </svg>
+                  )
+                },
+                {
+                  id: 'space' as const,
+                  code: 'MOD-02',
+                  number: '02',
+                  title: translations.card2Title,
+                  subtitle: lang === 'es' ? 'Integrador Simpléctico Velocity Verlet' : 'Symplectic Velocity Verlet Integrator',
+                  solver: 'Velocity Verlet Simpléctico',
+                  category: 'space' as const,
+                  icon: Orbit,
+                  accentColor: '#38bdf8',
+                  equationsHeader: 'F_g = G·M·m / r² · T² ∝ a³',
+                  equationsFooter: 'v_e = √(2GM/r) · Hohmann Δv',
+                  description: translations.card2Desc,
+                  badges: translations.card2Badges,
+                  extraBadge: lang === 'es' ? 'Transferencia de Hohmann' : 'Hohmann Transfer',
+                  playBtnText: translations.card2PlayBtn,
+                  objectivesBtnText: translations.card2ObjectivesBtn,
+                  svgRender: (
+                    <svg viewBox="0 0 420 160" className="w-full h-full px-6 py-3">
+                      <path d="M 36 112 Q 210 148 384 112" fill="none" stroke="#334155" strokeWidth="1.5" />
+                      <path d="M 76 118 Q 210 142 344 118" fill="none" stroke="#1E293B" strokeWidth="1.25" />
+                      <ellipse
+                        cx="210"
+                        cy="74"
+                        rx="124"
+                        ry="40"
+                        transform="rotate(-9 210 74)"
+                        fill="none"
+                        stroke="#38BDF8"
+                        strokeWidth="1.75"
+                        strokeDasharray="6 4"
+                      />
+                      <ellipse
+                        cx="196"
+                        cy="74"
+                        rx="76"
+                        ry="25"
+                        transform="rotate(-9 196 74)"
+                        fill="none"
+                        stroke="#22D3EE"
+                        strokeWidth="2"
+                      />
+                      <circle cx="176" cy="76" r="17" fill="#F59E0B" />
+                      <circle cx="268" cy="56" r="7" fill="#22D3EE" />
+                      <line x1="268" y1="56" x2="234" y2="62" stroke="#F43F5E" strokeWidth="2" />
+                      <line x1="268" y1="56" x2="280" y2="30" stroke="#10B981" strokeWidth="2" />
+                      <text x="286" y="38" fill="#6EE7B7" fontSize="10" fontFamily="JetBrains Mono, monospace">
+                        v_t
+                      </text>
+                      <text x="222" y="54" fill="#FDA4AF" fontSize="10" fontFamily="JetBrains Mono, monospace">
+                        F_g
+                      </text>
+                    </svg>
+                  )
+                },
+                {
+                  id: 'mechanics' as const,
+                  code: 'MOD-03',
+                  number: '03',
+                  title: lang === 'es' ? 'Osciladores Acoplados, Péndulo de Huygens y Ondas 3D' : 'Coupled Oscillators, Huygens Pendulum & 3D Waves',
+                  subtitle: lang === 'es' ? 'Integrador Runge-Kutta 4to Orden' : '4th-Order Runge-Kutta Integrator',
+                  solver: 'Runge-Kutta 4to Orden (RK4)',
+                  category: 'mechanics' as const,
+                  icon: Activity,
+                  accentColor: '#f59e0b',
+                  equationsHeader: 'θ̈ + (g/L)sin(θ) = 0 · T = 2π√(L/g)',
+                  equationsFooter: 'E_m = K + U = cte',
+                  description:
+                    lang === 'es'
+                      ? 'Integración numérica Runge-Kutta de 4to orden (RK4). Evalúa conservación de energía mecánica E = K + U, transferencia por batimiento armónico, precesión de Foucault e interferencia ondulatoria.'
+                      : '4th-order Runge-Kutta (RK4) numerical integration. Evaluates mechanical energy conservation E = K + U, harmonic beat transfer, Foucault precession, and wave interference.',
+                  badges: ['Runge-Kutta 4', 'Modos Normales', 'E = K + U'],
+                  extraBadge: lang === 'es' ? 'Precesión de Foucault' : 'Foucault Precession',
+                  playBtnText: lang === 'es' ? 'Abrir Banco RK4' : 'Open RK4 Bench',
+                  objectivesBtnText: translations.card1ObjectivesBtn,
+                  svgRender: (
+                    <svg viewBox="0 0 420 160" className="w-full h-full px-6 py-3">
+                      <line x1="96" y1="24" x2="324" y2="24" stroke="#64748B" strokeWidth="3" />
+                      <line x1="158" y1="24" x2="128" y2="104" stroke="#94A3B8" strokeWidth="2" />
+                      <line x1="262" y1="24" x2="292" y2="104" stroke="#94A3B8" strokeWidth="2" />
+                      <path
+                        d="M 142 64 L 166 56 L 188 70 L 210 56 L 232 70 L 254 56 L 278 64"
+                        fill="none"
+                        stroke="#F59E0B"
+                        strokeWidth="2"
+                      />
+                      <circle cx="128" cy="104" r="12" fill="#F59E0B" />
+                      <circle cx="292" cy="104" r="12" fill="#22D3EE" />
+                      <text x="192" y="50" fill="#FDE68A" fontSize="10" fontFamily="JetBrains Mono, monospace">
+                        k_c · Δx
+                      </text>
+                    </svg>
+                  )
+                },
+                {
+                  id: 'kinematics' as const,
+                  code: 'MOD-04',
+                  number: '04',
+                  title: lang === 'es' ? 'Laboratorio de Cinemática: Lanzamiento de Proyectiles & Aerodinámica' : 'Kinematics Lab: Projectile Launch & Aerodynamics',
+                  subtitle: lang === 'es' ? 'Balística RK4 · Entornos Exóticos (g, ρ)' : 'RK4 Ballistics · Exotic Environments (g, ρ)',
+                  solver: 'Runge-Kutta 4 (RK4) + Rayleigh',
+                  category: 'kinematics' as const,
+                  icon: Crosshair,
+                  accentColor: '#10b981',
+                  equationsHeader: 'F_d = -½ρ·C_d·A·|v_rel|·v_rel',
+                  equationsFooter: 'v_t = √(2mg / ρ·C_d·A) · (g, ρ) Libre',
+                  description:
+                    lang === 'es'
+                      ? 'Cañón neumático sobre plataforma hidráulica (0–30 m) con integración RK4 de resistencia cuadrática de Rayleigh, calibración manual de gravedad (g) y densidad (ρ), cámara de vacío de Galileo y 8 proyectiles.'
+                      : 'Pneumatic cannon on a hydraulic platform (0–30 m) with RK4 quadratic Rayleigh drag, manual gravity (g) and air density (ρ) calibration, Galileo vacuum chamber, and 8 payloads.',
+                  badges: ['Arrastre Rayleigh', 'Cámara de Vacío', '8 Proyectiles'],
+                  extraBadge: lang === 'es' ? 'Parámetros (g, ρ) Manuales' : 'Manual (g, ρ) Parameters',
+                  playBtnText: lang === 'es' ? 'Iniciar Laboratorio' : 'Start Laboratory',
+                  objectivesBtnText: translations.card1ObjectivesBtn,
+                  svgRender: (
+                    <svg viewBox="0 0 420 160" className="w-full h-full px-6 py-3">
+                      <line x1="36" y1="118" x2="368" y2="118" stroke="#475569" strokeWidth="2" />
+                      <rect
+                        x="46"
+                        y="82"
+                        width="26"
+                        height="36"
+                        rx="3"
+                        fill="#0F172A"
+                        stroke="#38BDF8"
+                        strokeWidth="1.75"
+                      />
+                      <path
+                        d="M 68 80 Q 204 8 338 118"
+                        fill="none"
+                        stroke="#22D3EE"
+                        strokeWidth="2.25"
+                      />
+                      <path
+                        d="M 68 80 Q 168 32 254 118"
+                        fill="none"
+                        stroke="#F59E0B"
+                        strokeWidth="2.25"
+                        strokeDasharray="6 4"
+                      />
+                      <circle cx="204" cy="44" r="6" fill="#10B981" />
+                      <circle cx="254" cy="118" r="6" fill="#F59E0B" />
+                      <circle cx="338" cy="118" r="6" fill="#EF4444" />
+                      <text x="216" y="42" fill="#6EE7B7" fontSize="10" fontFamily="JetBrains Mono, monospace">
+                        y_max (v_y=0)
+                      </text>
+                      <text x="150" y="96" fill="#FDE68A" fontSize="10" fontFamily="JetBrains Mono, monospace">
+                        Con arrastre ρ
+                      </text>
+                    </svg>
+                  )
+                }
+              ];
+
+              const visibleModules =
+                categoryFilter === 'all'
+                  ? labModules
+                  : labModules.filter((m) => m.category === categoryFilter);
+
+              const activeMod = visibleModules[currentFrontLabIndex % visibleModules.length] || visibleModules[0];
+
+              return (
+                <section
+                  id="labs-presentation-section"
+                  aria-label={lang === 'es' ? 'Bancos de Simulación Interactiva' : 'Interactive Simulation Workbenches'}
+                  className="space-y-4"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
                     <div>
+                      <div className="flex items-center gap-2 text-xs font-mono text-cyan-300">
+                        <Layers className="w-3.5 h-3.5" />
+                        <span>
+                          {lang === 'es' ? 'Catálogo de Laboratorios Numéricos' : 'Numerical Laboratories Catalog'}
+                        </span>
+                      </div>
+                      <h2 className="fluid-title-md font-bold text-white tracking-tight">
+                        {lang === 'es'
+                          ? 'Bancos Experimentales de Física Computacional'
+                          : 'Computational Physics Experimental Workbenches'}
+                      </h2>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
                       <div
-                        onClick={() => selectModuleView('circuits')}
-                        className="relative aspect-[21/9] schematic-grid-bg border-b border-slate-800 flex items-center justify-center cursor-pointer group overflow-hidden"
+                        role="group"
+                        aria-label="Modo de visualización"
+                        className="flex items-center p-1 rounded-xl bg-[#0B101B] border border-slate-800 text-xs font-mono"
                       >
-                        <svg viewBox="0 0 420 160" className="w-full h-full px-6 py-3">
-                          <rect
-                            x="56"
-                            y="24"
-                            width="304"
-                            height="96"
-                            rx="5"
-                            fill="none"
-                            stroke="#475569"
-                            strokeWidth="1.75"
-                          />
-                          <line x1="56" y1="56" x2="56" y2="88" stroke="#070A12" strokeWidth="4" />
-                          <line x1="42" y1="68" x2="70" y2="68" stroke="#22D3EE" strokeWidth="2.5" />
-                          <line x1="48" y1="78" x2="64" y2="78" stroke="#94A3B8" strokeWidth="2" />
-                          <text x="36" y="58" fill="#67E8F9" fontSize="10" fontFamily="JetBrains Mono, monospace">
-                            +V_F
-                          </text>
+                        <button
+                          type="button"
+                          onClick={() => setLabDisplayMode('swap')}
+                          className={`min-h-[2rem] px-3 py-1 rounded-lg flex items-center gap-1.5 instrument-transition cursor-pointer ${
+                            labDisplayMode === 'swap'
+                              ? 'bg-cyan-400 text-slate-950 font-bold shadow-md shadow-cyan-500/20'
+                              : 'text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          <Layers className="w-3.5 h-3.5" />
+                          <span>{lang === 'es' ? 'Baraja 3D' : '3D Deck'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLabDisplayMode('grid')}
+                          className={`min-h-[2rem] px-3 py-1 rounded-lg flex items-center gap-1.5 instrument-transition cursor-pointer ${
+                            labDisplayMode === 'grid'
+                              ? 'bg-cyan-400 text-slate-950 font-bold shadow-md shadow-cyan-500/20'
+                              : 'text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          <LayoutGrid className="w-3.5 h-3.5" />
+                          <span>{lang === 'es' ? 'Cuadrícula' : 'Grid'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
 
-                          <rect
-                            x="126"
-                            y="14"
-                            width="58"
-                            height="20"
-                            rx="3"
-                            fill="#0F172A"
-                            stroke="#22D3EE"
-                            strokeWidth="1.75"
-                          />
-                          <rect x="136" y="15" width="5" height="18" fill="#EF4444" />
-                          <rect x="146" y="15" width="5" height="18" fill="#A855F7" />
-                          <rect x="156" y="15" width="5" height="18" fill="#F59E0B" />
-                          <text x="140" y="48" fill="#CBD5E1" fontSize="10" fontFamily="JetBrains Mono, monospace">
-                            R₁ (EIA)
-                          </text>
-
-                          <line x1="252" y1="24" x2="252" y2="120" stroke="#475569" strokeWidth="1.75" />
-                          <circle cx="252" cy="24" r="3.5" fill="#22D3EE" />
-                          <circle cx="252" cy="120" r="3.5" fill="#22D3EE" />
-
-                          <rect
-                            x="240"
-                            y="52"
-                            width="24"
-                            height="40"
-                            rx="3"
-                            fill="#0F172A"
-                            stroke="#38BDF8"
-                            strokeWidth="1.75"
-                          />
-                          <text x="270" y="76" fill="#CBD5E1" fontSize="10" fontFamily="JetBrains Mono, monospace">
-                            R₂
-                          </text>
-
-                          <circle
-                            cx="360"
-                            cy="72"
-                            r="16"
-                            fill="#0F172A"
-                            stroke="#F59E0B"
-                            strokeWidth="2"
-                          />
-                          <circle cx="360" cy="72" r="7" fill="#F59E0B" fillOpacity="0.85" />
-                          <text x="314" y="76" fill="#FDE68A" fontSize="10" fontFamily="JetBrains Mono, monospace">
-                            P≤15W
-                          </text>
-                        </svg>
-                        <div className="absolute top-2.5 left-3.5 font-mono text-[11px] text-cyan-300 bg-[#070A12]/90 px-2.5 py-0.5 rounded border border-slate-800">
-                          V_F = I_T · (R₁ + R₂∥R₃)
-                        </div>
-                        <div className="absolute bottom-2.5 right-3.5 font-mono text-[11px] text-slate-300 bg-[#070A12]/90 px-2.5 py-0.5 rounded border border-slate-800">
-                          LCK: ∑I = 0 · LVK: ∑ΔV = 0
-                        </div>
-                        <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 instrument-transition flex items-center justify-center">
-                          <span className="px-4 py-2 rounded-lg bg-cyan-400 text-slate-950 font-mono font-bold text-xs flex items-center gap-1.5">
-                            <Play className="w-3.5 h-3.5 fill-current" />
-                            {translations.card1PlayBtn}
+                  {labDisplayMode === 'swap' && (
+                    <div className="rounded-2xl workbench-panel p-4 sm:p-6 space-y-4 border border-cyan-500/20 bg-gradient-to-b from-[#0C1222]/90 via-[#070A14]/95 to-[#05070E] shadow-2xl overflow-hidden relative">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-cyan-950/70 border border-cyan-500/30 text-cyan-300 text-xs font-mono font-semibold">
+                            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                            {activeMod ? `${activeMod.code} · ${activeMod.title}` : 'Laboratorio Activo'}
                           </span>
+                          <span className="text-[11px] font-mono text-slate-400 hidden md:inline">
+                            {lang === 'es'
+                              ? 'Desliza o lanza las cartas en 3D · Clic en la carta frontal para abrir'
+                              : 'Swipe or fling cards in 3D · Click front card to enter'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-end sm:self-auto">
+                          <button
+                            type="button"
+                            onClick={() => cardSwapRef.current?.prev()}
+                            aria-label="Carta anterior"
+                            className="min-h-[2.25rem] px-3 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-xs font-mono flex items-center gap-1 instrument-transition cursor-pointer"
+                          >
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">{lang === 'es' ? 'Anterior' : 'Prev'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => cardSwapRef.current?.next()}
+                            aria-label="Carta siguiente"
+                            className="min-h-[2.25rem] px-3 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 text-slate-200 text-xs font-mono flex items-center gap-1 instrument-transition cursor-pointer"
+                          >
+                            <span className="hidden sm:inline">{lang === 'es' ? 'Siguiente' : 'Next'}</span>
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
 
-                      <div className="fluid-section-pad space-y-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
-                          <span className="text-cyan-300 font-semibold">
-                            {lang === 'es' ? '01. Electrodinámica DC' : '01. DC Electrodynamics'}
-                          </span>
-                          <span className="text-slate-300">
-                            {lang === 'es' ? 'Solver Nodal Matricial · Sandbox Libre' : 'Nodal Matrix Solver · Free Sandbox'}
-                          </span>
-                        </div>
-                        <h2 className="fluid-title-md font-bold text-white">{translations.card1Title}</h2>
-                        <p className="text-xs sm:text-sm text-[#CBD5E1] leading-relaxed">
-                          {translations.card1Desc}
-                        </p>
-                        <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-mono text-slate-300">
-                          {translations.card1Badges.map((badgeText, badgeIndex) => (
-                            <React.Fragment key={badgeIndex}>
-                              {badgeIndex > 0 && <span aria-hidden="true" className="text-slate-600">·</span>}
-                              <span>{badgeText}</span>
-                            </React.Fragment>
+                      <div
+                        className="relative w-full flex items-center justify-center py-2"
+                        style={{ minHeight: '520px', height: '560px' }}
+                      >
+                        <CardSwap
+                          ref={cardSwapRef}
+                          width={480}
+                          height={400}
+                          cardDistance={110}
+                          verticalDistance={24}
+                          depth={90}
+                          skewAmount={0}
+                          visibleCards={Math.min(4, visibleModules.length)}
+                          delay={4500}
+                          speed={1.5}
+                          bounce={0.22}
+                          parallax={0.5}
+                          hoverSpread={0.12}
+                          dim={0.5}
+                          cardRadius={16}
+                          autoplay={true}
+                          pauseOnHover={true}
+                          draggable={true}
+                          theme="science"
+                          onCardClick={(index) => {
+                            const mod = visibleModules[index];
+                            if (mod) selectModuleView(mod.id);
+                          }}
+                          onChange={(index) => {
+                            setCurrentFrontLabIndex(index);
+                          }}
+                        >
+                          {visibleModules.map((mod) => (
+                            <Card
+                              key={mod.id}
+                              className="cursor-pointer group flex flex-col justify-between select-none"
+                            >
+                              <div>
+                                <div className="card-swap-head flex items-center justify-between px-4 py-2.5 bg-[#0D1424]/95 border-b border-slate-800">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="w-7 h-7 rounded-lg bg-cyan-950/80 border border-cyan-500/40 text-cyan-400 flex items-center justify-center shrink-0">
+                                      <mod.icon className="w-4 h-4" />
+                                    </div>
+                                    <div className="truncate">
+                                      <div className="font-mono text-xs font-bold text-white tracking-wide truncate">
+                                        {mod.code} · {mod.title}
+                                      </div>
+                                      <div className="text-[10px] font-mono text-slate-400 truncate">
+                                        {mod.subtitle}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <span className="font-mono text-[10px] text-cyan-300 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800/60 shrink-0">
+                                    {mod.solver}
+                                  </span>
+                                </div>
+
+                                <div className="relative aspect-[21/9] w-full schematic-grid-bg border-b border-slate-800 flex items-center justify-center overflow-hidden">
+                                  {mod.svgRender}
+                                  <div className="absolute top-2 left-3 font-mono text-[10px] text-cyan-300 bg-[#070A12]/90 px-2 py-0.5 rounded border border-slate-800">
+                                    {mod.equationsHeader}
+                                  </div>
+                                  <div className="absolute bottom-2 right-3 font-mono text-[10px] text-slate-300 bg-[#070A12]/90 px-2 py-0.5 rounded border border-slate-800">
+                                    {mod.equationsFooter}
+                                  </div>
+                                </div>
+
+                                <div className="p-3.5 space-y-2">
+                                  <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
+                                    {mod.description}
+                                  </p>
+                                  <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-slate-400">
+                                    {mod.badges.map((b, i) => (
+                                      <span
+                                        key={i}
+                                        className="px-1.5 py-0.5 rounded bg-slate-800/80 border border-slate-700/60 text-slate-300"
+                                      >
+                                        {b}
+                                      </span>
+                                    ))}
+                                    <span className="px-1.5 py-0.5 rounded bg-cyan-950/60 border border-cyan-800/60 text-cyan-300">
+                                      {mod.extraBadge}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="p-3.5 pt-0 grid grid-cols-2 gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    selectModuleView(mod.id);
+                                  }}
+                                  className="min-h-[2.5rem] w-full py-2 px-3 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-mono font-bold text-xs flex items-center justify-center gap-1.5 instrument-transition shadow-md shadow-cyan-500/20 cursor-pointer"
+                                >
+                                  <Play className="w-3.5 h-3.5 fill-current" />
+                                  <span>{mod.playBtnText}</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedObjectivesModule(mod.id);
+                                  }}
+                                  className="min-h-[2.5rem] w-full py-2 px-3 rounded-lg bg-[#0E1525] hover:bg-slate-800 border border-slate-700 text-slate-200 font-mono text-xs flex items-center justify-center gap-1.5 instrument-transition cursor-pointer"
+                                >
+                                  <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+                                  <span>{mod.objectivesBtnText}</span>
+                                </button>
+                              </div>
+                            </Card>
                           ))}
-                          <span aria-hidden="true" className="text-slate-600">·</span>
-                          <span className="text-cyan-300">Taller Libre de Nodos</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="fluid-section-pad pt-0 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => selectModuleView('circuits')}
-                        className="min-h-[2.75rem] w-full py-2.5 px-4 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-mono font-bold text-xs flex items-center justify-center gap-2 instrument-transition cursor-pointer"
-                      >
-                        <Zap className="w-4 h-4 shrink-0" />
-                        <span>{translations.card1PlayBtn}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedObjectivesModule('circuits')}
-                        className="min-h-[2.75rem] w-full py-2.5 px-4 rounded-lg bg-[#07090E] hover:bg-slate-900 border border-slate-700 text-slate-200 font-mono text-xs flex items-center justify-center gap-1.5 instrument-transition cursor-pointer"
-                      >
-                        <BookOpen className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                        <span>{translations.card1ObjectivesBtn}</span>
-                      </button>
-                    </div>
-                  </article>
-                </ScrollReveal>
-              )}
-
-              {(categoryFilter === 'all' || categoryFilter === 'space') && (
-                <ScrollReveal className="h-full flex">
-                  <article className="w-full rounded-xl workbench-panel-interactive flex flex-col justify-between overflow-hidden">
-                    <div>
-                      <div
-                        onClick={() => selectModuleView('space')}
-                        className="relative aspect-[21/9] schematic-grid-bg border-b border-slate-800 flex items-center justify-center cursor-pointer group overflow-hidden"
-                      >
-                        <svg viewBox="0 0 420 160" className="w-full h-full px-6 py-3">
-                          <path
-                            d="M 36 112 Q 210 148 384 112"
-                            fill="none"
-                            stroke="#334155"
-                            strokeWidth="1.5"
-                          />
-                          <path
-                            d="M 76 118 Q 210 142 344 118"
-                            fill="none"
-                            stroke="#1E293B"
-                            strokeWidth="1.25"
-                          />
-                          <ellipse
-                            cx="210"
-                            cy="74"
-                            rx="124"
-                            ry="40"
-                            transform="rotate(-9 210 74)"
-                            fill="none"
-                            stroke="#38BDF8"
-                            strokeWidth="1.75"
-                            strokeDasharray="6 4"
-                          />
-                          <ellipse
-                            cx="196"
-                            cy="74"
-                            rx="76"
-                            ry="25"
-                            transform="rotate(-9 196 74)"
-                            fill="none"
-                            stroke="#22D3EE"
-                            strokeWidth="2"
-                          />
-                          <circle cx="176" cy="76" r="17" fill="#F59E0B" />
-                          <circle cx="268" cy="56" r="7" fill="#22D3EE" />
-                          <line x1="268" y1="56" x2="234" y2="62" stroke="#F43F5E" strokeWidth="2" />
-                          <line x1="268" y1="56" x2="280" y2="30" stroke="#10B981" strokeWidth="2" />
-                          <text x="286" y="38" fill="#6EE7B7" fontSize="10" fontFamily="JetBrains Mono, monospace">
-                            v_t
-                          </text>
-                          <text x="222" y="54" fill="#FDA4AF" fontSize="10" fontFamily="JetBrains Mono, monospace">
-                            F_g
-                          </text>
-                        </svg>
-                        <div className="absolute top-2.5 left-3.5 font-mono text-[11px] text-cyan-300 bg-[#070A12]/90 px-2.5 py-0.5 rounded border border-slate-800">
-                          F_g = G·M·m / r² · T² ∝ a³
-                        </div>
-                        <div className="absolute bottom-2.5 right-3.5 font-mono text-[11px] text-slate-300 bg-[#070A12]/90 px-2.5 py-0.5 rounded border border-slate-800">
-                          v_e = √(2GM/r) · Hohmann Δv
-                        </div>
-                        <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 instrument-transition flex items-center justify-center">
-                          <span className="px-4 py-2 rounded-lg bg-cyan-400 text-slate-950 font-mono font-bold text-xs flex items-center gap-1.5">
-                            <Play className="w-3.5 h-3.5 fill-current" />
-                            {translations.card2PlayBtn}
-                          </span>
-                        </div>
+                        </CardSwap>
                       </div>
 
-                      <div className="fluid-section-pad space-y-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
-                          <span className="text-cyan-300 font-semibold">
-                            {lang === 'es' ? '02. Mecánica Celeste N-Cuerpos' : '02. N-Body Celestial Mechanics'}
+                      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800/80 text-xs font-mono">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-slate-400 mr-1">
+                            {lang === 'es' ? 'Acceso rápido:' : 'Quick access:'}
                           </span>
-                          <span className="text-slate-300">
-                            {lang === 'es' ? 'Integrador Simpléctico Velocity Verlet' : 'Symplectic Velocity Verlet Integrator'}
-                          </span>
-                        </div>
-                        <h2 className="fluid-title-md font-bold text-white">{translations.card2Title}</h2>
-                        <p className="text-xs sm:text-sm text-[#CBD5E1] leading-relaxed">
-                          {translations.card2Desc}
-                        </p>
-                        <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-mono text-slate-300">
-                          {translations.card2Badges.map((badgeText, badgeIndex) => (
-                            <React.Fragment key={badgeIndex}>
-                              {badgeIndex > 0 && <span aria-hidden="true" className="text-slate-600">·</span>}
-                              <span>{badgeText}</span>
-                            </React.Fragment>
+                          {visibleModules.map((m) => (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => selectModuleView(m.id)}
+                              className={`px-2.5 py-1 rounded-md border text-[11px] font-semibold instrument-transition cursor-pointer ${
+                                activeMod?.id === m.id
+                                  ? 'bg-cyan-400/20 text-cyan-300 border-cyan-500/40'
+                                  : 'bg-slate-900/60 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
+                              }`}
+                            >
+                              {m.code} · {m.title.split(':')[0]}
+                            </button>
                           ))}
-                          <span aria-hidden="true" className="text-slate-600">·</span>
-                          <span className="text-cyan-300">Transferencia de Hohmann</span>
                         </div>
-                      </div>
-                    </div>
-
-                    <div className="fluid-section-pad pt-0 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => selectModuleView('space')}
-                        className="min-h-[2.75rem] w-full py-2.5 px-4 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-mono font-bold text-xs flex items-center justify-center gap-2 instrument-transition cursor-pointer"
-                      >
-                        <Orbit className="w-4 h-4 shrink-0" />
-                        <span>{translations.card2PlayBtn}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedObjectivesModule('space')}
-                        className="min-h-[2.75rem] w-full py-2.5 px-4 rounded-lg bg-[#07090E] hover:bg-slate-900 border border-slate-700 text-slate-200 font-mono text-xs flex items-center justify-center gap-1.5 instrument-transition cursor-pointer"
-                      >
-                        <BookOpen className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                        <span>{translations.card2ObjectivesBtn}</span>
-                      </button>
-                    </div>
-                  </article>
-                </ScrollReveal>
-              )}
-
-              {(categoryFilter === 'all' || categoryFilter === 'mechanics') && (
-                <ScrollReveal className="h-full flex">
-                  <article className="w-full rounded-xl workbench-panel-interactive flex flex-col justify-between overflow-hidden">
-                    <div>
-                      <div
-                        onClick={() => selectModuleView('mechanics')}
-                        className="relative aspect-[21/9] schematic-grid-bg border-b border-slate-800 flex items-center justify-center cursor-pointer group overflow-hidden"
-                      >
-                        <svg viewBox="0 0 420 160" className="w-full h-full px-6 py-3">
-                          <line x1="96" y1="24" x2="324" y2="24" stroke="#64748B" strokeWidth="3" />
-                          <line x1="158" y1="24" x2="128" y2="104" stroke="#94A3B8" strokeWidth="2" />
-                          <line x1="262" y1="24" x2="292" y2="104" stroke="#94A3B8" strokeWidth="2" />
-                          <path
-                            d="M 142 64 L 166 56 L 188 70 L 210 56 L 232 70 L 254 56 L 278 64"
-                            fill="none"
-                            stroke="#F59E0B"
-                            strokeWidth="2"
-                          />
-                          <circle cx="128" cy="104" r="12" fill="#F59E0B" />
-                          <circle cx="292" cy="104" r="12" fill="#22D3EE" />
-                          <text x="192" y="50" fill="#FDE68A" fontSize="10" fontFamily="JetBrains Mono, monospace">
-                            k_c · Δx
-                          </text>
-                        </svg>
-                        <div className="absolute top-2.5 left-3.5 font-mono text-[11px] text-cyan-300 bg-[#070A12]/90 px-2.5 py-0.5 rounded border border-slate-800">
-                          θ̈ + (g/L)sin(θ) = 0 · T = 2π√(L/g)
-                        </div>
-                        <div className="absolute bottom-2.5 right-3.5 font-mono text-[11px] text-slate-300 bg-[#070A12]/90 px-2.5 py-0.5 rounded border border-slate-800">
-                          E_m = K + U = cte
-                        </div>
-                        <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 instrument-transition flex items-center justify-center">
-                          <span className="px-4 py-2 rounded-lg bg-cyan-400 text-slate-950 font-mono font-bold text-xs flex items-center gap-1.5">
-                            <Play className="w-3.5 h-3.5 fill-current" />
-                            {lang === 'es' ? 'Abrir Banco RK4' : 'Open RK4 Bench'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="fluid-section-pad space-y-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
-                          <span className="text-cyan-300 font-semibold">
-                            {lang === 'es' ? '03. Dinámica y Oscilaciones RK4' : '03. RK4 Dynamics & Oscillations'}
-                          </span>
-                          <span className="text-slate-300">
-                            {lang === 'es' ? 'Integrador Runge-Kutta 4to Orden' : '4th-Order Runge-Kutta Integrator'}
-                          </span>
-                        </div>
-                        <h2 className="fluid-title-md font-bold text-white">
+                        <div className="text-slate-400 text-[11px] hidden sm:block">
                           {lang === 'es'
-                            ? 'Osciladores Acoplados, Péndulo de Huygens y Ondas 3D'
-                            : 'Coupled Oscillators, Huygens Pendulum & 3D Waves'}
-                        </h2>
-                        <p className="text-xs sm:text-sm text-[#CBD5E1] leading-relaxed">
-                          {lang === 'es'
-                            ? 'Integración numérica Runge-Kutta de 4to orden (RK4). Evalúa conservación de energía mecánica E = K + U, transferencia por batimiento armónico, precesión de Foucault e interferencia ondulatoria.'
-                            : '4th-order Runge-Kutta (RK4) numerical integration. Evaluates mechanical energy conservation E = K + U, harmonic beat transfer, Foucault precession, and wave interference.'}
-                        </p>
-                        <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-mono text-slate-300">
-                          <span>Runge-Kutta 4</span>
-                          <span aria-hidden="true" className="text-slate-600">·</span>
-                          <span>Modos Normales</span>
-                          <span aria-hidden="true" className="text-slate-600">·</span>
-                          <span>E = K + U</span>
-                          <span aria-hidden="true" className="text-slate-600">·</span>
-                          <span className="text-cyan-300">Precesión de Foucault</span>
+                            ? '💡 Teclado: Flechas ← / → para navegar'
+                            : '💡 Keyboard: Use ← / → arrow keys to navigate'}
                         </div>
                       </div>
                     </div>
+                  )}
 
-                    <div className="fluid-section-pad pt-0 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => selectModuleView('mechanics')}
-                        className="min-h-[2.75rem] w-full py-2.5 px-4 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-mono font-bold text-xs flex items-center justify-center gap-2 instrument-transition cursor-pointer"
-                      >
-                        <Activity className="w-4 h-4 shrink-0" />
-                        <span>{lang === 'es' ? 'Abrir Banco RK4' : 'Open RK4 Bench'}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedObjectivesModule('mechanics')}
-                        className="min-h-[2.75rem] w-full py-2.5 px-4 rounded-lg bg-[#07090E] hover:bg-slate-900 border border-slate-700 text-slate-200 font-mono text-xs flex items-center justify-center gap-1.5 instrument-transition cursor-pointer"
-                      >
-                        <BookOpen className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                        <span>{translations.card1ObjectivesBtn}</span>
-                      </button>
+                  {labDisplayMode === 'grid' && (
+                    <div
+                      id="labs-3d-grid"
+                      className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch"
+                    >
+                      {visibleModules.map((mod) => (
+                        <ScrollReveal key={mod.id} className="h-full flex">
+                          <article
+                            data-testid={`hub-card-${mod.id}`}
+                            className="w-full rounded-xl workbench-panel-interactive flex flex-col justify-between overflow-hidden"
+                          >
+                            <div>
+                              <div
+                                onClick={() => selectModuleView(mod.id)}
+                                className="relative aspect-[21/9] schematic-grid-bg border-b border-slate-800 flex items-center justify-center cursor-pointer group overflow-hidden"
+                              >
+                                {mod.svgRender}
+                                <div className="absolute top-2.5 left-3.5 font-mono text-[11px] text-cyan-300 bg-[#070A12]/90 px-2.5 py-0.5 rounded border border-slate-800">
+                                  {mod.equationsHeader}
+                                </div>
+                                <div className="absolute bottom-2.5 right-3.5 font-mono text-[11px] text-slate-300 bg-[#070A12]/90 px-2.5 py-0.5 rounded border border-slate-800">
+                                  {mod.equationsFooter}
+                                </div>
+                                <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 instrument-transition flex items-center justify-center">
+                                  <span className="px-4 py-2 rounded-lg bg-cyan-400 text-slate-950 font-mono font-bold text-xs flex items-center gap-1.5">
+                                    <Play className="w-3.5 h-3.5 fill-current" />
+                                    {mod.playBtnText}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="fluid-section-pad space-y-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                                  <span className="text-cyan-300 font-semibold">
+                                    {mod.number}. {mod.title}
+                                  </span>
+                                  <span className="text-slate-300">{mod.subtitle}</span>
+                                </div>
+                                <h3 className="fluid-title-md font-bold text-white">{mod.title}</h3>
+                                <p className="text-xs sm:text-sm text-[#CBD5E1] leading-relaxed">
+                                  {mod.description}
+                                </p>
+                                <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-mono text-slate-300">
+                                  {mod.badges.map((badgeText, badgeIndex) => (
+                                    <React.Fragment key={badgeIndex}>
+                                      {badgeIndex > 0 && (
+                                        <span aria-hidden="true" className="text-slate-600">
+                                          ·
+                                        </span>
+                                      )}
+                                      <span>{badgeText}</span>
+                                    </React.Fragment>
+                                  ))}
+                                  <span aria-hidden="true" className="text-slate-600">
+                                    ·
+                                  </span>
+                                  <span className="text-cyan-300">{mod.extraBadge}</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="fluid-section-pad pt-0 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              <button
+                                type="button"
+                                data-testid={`start-${mod.id}-btn`}
+                                onClick={() => selectModuleView(mod.id)}
+                                className="min-h-[2.75rem] w-full py-2.5 px-4 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-mono font-bold text-xs flex items-center justify-center gap-2 instrument-transition cursor-pointer"
+                              >
+                                <mod.icon className="w-4 h-4 shrink-0" />
+                                <span>{mod.playBtnText}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedObjectivesModule(mod.id)}
+                                className="min-h-[2.75rem] w-full py-2.5 px-4 rounded-lg bg-[#07090E] hover:bg-slate-900 border border-slate-700 text-slate-200 font-mono text-xs flex items-center justify-center gap-1.5 instrument-transition cursor-pointer"
+                              >
+                                <BookOpen className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                                <span>{mod.objectivesBtnText}</span>
+                              </button>
+                            </div>
+                          </article>
+                        </ScrollReveal>
+                      ))}
                     </div>
-                  </article>
-                </ScrollReveal>
-              )}
-
-              {(categoryFilter === 'all' || categoryFilter === 'kinematics') && (
-                <ScrollReveal className="h-full flex">
-                  <article
-                    data-testid="hub-card-kinematics"
-                    className="w-full rounded-xl workbench-panel-interactive flex flex-col justify-between overflow-hidden"
-                  >
-                    <div>
-                      <div
-                        onClick={() => selectModuleView('kinematics')}
-                        className="relative aspect-[21/9] schematic-grid-bg border-b border-slate-800 flex items-center justify-center cursor-pointer group overflow-hidden"
-                      >
-                        <svg viewBox="0 0 420 160" className="w-full h-full px-6 py-3">
-                          <line x1="36" y1="118" x2="368" y2="118" stroke="#475569" strokeWidth="2" />
-                          <rect
-                            x="46"
-                            y="82"
-                            width="26"
-                            height="36"
-                            rx="3"
-                            fill="#0F172A"
-                            stroke="#38BDF8"
-                            strokeWidth="1.75"
-                          />
-                          <path
-                            d="M 68 80 Q 204 8 338 118"
-                            fill="none"
-                            stroke="#22D3EE"
-                            strokeWidth="2.25"
-                          />
-                          <path
-                            d="M 68 80 Q 168 32 254 118"
-                            fill="none"
-                            stroke="#F59E0B"
-                            strokeWidth="2.25"
-                            strokeDasharray="6 4"
-                          />
-                          <circle cx="204" cy="44" r="6" fill="#10B981" />
-                          <circle cx="254" cy="118" r="6" fill="#F59E0B" />
-                          <circle cx="338" cy="118" r="6" fill="#EF4444" />
-                          <text x="216" y="42" fill="#6EE7B7" fontSize="10" fontFamily="JetBrains Mono, monospace">
-                            y_max (v_y=0)
-                          </text>
-                          <text x="150" y="96" fill="#FDE68A" fontSize="10" fontFamily="JetBrains Mono, monospace">
-                            Con arrastre ρ
-                          </text>
-                        </svg>
-                        <div className="absolute top-2.5 left-3.5 font-mono text-[11px] text-cyan-300 bg-[#070A12]/90 px-2.5 py-0.5 rounded border border-slate-800">
-                          F_d = -½ρ·C_d·A·|v_rel|·v_rel
-                        </div>
-                        <div className="absolute bottom-2.5 right-3.5 font-mono text-[11px] text-slate-300 bg-[#070A12]/90 px-2.5 py-0.5 rounded border border-slate-800">
-                          v_t = √(2mg / ρ·C_d·A) · (g, ρ) Libre
-                        </div>
-                        <div className="absolute inset-0 bg-slate-950/60 opacity-0 group-hover:opacity-100 instrument-transition flex items-center justify-center">
-                          <span className="px-4 py-2 rounded-lg bg-cyan-400 text-slate-950 font-mono font-bold text-xs flex items-center gap-1.5">
-                            <Play className="w-3.5 h-3.5 fill-current" />
-                            {lang === 'es' ? 'Iniciar Laboratorio' : 'Start Laboratory'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="fluid-section-pad space-y-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
-                          <span className="text-cyan-300 font-semibold">
-                            {lang === 'es' ? '04. Cinemática y Aerodinámica 2D' : '04. 2D Kinematics & Aerodynamics'}
-                          </span>
-                          <span className="text-slate-300">
-                            {lang === 'es' ? 'Balística RK4 · Entornos Exóticos (g, ρ)' : 'RK4 Ballistics · Exotic Environments (g, ρ)'}
-                          </span>
-                        </div>
-                        <h2 className="fluid-title-md font-bold text-white">
-                          {lang === 'es'
-                            ? 'Laboratorio de Cinemática: Lanzamiento de Proyectiles & Aerodinámica'
-                            : 'Kinematics Lab: Projectile Launch & Aerodynamics'}
-                        </h2>
-                        <p className="text-xs sm:text-sm text-[#CBD5E1] leading-relaxed">
-                          {lang === 'es'
-                            ? 'Cañón neumático sobre plataforma hidráulica (0–30 m) con integración RK4 de resistencia cuadrática de Rayleigh, calibración manual de gravedad (g) y densidad (ρ), cámara de vacío de Galileo y 8 proyectiles.'
-                            : 'Pneumatic cannon on a hydraulic platform (0–30 m) with RK4 quadratic Rayleigh drag, manual gravity (g) and air density (ρ) calibration, Galileo vacuum chamber, and 8 payloads.'}
-                        </p>
-                        <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-mono text-slate-300">
-                          <span>Arrastre Rayleigh</span>
-                          <span aria-hidden="true" className="text-slate-600">·</span>
-                          <span>Cámara de Vacío</span>
-                          <span aria-hidden="true" className="text-slate-600">·</span>
-                          <span>8 Proyectiles</span>
-                          <span aria-hidden="true" className="text-slate-600">·</span>
-                          <span className="text-cyan-300">Parámetros (g, ρ) Manuales</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="fluid-section-pad pt-0 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                      <button
-                        type="button"
-                        data-testid="start-kinematics-lab-btn"
-                        onClick={() => selectModuleView('kinematics')}
-                        className="min-h-[2.75rem] w-full py-2.5 px-4 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-mono font-bold text-xs flex items-center justify-center gap-2 instrument-transition cursor-pointer"
-                      >
-                        <Crosshair className="w-4 h-4 shrink-0" />
-                        <span>{lang === 'es' ? 'Iniciar Laboratorio' : 'Start Laboratory'}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedObjectivesModule('kinematics')}
-                        className="min-h-[2.75rem] w-full py-2.5 px-4 rounded-lg bg-[#07090E] hover:bg-slate-900 border border-slate-700 text-slate-200 font-mono text-xs flex items-center justify-center gap-1.5 instrument-transition cursor-pointer"
-                      >
-                        <BookOpen className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                        <span>{translations.card1ObjectivesBtn}</span>
-                      </button>
-                    </div>
-                  </article>
-                </ScrollReveal>
-              )}
-            </section>
+                  )}
+                </section>
+              );
+            })()}
 
             <section
               id="ecuaciones-referencia"
