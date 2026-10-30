@@ -288,6 +288,15 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
     ]);
   }, [liveStats, lang, onUpdateTelemetry]);
 
+  const clearCataclysmState = () => {
+    setSupernovaAlert({ active: false, totalEnergyGJ: 0, absorbedPlanets: [] });
+    setLastCollisionNotice(null);
+    supernovaAnimRef.current = { active: false, startTime: 0, progress: 0, origin: { x: 0, y: 0, z: 0 } };
+    impactFlashesRef.current = [];
+    absorbedHistoryRef.current = [];
+    totalCollisionEnergyRef.current = 0;
+  };
+
   const applyPreset = (
     newPreset: SpacePresetId,
     newFactor: number = insertionFactor,
@@ -297,11 +306,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
     setPreset(newPreset);
     setInsertionFactor(newFactor);
     setTargetBodyIndex(1);
-    setSupernovaAlert({ active: false, totalEnergyGJ: 0, absorbedPlanets: [] });
-    setLastCollisionNotice(null);
-    supernovaAnimRef.current = { active: false, startTime: 0, progress: 0, origin: { x: 0, y: 0, z: 0 } };
-    absorbedHistoryRef.current = [];
-    totalCollisionEnergyRef.current = 0;
+    clearCataclysmState();
 
     let baseBodies = createSpacePreset(newPreset, newFactor, gravityG);
     if (centralMassSolar !== 1.0 || activeBlackHole) {
@@ -328,6 +333,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
 
   const handleTriggerCollisionCataclysm = () => {
     setIsPaused(false);
+    clearCataclysmState();
     const activeBlackHole = controlsStateRef.current.isBlackHole;
     // Si solo queda 1 cuerpo porque ya habían chocado todos, regeneramos los planetas en curso de colisión
     if (bodiesRef.current.length <= 1) {
@@ -336,9 +342,6 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
         fresh = scaleCentralBodyMass(fresh, centralMassSolar, activeBlackHole);
       }
       bodiesRef.current = triggerPlanetaryCollisionCourse(fresh);
-      setSupernovaAlert({ active: false, totalEnergyGJ: 0, absorbedPlanets: [] });
-      absorbedHistoryRef.current = [];
-      totalCollisionEnergyRef.current = 0;
       resetTriggerRef.current += 1;
     } else {
       bodiesRef.current = triggerPlanetaryCollisionCourse(bodiesRef.current);
@@ -347,11 +350,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
 
   const handleInsertionFactorChange = (val: number) => {
     setInsertionFactor(val);
-    setSupernovaAlert({ active: false, totalEnergyGJ: 0, absorbedPlanets: [] });
-    setLastCollisionNotice(null);
-    supernovaAnimRef.current = { active: false, startTime: 0, progress: 0, origin: { x: 0, y: 0, z: 0 } };
-    absorbedHistoryRef.current = [];
-    totalCollisionEnergyRef.current = 0;
+    clearCataclysmState();
 
     const activeBlackHole = controlsStateRef.current.isBlackHole;
     let nextBodies = createSpacePreset(preset, val, gravityG);
@@ -871,7 +870,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
       let currentSnProgress = 0;
       if (supernovaAnimRef.current.active) {
         const elapsedSn = (nowMs - supernovaAnimRef.current.startTime) / 4200; // 4.2s de expansión
-        if (elapsedSn <= 1.0) {
+        if (elapsedSn >= 0 && elapsedSn <= 1.0) {
           currentSnProgress = elapsedSn;
           supernovaAnimRef.current.progress = elapsedSn;
           supernovaGroup.visible = true;
@@ -910,15 +909,27 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
         } else {
           supernovaAnimRef.current.active = false;
           supernovaGroup.visible = false;
+          snCoreMat.opacity = 0;
+          snShellMat.opacity = 0;
+          snRingMat.opacity = 0;
+          ejectaMat.opacity = 0;
           starLight.intensity = 3.8;
         }
+      } else if (supernovaGroup.visible) {
+        // Garantiza que si se cancela la Supernova al cambiar de modo rápido, nunca quede congelada en pantalla
+        supernovaGroup.visible = false;
+        snCoreMat.opacity = 0;
+        snShellMat.opacity = 0;
+        snRingMat.opacity = 0;
+        ejectaMat.opacity = 0;
+        starLight.intensity = 3.8;
       }
 
       // Animación de destello de impacto planetario individual
       if (impactFlashesRef.current.length > 0) {
         const latest = impactFlashesRef.current[impactFlashesRef.current.length - 1];
         const tFlash = (nowMs - latest.startTime) / 700;
-        if (tFlash <= 1.0) {
+        if (tFlash >= 0 && tFlash <= 1.0) {
           impactRingMesh.visible = true;
           impactRingMesh.position.set(latest.x, latest.y, latest.z);
           const s = 1.0 + tFlash * 9.5;
@@ -926,8 +937,12 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
           impactRingMat.opacity = (1.0 - tFlash) * 0.85;
         } else {
           impactRingMesh.visible = false;
+          impactRingMat.opacity = 0;
           impactFlashesRef.current = [];
         }
+      } else if (impactRingMesh.visible) {
+        impactRingMesh.visible = false;
+        impactRingMat.opacity = 0;
       }
 
       // 2. Actualizar Malla 3D del Espacio-Tiempo mediante GPU ShaderMaterial (SpaceScene3D)
@@ -1582,6 +1597,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
             onClick={() => {
               const nextHohmann = !hohmannActive;
               setHohmannActive(nextHohmann);
+              clearCataclysmState();
               bodiesRef.current = createKeplerianCustomSystem({
                 centralMassSolar,
                 semiMajorAxisAU,
@@ -1645,6 +1661,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
               onChange={(e) => {
                 const aVal = parseFloat(e.target.value);
                 setSemiMajorAxisAU(aVal);
+                clearCataclysmState();
                 bodiesRef.current = createKeplerianCustomSystem({
                   centralMassSolar,
                   semiMajorAxisAU: aVal,
@@ -1676,6 +1693,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
               onChange={(e) => {
                 const eVal = parseFloat(e.target.value);
                 setEccentricity(eVal);
+                clearCataclysmState();
                 bodiesRef.current = createKeplerianCustomSystem({
                   centralMassSolar,
                   semiMajorAxisAU,
