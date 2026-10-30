@@ -45,6 +45,7 @@ import {
 } from './space-challenges';
 import { ScrollReveal } from '../../components/QuantumAnimations';
 import { TourGuiado, TourStep } from '../../components/TourGuiado';
+import { useLabGlobalStore } from '../../store/useLabGlobalStore';
 
 const SPACE_TOUR_STEPS: TourStep[] = [
   {
@@ -150,21 +151,57 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
 }) => {
   const t = dictionary[lang];
 
+  // Estado global centralizado en Zustand (useLabGlobalStore) para evitar reinicios erróneos entre Agujero Negro, Masa y Gravedad
+  const spaceLab = useLabGlobalStore((s) => s.spaceLab);
+  const setSpaceBlackHole = useLabGlobalStore((s) => s.setSpaceBlackHole);
+  const setSpaceCentralMass = useLabGlobalStore((s) => s.setSpaceCentralMass);
+  const setSpaceGravityG = useLabGlobalStore((s) => s.setSpaceGravityG);
+  const setSpaceInsertionFactor = useLabGlobalStore((s) => s.setSpaceInsertionFactor);
+  const setSpaceSimSpeed = useLabGlobalStore((s) => s.setSpaceSimSpeed);
+  const setSpacePreset = useLabGlobalStore((s) => s.setSpacePreset);
+  const setSpaceKeplerParams = useLabGlobalStore((s) => s.setSpaceKeplerParams);
+  const setSpaceVisualLayers = useLabGlobalStore((s) => s.setSpaceVisualLayers);
+  const triggerSpaceCollisionCataclysm = useLabGlobalStore((s) => s.triggerSpaceCollisionCataclysm);
+  const setSpaceBodies = useLabGlobalStore((s) => s.setSpaceBodies);
+
+  const {
+    preset,
+    isBlackHole,
+    centralMassSolar,
+    gravityG,
+    insertionFactor,
+    simSpeed,
+    semiMajorAxisAU,
+    eccentricity,
+    hohmannActive,
+    showSpacetimeMesh,
+    showGravityVectors,
+    showVelocityVectors,
+    showTrails,
+  } = spaceLab;
+
+  const setShowSpacetimeMesh = (updater: boolean | ((v: boolean) => boolean)) => {
+    const next = typeof updater === 'function' ? updater(showSpacetimeMesh) : updater;
+    setSpaceVisualLayers({ showSpacetimeMesh: next });
+  };
+  const setShowGravityVectors = (updater: boolean | ((v: boolean) => boolean)) => {
+    const next = typeof updater === 'function' ? updater(showGravityVectors) : updater;
+    setSpaceVisualLayers({ showGravityVectors: next });
+  };
+  const setShowVelocityVectors = (updater: boolean | ((v: boolean) => boolean)) => {
+    const next = typeof updater === 'function' ? updater(showVelocityVectors) : updater;
+    setSpaceVisualLayers({ showVelocityVectors: next });
+  };
+  const setShowTrails = (updater: boolean | ((v: boolean) => boolean)) => {
+    const next = typeof updater === 'function' ? updater(showTrails) : updater;
+    setSpaceVisualLayers({ showTrails: next });
+  };
+
   const [activeSubTab, setActiveSubTab] = useState<'sandbox' | 'challenges'>('sandbox');
-  const [preset, setPreset] = useState<SpacePresetId>('solar');
   const [cameraMode, setCameraMode] = useState<CameraMode>('free');
   const [targetBodyIndex, setTargetBodyIndex] = useState<number>(1);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [dockCollapsed, setDockCollapsed] = useState<boolean>(false);
-
-  // Parámetros físicos interactivos + Parámetros Keplerianos / Hohmann de QuantumLabs
-  const [insertionFactor, setInsertionFactor] = useState<number>(1.0);
-  const [gravityG, setGravityG] = useState<number>(1.0);
-  const [simSpeed, setSimSpeed] = useState<number>(1.0);
-  const [centralMassSolar, setCentralMassSolar] = useState<number>(1.0);
-  const [semiMajorAxisAU, setSemiMajorAxisAU] = useState<number>(1.0);
-  const [eccentricity, setEccentricity] = useState<number>(0.15);
-  const [hohmannActive, setHohmannActive] = useState<boolean>(false);
 
   const keplerMetrics = computeKeplerAndHohmannAnalytics({
     centralMassSolar,
@@ -173,14 +210,6 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
     targetOrbitAU: semiMajorAxisAU * 1.524,
   });
 
-  // Capas de visualización conmutables
-  const [showSpacetimeMesh, setShowSpacetimeMesh] = useState<boolean>(true);
-  const [showGravityVectors, setShowGravityVectors] = useState<boolean>(true);
-  const [showVelocityVectors, setShowVelocityVectors] = useState<boolean>(true);
-  const [showTrails, setShowTrails] = useState<boolean>(true);
-
-  // Modo Agujero Negro y Estado de Supernova Cataclísmica
-  const [isBlackHole, setIsBlackHole] = useState<boolean>(false);
   const [supernovaAlert, setSupernovaAlert] = useState<{
     active: boolean;
     totalEnergyGJ: number;
@@ -203,9 +232,9 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
 
   const [validationFeedback, setValidationFeedback] = useState<Record<string, SpaceValidationResult>>({});
 
-  // Estado mutable de los cuerpos celestes para el bucle Verlet
-  const bodiesRef = useRef<CelestialBody[]>(createSpacePreset('solar', 1.0, 1.0));
-  const resetTriggerRef = useRef<number>(0);
+  // Estado mutable de los cuerpos celestes para el bucle Verlet sincronizado con el store global
+  const bodiesRef = useRef<CelestialBody[]>(useLabGlobalStore.getState().spaceLab.bodies);
+  const resetTriggerRef = useRef<number>(useLabGlobalStore.getState().spaceLab.sceneRevision);
   const supernovaAnimRef = useRef<{
     active: boolean;
     startTime: number;
@@ -253,6 +282,21 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
   };
 
   const mountRef = useRef<HTMLDivElement | null>(null);
+
+  // Suscripción directa al store global Zustand para sincronizar bodiesRef y sceneRevision al instante
+  useEffect(() => {
+    const unsubscribe = useLabGlobalStore.subscribe((state, prevState) => {
+      if (state.spaceLab.sceneRevision !== prevState.spaceLab.sceneRevision) {
+        bodiesRef.current = state.spaceLab.bodies;
+        resetTriggerRef.current = state.spaceLab.sceneRevision;
+      }
+    });
+    return () => {
+      // Al desmontar la vista, guardar la posición actual de los cuerpos en el store global
+      setSpaceBodies(bodiesRef.current, false);
+      unsubscribe();
+    };
+  }, [setSpaceBodies]);
 
   // Dron ambiental cósmico suave al entrar al Laboratorio Espacial 3D
   useEffect(() => {
@@ -302,63 +346,36 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
     newFactor: number = insertionFactor,
     keepBlackHole?: boolean
   ) => {
-    const activeBlackHole = keepBlackHole !== undefined ? keepBlackHole : controlsStateRef.current.isBlackHole;
-    setPreset(newPreset);
-    setInsertionFactor(newFactor);
     setTargetBodyIndex(1);
     clearCataclysmState();
-
-    let baseBodies = createSpacePreset(newPreset, newFactor, gravityG);
-    if (centralMassSolar !== 1.0 || activeBlackHole) {
-      baseBodies = scaleCentralBodyMass(baseBodies, centralMassSolar, activeBlackHole);
+    setSpaceBodies(bodiesRef.current, false);
+    if (keepBlackHole !== undefined && keepBlackHole !== useLabGlobalStore.getState().spaceLab.isBlackHole) {
+      setSpaceBlackHole(keepBlackHole);
     }
-    bodiesRef.current = baseBodies;
-    resetTriggerRef.current += 1;
+    setSpacePreset(newPreset, newFactor);
   };
 
   const handleToggleBlackHole = (forceValue?: boolean) => {
-    const nextBlackHole = forceValue !== undefined ? forceValue : !controlsStateRef.current.isBlackHole;
-    setIsBlackHole(nextBlackHole);
-    controlsStateRef.current.isBlackHole = nextBlackHole;
-    bodiesRef.current = convertCentralBodyToBlackHole(bodiesRef.current, nextBlackHole);
-    resetTriggerRef.current += 1;
+    setSpaceBodies(bodiesRef.current, false);
+    setSpaceBlackHole(forceValue);
   };
 
   const handleCentralMassChange = (newMassSolar: number) => {
-    setCentralMassSolar(newMassSolar);
-    const activeBlackHole = controlsStateRef.current.isBlackHole;
-    bodiesRef.current = scaleCentralBodyMass(bodiesRef.current, newMassSolar, activeBlackHole);
-    resetTriggerRef.current += 1;
+    setSpaceBodies(bodiesRef.current, false);
+    setSpaceCentralMass(newMassSolar);
   };
 
   const handleTriggerCollisionCataclysm = () => {
     setIsPaused(false);
     clearCataclysmState();
-    const activeBlackHole = controlsStateRef.current.isBlackHole;
-    // Si solo queda 1 cuerpo porque ya habían chocado todos, regeneramos los planetas en curso de colisión
-    if (bodiesRef.current.length <= 1) {
-      let fresh = createSpacePreset(preset, 0.25, gravityG);
-      if (centralMassSolar !== 1.0 || activeBlackHole) {
-        fresh = scaleCentralBodyMass(fresh, centralMassSolar, activeBlackHole);
-      }
-      bodiesRef.current = triggerPlanetaryCollisionCourse(fresh);
-      resetTriggerRef.current += 1;
-    } else {
-      bodiesRef.current = triggerPlanetaryCollisionCourse(bodiesRef.current);
-    }
+    setSpaceBodies(bodiesRef.current, false);
+    triggerSpaceCollisionCataclysm();
   };
 
   const handleInsertionFactorChange = (val: number) => {
-    setInsertionFactor(val);
     clearCataclysmState();
-
-    const activeBlackHole = controlsStateRef.current.isBlackHole;
-    let nextBodies = createSpacePreset(preset, val, gravityG);
-    if (centralMassSolar !== 1.0 || activeBlackHole) {
-      nextBodies = scaleCentralBodyMass(nextBodies, centralMassSolar, activeBlackHole);
-    }
-    bodiesRef.current = nextBodies;
-    resetTriggerRef.current += 1;
+    setSpaceBodies(bodiesRef.current, false);
+    setSpaceInsertionFactor(val);
   };
 
   const handleValidateChallenge = (chId: string) => {
@@ -1521,11 +1538,8 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
                     value={gravityG}
                     onChange={(e) => {
                       const nextG = parseFloat(e.target.value);
-                      setGravityG(nextG);
-                      if (controlsStateRef.current.isBlackHole && bodiesRef.current.length > 0 && !bodiesRef.current[0].isBlackHole) {
-                        bodiesRef.current = convertCentralBodyToBlackHole(bodiesRef.current, true);
-                        resetTriggerRef.current += 1;
-                      }
+                      setSpaceBodies(bodiesRef.current, false);
+                      setSpaceGravityG(nextG);
                     }}
                     className="w-full accent-purple-400 cursor-pointer"
                   />
@@ -1547,7 +1561,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
                     max={3.0}
                     step={0.2}
                     value={simSpeed}
-                    onChange={(e) => setSimSpeed(parseFloat(e.target.value))}
+                    onChange={(e) => setSpaceSimSpeed(parseFloat(e.target.value))}
                     className="w-full accent-amber-400 cursor-pointer"
                   />
                 </div>
@@ -1596,17 +1610,8 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
             type="button"
             onClick={() => {
               const nextHohmann = !hohmannActive;
-              setHohmannActive(nextHohmann);
               clearCataclysmState();
-              bodiesRef.current = createKeplerianCustomSystem({
-                centralMassSolar,
-                semiMajorAxisAU,
-                eccentricity,
-                isHohmannTransferActive: nextHohmann,
-                G: gravityG,
-                isBlackHole: controlsStateRef.current.isBlackHole,
-              });
-              resetTriggerRef.current += 1;
+              setSpaceKeplerParams({ hohmannActive: nextHohmann });
             }}
             className={`px-3.5 py-2 rounded-lg text-xs font-mono font-bold border transition-colors cursor-pointer ${
               hohmannActive
@@ -1660,17 +1665,8 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
               value={semiMajorAxisAU}
               onChange={(e) => {
                 const aVal = parseFloat(e.target.value);
-                setSemiMajorAxisAU(aVal);
                 clearCataclysmState();
-                bodiesRef.current = createKeplerianCustomSystem({
-                  centralMassSolar,
-                  semiMajorAxisAU: aVal,
-                  eccentricity,
-                  isHohmannTransferActive: hohmannActive,
-                  G: gravityG,
-                  isBlackHole: controlsStateRef.current.isBlackHole,
-                });
-                resetTriggerRef.current += 1;
+                setSpaceKeplerParams({ semiMajorAxisAU: aVal });
               }}
               className="w-full accent-cyan-400 cursor-pointer"
             />
@@ -1692,17 +1688,8 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
               value={eccentricity}
               onChange={(e) => {
                 const eVal = parseFloat(e.target.value);
-                setEccentricity(eVal);
                 clearCataclysmState();
-                bodiesRef.current = createKeplerianCustomSystem({
-                  centralMassSolar,
-                  semiMajorAxisAU,
-                  eccentricity: eVal,
-                  isHohmannTransferActive: hohmannActive,
-                  G: gravityG,
-                  isBlackHole: controlsStateRef.current.isBlackHole,
-                });
-                resetTriggerRef.current += 1;
+                setSpaceKeplerParams({ eccentricity: eVal });
               }}
               className="w-full accent-purple-400 cursor-pointer"
             />

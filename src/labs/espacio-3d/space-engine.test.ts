@@ -159,5 +159,31 @@ test('Black Hole conversion, mass scaling, and Supernova planetary collision det
   assert.equal(crashingBodies.length, 1);
 });
 
+import { useLabGlobalStore } from '../../store/useLabGlobalStore';
+
+test('Global Zustand store (useLabGlobalStore) preserves mass, gravity, and Black Hole state without erroneous resets', () => {
+  const store = useLabGlobalStore.getState();
+  store.setSpaceCentralMass(2.1);
+  store.setSpaceGravityG(1.65);
+  store.setSpaceBlackHole(true);
+
+  const afterBh = useLabGlobalStore.getState().spaceLab;
+  assert.equal(afterBh.isBlackHole, true);
+  assert.equal(afterBh.centralMassSolar, 2.1);
+  assert.equal(afterBh.gravityG, 1.65);
+  assert.equal(afterBh.bodies[0].isBlackHole, true);
+
+  // Cambiar gravedad o velocidad de inserción con el Agujero Negro activo NO reinicia la masa ni desactiva el Agujero Negro
+  store.setSpaceGravityG(1.85);
+  store.setSpaceInsertionFactor(1.15);
+
+  const afterSliders = useLabGlobalStore.getState().spaceLab;
+  assert.equal(afterSliders.isBlackHole, true);
+  assert.equal(afterSliders.centralMassSolar, 2.1);
+  assert.equal(afterSliders.gravityG, 1.85);
+  assert.equal(afterSliders.bodies[0].isBlackHole, true);
+});
+
+
 
 

@@ -42,25 +42,29 @@ import { CircuitLabView } from './labs/circuitos/CircuitLabView';
 import { SpaceLabView } from './labs/espacio-3d/SpaceLabView';
 import { MechanicsLabView } from './labs/mecanica-3d/MechanicsLabView';
 import { KinematicsLabView } from './labs/cinematica/KinematicsLabView';
-
-type ActiveModuleView = 'hub' | 'circuits' | 'space' | 'mechanics' | 'kinematics';
-type ModuleCategoryFilter = 'all' | 'circuits' | 'space' | 'mechanics' | 'kinematics';
+import {
+  useLabGlobalStore,
+  ActiveModuleView,
+} from './store/useLabGlobalStore';
 
 export default function App() {
-  const [lang, setLang] = useState<Language>('es');
-  const [activeView, setActiveView] = useState<ActiveModuleView>(() => {
-    if (typeof window !== 'undefined') {
-      const searchParams = new URLSearchParams(window.location.search);
-      const requestedLab = searchParams.get('lab');
-      if (requestedLab === 'circuits' || requestedLab === 'circuitos') return 'circuits';
-      if (requestedLab === 'space' || requestedLab === 'espacio-3d') return 'space';
-      if (requestedLab === 'mechanics' || requestedLab === 'mecanica-3d') return 'mechanics';
-      if (requestedLab === 'kinematics' || requestedLab === 'cinematica') return 'kinematics';
-    }
-    return 'hub';
-  });
-  const [categoryFilter, setCategoryFilter] = useState<ModuleCategoryFilter>('all');
-  const [isAudioMuted, setIsAudioMuted] = useState<boolean>(false);
+  const lang = useLabGlobalStore((s) => s.lang);
+  const setLang = useLabGlobalStore((s) => s.setLang);
+  const activeView = useLabGlobalStore((s) => s.activeView);
+  const setActiveView = useLabGlobalStore((s) => s.setActiveView);
+  const categoryFilter = useLabGlobalStore((s) => s.categoryFilter);
+  const setCategoryFilter = useLabGlobalStore((s) => s.setCategoryFilter);
+  const isAudioMuted = useLabGlobalStore((s) => s.isAudioMuted);
+  const setIsAudioMuted = useLabGlobalStore((s) => s.setIsAudioMuted);
+  const labDisplayMode = useLabGlobalStore((s) => s.labDisplayMode);
+  const setLabDisplayMode = useLabGlobalStore((s) => s.setLabDisplayMode);
+  const externalResistorSync = useLabGlobalStore((s) => s.externalResistorSync);
+  const setExternalResistorSync = useLabGlobalStore((s) => s.setExternalResistorSync);
+  const completedChallenges = useLabGlobalStore((s) => s.completedChallenges);
+  const totalScore = useLabGlobalStore((s) => s.totalScore);
+  const registerCompletedChallenge = useLabGlobalStore((s) => s.registerCompletedChallenge);
+  const setActiveTelemetry = useLabGlobalStore((s) => s.setActiveTelemetry);
+
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState<boolean>(false);
   const [isNetworkOnline, setIsNetworkOnline] = useState<boolean>(
@@ -69,21 +73,11 @@ export default function App() {
   const [isTheoryModalOpen, setIsTheoryModalOpen] = useState<boolean>(false);
   const [isColorCodeModalOpen, setIsColorCodeModalOpen] = useState<boolean>(false);
   const [isQRModalOpen, setIsQRModalOpen] = useState<boolean>(false);
-  const [externalResistorSync, setExternalResistorSync] = useState<{
-    target: 'R1' | 'R2' | 'R3';
-    ohms: number;
-    token: number;
-  } | null>(null);
   const [selectedObjectivesModule, setSelectedObjectivesModule] = useState<
     'circuits' | 'space' | 'mechanics' | 'kinematics' | null
   >(null);
-  const [labDisplayMode, setLabDisplayMode] = useState<'swap' | 'grid'>('swap');
   const [currentFrontLabIndex, setCurrentFrontLabIndex] = useState<number>(0);
   const cardSwapRef = useRef<CardSwapRef | null>(null);
-
-  const [completedChallenges, setCompletedChallenges] = useState<Record<string, boolean>>({});
-  const [totalScore, setTotalScore] = useState<number>(0);
-  const [, setActiveTelemetry] = useState<TelemetryItem[]>([]);
 
   const navbarRef = useRef<HTMLElement | null>(null);
   const translations = dictionary[lang];
@@ -116,14 +110,6 @@ export default function App() {
     const nextMutedState = !isAudioMuted;
     setIsAudioMuted(nextMutedState);
     audioSynth.setMuted(nextMutedState);
-  };
-
-  const registerCompletedChallenge = (challengeId: string, awardedPoints: number) => {
-    setCompletedChallenges((previous) => {
-      if (previous[challengeId]) return previous;
-      setTotalScore((score) => score + awardedPoints);
-      return { ...previous, [challengeId]: true };
-    });
   };
 
   const verifiedChallengesCount = Object.keys(completedChallenges).length;
