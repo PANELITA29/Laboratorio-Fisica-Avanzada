@@ -374,13 +374,17 @@ export function createSpacePreset(
   }
 
   if (preset === 'binary-bh') {
-    // Sistema Binario de Agujeros Negros en espiral relativista + planeta circumbinario sometido a mareas extremas
+    // Sistema Binario de Agujeros Negros en espiral relativista + sonda en cruce del Radio de Schwarzschild + planeta circumbinario
     const mBH = 780;
     const rBin = 6.8;
     // Dos masas iguales M orbitando su baricentro a distancia 2*rBin: F = G*M^2 / (2*rBin)^2 = M * v^2 / rBin -> v = sqrt(G*M / (4*rBin))
     const vBin = Math.sqrt((G * mBH) / (4 * rBin)) * insertionVelocityFactor;
-    const rTest = 21.5;
+    const rTest = 19.5;
     const vTest = Math.sqrt((G * (2 * mBH)) / rTest);
+
+    // Sonda relativista en órbita elíptica rasante que cruza el Radio de Schwarzschild (r_s) del sistema binario
+    const rProbe = 11.2;
+    const vProbe = Math.sqrt((G * (2 * mBH)) / rProbe) * 0.58 * insertionVelocityFactor;
 
     return [
       {
@@ -416,14 +420,25 @@ export function createSpacePreset(
         acceleration: { x: 0, y: 0, z: 0 },
       },
       {
+        id: 'probe-schwarzschild',
+        nameEs: 'Sonda Relativista (Horizonte r_s)',
+        nameEn: 'Relativistic Probe (r_s Horizon)',
+        mass: 4.5,
+        radius: 1.05,
+        color: '#F43F5E',
+        position: { x: 0, y: 0, z: rProbe },
+        velocity: { x: -vProbe, y: 0, z: -vProbe * 0.35 },
+        acceleration: { x: 0, y: 0, z: 0 },
+      },
+      {
         id: 'planet-tidal',
         nameEs: 'Exoplaneta Circumbinario',
         nameEn: 'Circumbinary Exoplanet',
         mass: 12,
         radius: 1.15,
         color: '#06B6D4',
-        position: { x: 0, y: 0, z: rTest },
-        velocity: { x: -vTest, y: 0, z: 0 },
+        position: { x: 0, y: 0, z: -rTest },
+        velocity: { x: vTest, y: 0, z: 0 },
         acceleration: { x: 0, y: 0, z: 0 },
       },
     ];
@@ -819,7 +834,13 @@ export function detectAndResolveCollisions(bodies: CelestialBody[]): CollisionSt
       const dz = bj.position.z - bi.position.z;
       const dist = Math.hypot(dx, dy, dz);
 
-      const collisionThreshold = (bi.radius + bj.radius) * (bi.isBlackHole || bj.isBlackHole ? 1.25 : 1.05);
+      // Para un Agujero Negro, el Horizonte de Schwarzschild (r_s) es más amplio que la singularidad interna,
+      // permitiendo que una sonda cruce r <= r_s y experimente espaguetización 3D extrema antes de ser absorbida por la singularidad central.
+      const isBhPair = bi.isBlackHole && bj.isBlackHole;
+      const hasSingleBh = (bi.isBlackHole || bj.isBlackHole) && !isBhPair;
+      const collisionThreshold = hasSingleBh
+        ? Math.max(bi.radius, bj.radius) * 0.58 + Math.min(bi.radius, bj.radius) * 0.35
+        : (bi.radius + bj.radius) * (isBhPair ? 1.15 : 1.05);
 
       if (dist <= collisionThreshold) {
         // El cuerpo con mayor masa (o fijo) sobrevive y absorbe al menor
@@ -874,7 +895,8 @@ export function detectAndResolveCollisions(bodies: CelestialBody[]): CollisionSt
   }
 
   const remaining = nextBodies.filter((_, idx) => !removedIndices.has(idx));
-  const allOrbitersCollided = remaining.length <= 1;
+  const nonBhOrbiters = remaining.filter((b, idx) => !b.isBlackHole && !(idx === 0 && b.isFixed));
+  const allOrbitersCollided = remaining.length <= 1 || nonBhOrbiters.length === 0;
 
   return {
     bodies: remaining,
@@ -884,13 +906,35 @@ export function detectAndResolveCollisions(bodies: CelestialBody[]): CollisionSt
 }
 
 // ============================================================================
-// ESPAGUETIZACIÓN 3D (FUERZAS DE MAREA), DILATACIÓN TEMPORAL RELATIVISTA
-// Y CREADOR INTERACTIVO DE PLANETAS CON CLIC EN EL LIENZO 3D
+// ESPAGUETIZACIÓN 3D (DEFORMACIÓN DE MALLA EN RADIO DE SCHWARZSCHILD r_s),
+// DILATACIÓN TEMPORAL RELATIVISTA Y CREADOR INTERACTIVO DE PLANETAS CON CLIC
 // ============================================================================
 
+/**
+ * Calcula el Radio de Schwarzschild efectivo r_s = 2 G M / c_eff² en unidades del escenario 3D.
+ * Para un Agujero Negro en sistema binario o individual, define la frontera del Horizonte de Sucesos
+ * dentro de la cual la deformación de malla 3D (espaguetización) y la dilatación temporal (dτ/dt -> 0) se vuelven extremas.
+ */
+export function computeSchwarzschildRadius(
+  mass: number,
+  G: number = DEFAULT_G,
+  isBlackHole: boolean = true
+): number {
+  if (isBlackHole) {
+    return Math.max(4.4, (2 * G * mass) / 260);
+  }
+  return Math.max(0.65, (2 * G * mass) / 2400);
+}
+
 export interface BodyTidalState {
-  stretchFactor: number; // Factor longitudinal de estiramiento (1.0 = esférico, >1.0 = espaguetizado)
+  stretchFactor: number; // Factor longitudinal de estiramiento (1.0 = esférico, >1.0 = espaguetizado, hasta 6.8x en r <= r_s)
   transverseScale: number; // Compresión transversal (1 / sqrt(stretchFactor)) para conservar volumen
+  vertexPinchIntensity: number; // [0..1] Intensidad de deformación de vértices 3D (cuello de botella y filamento asimétrico en r <= r_s)
+  tidalHeatingTempK: number; // Temperatura de incandescencia por fricción de marea (K)
+  distanceToHorizonRatio: number; // r / r_s (<= 1.0 significa que cruzó el Radio de Schwarzschild)
+  crossedSchwarzschild: boolean; // true cuando el cuerpo cruza r <= r_s de un Agujero Negro
+  attractorId: string;
+  attractorPosition: Vector3D;
   dirX: number;
   dirY: number;
   dirZ: number;
@@ -899,17 +943,25 @@ export interface BodyTidalState {
 export interface RelativisticSystemTelemetry {
   schwarzschildRadiusU: number;
   closestDistanceU: number;
+  horizonDistanceRatio: number; // r / r_s
+  isCrossingSchwarzschild: boolean; // true si algún objeto está dentro o cruzando r <= r_s
+  isBinaryBlackHoleSystem: boolean;
+  spaghettificationRegime: 'nominal' | 'roche-tidal' | 'schwarzschild-spaghettification';
+  closestBodyNameEs: string;
+  closestBodyNameEn: string;
   properTimeRate: number; // dτ / dt = sqrt(1 - r_s / r)
   lorentzGamma: number; // γ = 1 / sqrt(1 - r_s / r)
   gravitationalRedshiftZ: number; // z = γ - 1
   maxTidalStretch: number;
+  maxTidalHeatingK: number;
   tidalByBodyId: Record<string, BodyTidalState>;
 }
 
 /**
  * Calcula en cada fotograma:
- * 1) El estiramiento mareal (espaguetización) ΔF_T ∝ 2 G M R_p / r³ sobre cada planeta.
- * 2) La dilatación temporal relativista dτ/dt = sqrt(1 - r_s/r) del cuerpo más cercano al horizonte.
+ * 1) El estiramiento mareal y deformación de malla 3D (espaguetización) ΔF_T ∝ 2 G M R_p / r³ sobre cada objeto,
+ *    con amplificación no lineal extrema al cruzar el Radio de Schwarzschild (r <= r_s) de un Agujero Negro Binario.
+ * 2) La dilatación temporal relativista dτ/dt = sqrt(1 - r_s/r) del reloj propio de la sonda frente al observador lejano.
  */
 export function computeRelativisticAndTidalMetrics(
   bodies: CelestialBody[],
@@ -920,10 +972,17 @@ export function computeRelativisticAndTidalMetrics(
     return {
       schwarzschildRadiusU: 0,
       closestDistanceU: 16,
+      horizonDistanceRatio: 10,
+      isCrossingSchwarzschild: false,
+      isBinaryBlackHoleSystem: false,
+      spaghettificationRegime: 'nominal',
+      closestBodyNameEs: 'Sonda',
+      closestBodyNameEn: 'Probe',
       properTimeRate: 1.0,
       lorentzGamma: 1.0,
       gravitationalRedshiftZ: 0,
       maxTidalStretch: 1.0,
+      maxTidalHeatingK: 290,
       tidalByBodyId,
     };
   }
@@ -932,17 +991,27 @@ export function computeRelativisticAndTidalMetrics(
   const blackHoles = bodies.filter((b) => b.isBlackHole);
   const attractors = blackHoles.length > 0 ? blackHoles : [bodies[0]];
   const hasBlackHole = blackHoles.length > 0;
+  const isBinaryBlackHoleSystem = blackHoles.length >= 2;
 
   let minRatioDist = 999;
-  let effectiveRs = 0.5;
+  let effectiveRs = 0.65;
   let closestDist = 16;
   let maxTidalStretch = 1.0;
+  let maxTidalHeatingK = 290;
+  let closestBodyNameEs = bodies[bodies.length - 1]?.nameEs ?? 'Sonda';
+  let closestBodyNameEn = bodies[bodies.length - 1]?.nameEn ?? 'Probe';
 
   for (const b of bodies) {
     if (b.isBlackHole || (b === bodies[0] && b.isFixed)) {
       tidalByBodyId[b.id] = {
         stretchFactor: 1.0,
         transverseScale: 1.0,
+        vertexPinchIntensity: 0,
+        tidalHeatingTempK: 290,
+        distanceToHorizonRatio: 99,
+        crossedSchwarzschild: false,
+        attractorId: b.id,
+        attractorPosition: { ...b.position },
         dirX: 1,
         dirY: 0,
         dirZ: 0,
@@ -950,7 +1019,7 @@ export function computeRelativisticAndTidalMetrics(
       continue;
     }
 
-    // Buscar el atractor que ejerce el mayor gradiente de marea M / r³ sobre este cuerpo
+    // Buscar el Agujero Negro (en el sistema binario o individual) con menor razón r / r_s y mayor tensor de marea
     let bestAttractor = attractors[0];
     let maxTidalGradient = -1;
     let bestDx = 1;
@@ -958,13 +1027,17 @@ export function computeRelativisticAndTidalMetrics(
     let bestDz = 0;
     let bestDist = 16;
 
+    // En un sistema de Agujeros Negros Binarios, sumar la contribución tensorial combinada de ambos horizontes
+    let binaryBonusGradient = 0;
+
     for (const att of attractors) {
       if (att.id === b.id) continue;
       const dx = att.position.x - b.position.x;
       const dy = att.position.y - b.position.y;
       const dz = att.position.z - b.position.z;
-      const dist = Math.max(1.2, Math.hypot(dx, dy, dz));
+      const dist = Math.max(0.85, Math.hypot(dx, dy, dz));
       const grad = (G * att.mass) / (dist * dist * dist);
+      binaryBonusGradient += grad;
       if (grad > maxTidalGradient) {
         maxTidalGradient = grad;
         bestAttractor = att;
@@ -975,31 +1048,62 @@ export function computeRelativisticAndTidalMetrics(
       }
     }
 
-    // Radio de Schwarzschild efectivo en unidades de la escena 3D
-    const rs = bestAttractor.isBlackHole
-      ? Math.max(2.4, (2 * G * bestAttractor.mass) / 620)
-      : Math.max(0.55, (2 * G * bestAttractor.mass) / 2800);
+    // Radio de Schwarzschild r_s del Agujero Negro dominante (en binario se amplifica por el potencial conjunto)
+    const baseRs = computeSchwarzschildRadius(bestAttractor.mass, G, Boolean(bestAttractor.isBlackHole));
+    const rs = isBinaryBlackHoleSystem ? baseRs * 1.18 : baseRs;
+    const ratioToRs = bestDist / rs;
+    const crossedSchwarzschild = Boolean(bestAttractor.isBlackHole) && ratioToRs <= 1.0;
 
-    if (bestDist / rs < minRatioDist) {
-      minRatioDist = bestDist / rs;
+    if (ratioToRs < minRatioDist) {
+      minRatioDist = ratioToRs;
       effectiveRs = rs;
       closestDist = bestDist;
+      closestBodyNameEs = b.nameEs;
+      closestBodyNameEn = b.nameEn;
     }
 
-    // Fuerza de marea (Espaguetización): se intensifica drásticamente al acercarse al límite de Roche (~2.8 * r_s)
-    const tidalCoeff = bestAttractor.isBlackHole ? 2.15 : 0.35;
-    const rawStretch =
-      1.0 + tidalCoeff * ((G * bestAttractor.mass * Math.max(0.7, b.radius)) / Math.pow(Math.max(2.1, bestDist), 2.65));
-    const stretchFactor = Math.min(3.8, Math.max(1.0, rawStretch));
+    // Espaguetización 3D: crece en la zona de Roche (r < 2.5 r_s) y se dispara drásticamente al cruzar r <= r_s
+    const tidalCoeff = bestAttractor.isBlackHole ? (isBinaryBlackHoleSystem ? 2.85 : 2.25) : 0.35;
+    let rawStretch =
+      1.0 +
+      tidalCoeff *
+        ((G * bestAttractor.mass * Math.max(0.75, b.radius)) / Math.pow(Math.max(1.35, bestDist), 2.55));
+
+    // Amplificación relativista al aproximarse o cruzar el Radio de Schwarzschild (r <= 1.35 * r_s)
+    let vertexPinchIntensity = 0;
+    if (bestAttractor.isBlackHole && ratioToRs < 1.85) {
+      const penetration = Math.max(0, Math.min(1.0, (1.85 - ratioToRs) / 1.15));
+      vertexPinchIntensity = Math.pow(penetration, 1.25);
+      if (ratioToRs <= 1.0) {
+        // Dentro del Radio de Schwarzschild: deformación extrema de malla en filamento de plasma (3.4x a 6.8x)
+        const horizonDepth = Math.max(0, Math.min(1.0, (1.0 - ratioToRs) / 0.65));
+        rawStretch = Math.max(rawStretch, 3.4 + horizonDepth * 3.4);
+        vertexPinchIntensity = Math.min(1.0, 0.68 + horizonDepth * 0.32);
+      }
+    }
+
+    const stretchFactor = Math.min(6.8, Math.max(1.0, rawStretch));
     const transverseScale = 1.0 / Math.sqrt(stretchFactor);
+    const tidalHeatingTempK = Math.round(
+      290 + Math.pow(Math.max(0, stretchFactor - 1.0), 1.75) * (crossedSchwarzschild ? 4200 : 1850)
+    );
 
     if (stretchFactor > maxTidalStretch) {
       maxTidalStretch = stretchFactor;
+    }
+    if (tidalHeatingTempK > maxTidalHeatingK) {
+      maxTidalHeatingK = tidalHeatingTempK;
     }
 
     tidalByBodyId[b.id] = {
       stretchFactor,
       transverseScale,
+      vertexPinchIntensity,
+      tidalHeatingTempK,
+      distanceToHorizonRatio: ratioToRs,
+      crossedSchwarzschild,
+      attractorId: bestAttractor.id,
+      attractorPosition: { ...bestAttractor.position },
       dirX: bestDx,
       dirY: bestDy,
       dirZ: bestDz,
@@ -1008,18 +1112,31 @@ export function computeRelativisticAndTidalMetrics(
 
   // Si sólo hay agujeros negros (ej. colapsaron todos los planetas o binario puro), evaluar entre ellos
   if (minRatioDist === 999 && attractors.length >= 1) {
-    effectiveRs = hasBlackHole ? Math.max(2.6, (2 * G * attractors[0].mass) / 620) : 0.6;
+    effectiveRs = computeSchwarzschildRadius(attractors[0].mass, G, hasBlackHole);
     if (attractors.length >= 2) {
       const dx = attractors[1].position.x - attractors[0].position.x;
       const dz = attractors[1].position.z - attractors[0].position.z;
-      closestDist = Math.max(effectiveRs * 1.15, Math.hypot(dx, dz));
+      closestDist = Math.max(effectiveRs * 1.12, Math.hypot(dx, dz));
+      minRatioDist = closestDist / effectiveRs;
     } else {
       closestDist = effectiveRs * 3.5;
+      minRatioDist = 3.5;
     }
   }
 
+  const isCrossingSchwarzschild = hasBlackHole && minRatioDist <= 1.0;
+  const spaghettificationRegime: RelativisticSystemTelemetry['spaghettificationRegime'] =
+    isCrossingSchwarzschild
+      ? 'schwarzschild-spaghettification'
+      : maxTidalStretch >= 1.28 || minRatioDist <= 2.2
+      ? 'roche-tidal'
+      : 'nominal';
+
   // Factor de dilatación temporal relativista de Schwarzschild: dτ = dt * sqrt(1 - r_s / r)
-  const metricTerm = Math.max(0.03, 1.0 - effectiveRs / Math.max(effectiveRs * 1.03, closestDist));
+  // Cuando el objeto cruza r <= r_s, el tiempo propio medido desde el infinito se ralentiza hasta casi congelarse (dτ/dt -> 0.035)
+  const metricTerm = isCrossingSchwarzschild
+    ? Math.max(0.0012, 0.015 * Math.max(0.1, minRatioDist))
+    : Math.max(0.0025, 1.0 - effectiveRs / Math.max(effectiveRs * 1.004, closestDist));
   const properTimeRate = Math.sqrt(metricTerm);
   const lorentzGamma = 1.0 / properTimeRate;
   const gravitationalRedshiftZ = lorentzGamma - 1.0;
@@ -1027,12 +1144,61 @@ export function computeRelativisticAndTidalMetrics(
   return {
     schwarzschildRadiusU: effectiveRs,
     closestDistanceU: closestDist,
+    horizonDistanceRatio: minRatioDist,
+    isCrossingSchwarzschild,
+    isBinaryBlackHoleSystem,
+    spaghettificationRegime,
+    closestBodyNameEs,
+    closestBodyNameEn,
     properTimeRate,
     lorentzGamma,
     gravitationalRedshiftZ,
     maxTidalStretch,
+    maxTidalHeatingK,
     tidalByBodyId,
   };
+}
+
+/**
+ * Inyecta o redirige una Sonda Relativista en trayectoria de cruce directo por el Radio de Schwarzschild (r_s)
+ * de un sistema de Agujeros Negros Binarios para observar en vivo la espaguetización 3D de su malla y el congelamiento del reloj propio.
+ */
+export function injectBinarySchwarzschildSpaghettificationProbe(
+  bodies: CelestialBody[],
+  G: number = DEFAULT_G
+): CelestialBody[] {
+  const hasBinary =
+    bodies.some((b) => b.id === 'bh-alpha') && bodies.some((b) => b.id === 'bh-beta');
+  const baseBodies = hasBinary ? [...bodies] : createSpacePreset('binary-bh', 1.0, G);
+
+  const bhAlpha = baseBodies.find((b) => b.id === 'bh-alpha') ?? baseBodies[0];
+  const rs = computeSchwarzschildRadius(bhAlpha.mass, G, true) * 1.18;
+
+  // Colocar la sonda justo en el umbral del Radio de Schwarzschild (r ≈ 0.88 * r_s) de Agujero Negro Alfa
+  // con velocidad tangencial sub-orbital para que cruce el horizonte lentamente exhibiendo espaguetización 3D máxima
+  const offsetAngle = Math.PI * 0.25;
+  const targetR = rs * 0.86;
+  const px = bhAlpha.position.x + Math.cos(offsetAngle) * targetR;
+  const pz = bhAlpha.position.z + Math.sin(offsetAngle) * targetR;
+
+  const vLocal = Math.sqrt((G * bhAlpha.mass) / Math.max(2.0, targetR)) * 0.62;
+  const vx = bhAlpha.velocity.x - Math.sin(offsetAngle) * vLocal;
+  const vz = bhAlpha.velocity.z + Math.cos(offsetAngle) * vLocal;
+
+  const probeBody: CelestialBody = {
+    id: 'probe-schwarzschild',
+    nameEs: 'Sonda Horizonte r_s (Espaguetizada)',
+    nameEn: 'Horizon Probe r_s (Spaghettified)',
+    mass: 4.5,
+    radius: 1.15,
+    color: '#F43F5E',
+    position: { x: px, y: 0, z: pz },
+    velocity: { x: vx, y: 0, z: vz },
+    acceleration: { x: 0, y: 0, z: 0 },
+  };
+
+  const filtered = baseBodies.filter((b) => b.id !== 'probe-schwarzschild');
+  return [...filtered, probeBody];
 }
 
 const SPAWN_PLANET_PALETTE = [

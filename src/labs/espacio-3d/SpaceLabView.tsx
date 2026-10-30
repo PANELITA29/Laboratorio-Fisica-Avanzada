@@ -35,10 +35,12 @@ import {
   triggerPlanetaryCollisionCourse,
   detectAndResolveCollisions,
   computeRelativisticAndTidalMetrics,
+  computeSchwarzschildRadius,
 } from './space-engine';
 import {
   createSpacetimeShaderMesh,
   updateSpacetimeShaderUniforms,
+  deformPlanetGeometryForSpaghettification,
 } from './SpaceScene3D';
 import {
   SPACE_CHALLENGES,
@@ -167,6 +169,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
   const setSpaceKeplerParams = useLabGlobalStore((s) => s.setSpaceKeplerParams);
   const setSpaceVisualLayers = useLabGlobalStore((s) => s.setSpaceVisualLayers);
   const triggerSpaceCollisionCataclysm = useLabGlobalStore((s) => s.triggerSpaceCollisionCataclysm);
+  const injectSchwarzschildProbe = useLabGlobalStore((s) => s.injectSchwarzschildProbe);
   const setSpaceBodies = useLabGlobalStore((s) => s.setSpaceBodies);
 
   const {
@@ -227,7 +230,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
   });
   const [lastCollisionNotice, setLastCollisionNotice] = useState<string | null>(null);
 
-  // Telemetría viva throttled a <= 10Hz para el HUD y Reporte (+ Reloj Relativista y Espaguetización)
+  // Telemetría viva throttled a <= 10Hz para el HUD y Reporte (+ Reloj Relativista y Espaguetización en Horizonte de Schwarzschild)
   const [liveStats, setLiveStats] = useState({
     kineticEnergy: 0,
     potentialEnergy: 0,
@@ -236,9 +239,19 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
     primarySpeed: 8.6,
     coordTimeSec: 0,
     properTimeSec: 0,
+    properTimeRate: 1.0,
     lorentzGamma: 1.0,
     redshiftZ: 0.0,
     maxTidalStretch: 1.0,
+    maxTidalHeatingK: 290,
+    schwarzschildRadiusU: 5.5,
+    closestDistanceU: 16.0,
+    horizonDistanceRatio: 2.9,
+    isCrossingSchwarzschild: false,
+    isBinaryBlackHoleSystem: false,
+    spaghettificationRegime: 'nominal' as 'nominal' | 'roche-tidal' | 'schwarzschild-spaghettification',
+    closestBodyNameEs: 'Tierra',
+    closestBodyNameEn: 'Earth',
   });
 
   const [validationFeedback, setValidationFeedback] = useState<Record<string, SpaceValidationResult>>({});
@@ -511,19 +524,28 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
       trailLine: THREE.Line;
       trailPositions: Float32Array;
       trailCount: number;
+      deformableMesh?: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+      deformableMat?: THREE.MeshStandardMaterial;
+      basePositions?: Float32Array;
+      wasDeformed?: boolean;
+      tidalStreamLine?: THREE.Line;
+      tidalStreamPositions?: Float32Array;
     }
 
     let visualsMap: Record<string, BodyVisuals> = {};
     let lastResetToken = -1;
     const MAX_TRAIL_POINTS = 180;
+    const TIDAL_STREAM_POINTS = 24;
 
     // Construye un modelo 3D compuesto (3-12 partes) para cada astro, satélite o Agujero Negro
     const createCelestialCompositeGroup = (b: CelestialBody): THREE.Group => {
       const grp = new THREE.Group();
 
       if (b.isBlackHole) {
-        // Agujero Negro Relativista (Gargantúa) de 7 partes:
-        // 1) Horizonte de Sucesos (Sombra negra absoluta que absorbe toda radiación)
+        const rsRadius = computeSchwarzschildRadius(b.mass, controlsStateRef.current.gravityG, true);
+
+        // Agujero Negro Relativista (Gargantúa) de 8 partes incluyendo Frontera del Radio de Schwarzschild (r_s):
+        // 1) Horizonte de Sucesos Interno (Sombra negra absoluta que absorbe toda radiación)
         const horizonMesh = new THREE.Mesh(
           new THREE.SphereGeometry(b.radius * 0.92, 32, 32),
           new THREE.MeshBasicMaterial({ color: 0x000000 })
@@ -612,15 +634,48 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
         jetBottom.rotation.x = Math.PI;
         grp.add(jetTop, jetBottom);
 
+        // 8) Frontera Holográfica del Radio de Schwarzschild (r = r_s): marca la zona crítica de Espaguetización 3D
+        const rsHorizonRingGeo = new THREE.TorusGeometry(rsRadius, 0.055, 12, 72);
+        rsHorizonRingGeo.rotateX(Math.PI / 2);
+        const rsHorizonRingMat = new THREE.MeshBasicMaterial({
+          color: 0xf43f5e,
+          transparent: true,
+          opacity: 0.62,
+          depthWrite: false,
+        });
+        const rsHorizonRing = new THREE.Mesh(rsHorizonRingGeo, rsHorizonRingMat);
+        grp.add(rsHorizonRing);
+
+        const rsShellGeo = new THREE.SphereGeometry(rsRadius, 18, 14);
+        const rsShellMat = new THREE.MeshBasicMaterial({
+          color: 0xf43f5e,
+          transparent: true,
+          opacity: 0.09,
+          wireframe: true,
+          depthWrite: false,
+        });
+        const rsShellMesh = new THREE.Mesh(rsShellGeo, rsShellMat);
+        grp.add(rsShellMesh);
+
         return grp;
       }
 
       if (b.id.includes('satellite')) {
         // Satélite compuesto: 1) Bus central dorado, 2) 2 Paneles solares azules, 3) Plato de antena y propulsor
-        const hull = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.45, 0.45, 1.2, 16),
-          new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.85, roughness: 0.25 })
-        );
+        const hullGeo = new THREE.SphereGeometry(b.radius, 28, 28);
+        const hullMat = new THREE.MeshStandardMaterial({
+          color: 0xf59e0b,
+          metalness: 0.85,
+          roughness: 0.25,
+          emissive: 0x000000,
+          emissiveIntensity: 0.1,
+        });
+        const hull = new THREE.Mesh(hullGeo, hullMat);
+        const posAttr = hullGeo.attributes.position as THREE.BufferAttribute;
+        grp.userData.deformableMesh = hull;
+        grp.userData.deformableMat = hullMat;
+        grp.userData.basePositions = new Float32Array(posAttr.array as Float32Array);
+
         const wingGeo = new THREE.BoxGeometry(2.8, 0.06, 0.75);
         const wingMat = new THREE.MeshStandardMaterial({
           color: 0x0284c7,
@@ -645,17 +700,36 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
         return grp;
       }
 
-      // Astro o Estrella compuesta: 1) Esfera núcleo PBR, 2) Halo atmosférico o corona, 3) Anillo ecuatorial / marcador polar
+      // Astro, Planeta o Sonda Relativista compuesta:
+      // 1) Esfera núcleo PBR subdividida (32x28) cuyos vértices se deforman en vivo al cruzar el Radio de Schwarzschild
+      const coreGeo = new THREE.SphereGeometry(b.radius, 32, 28);
       const coreMat = new THREE.MeshStandardMaterial({
         color: b.color,
-        roughness: b.emissive ? 0.15 : 0.45,
-        metalness: b.emissive ? 0.1 : 0.3,
+        roughness: b.emissive ? 0.15 : 0.38,
+        metalness: b.emissive ? 0.1 : 0.32,
         emissive: b.emissive ? b.color : '#000000',
-        emissiveIntensity: b.emissive ? 1.4 : 0.08,
+        emissiveIntensity: b.emissive ? 1.4 : 0.1,
       });
-      const coreMesh = new THREE.Mesh(new THREE.SphereGeometry(b.radius, 28, 28), coreMat);
+      const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+      const posAttr = coreGeo.attributes.position as THREE.BufferAttribute;
+      grp.userData.deformableMesh = coreMesh;
+      grp.userData.deformableMat = coreMat;
+      grp.userData.basePositions = new Float32Array(posAttr.array as Float32Array);
       grp.add(coreMesh);
 
+      // 2) Malla Wireframe Relativista superpuesta que hace evidente la deformación de los polígonos 3D (espaguetización)
+      const wireOverlayMat = new THREE.MeshBasicMaterial({
+        color: 0xfef08a,
+        transparent: true,
+        opacity: 0.22,
+        wireframe: true,
+        depthWrite: false,
+      });
+      const wireOverlayMesh = new THREE.Mesh(coreGeo, wireOverlayMat);
+      wireOverlayMesh.scale.setScalar(1.015);
+      grp.add(wireOverlayMesh);
+
+      // 3) Halo atmosférico o corona
       const haloMat = new THREE.MeshBasicMaterial({
         color: b.color,
         transparent: true,
@@ -665,6 +739,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
       const haloMesh = new THREE.Mesh(new THREE.SphereGeometry(b.radius * 1.28, 20, 20), haloMat);
       grp.add(haloMesh);
 
+      // 4) Anillo ecuatorial / marcador polar
       const ringGeo = new THREE.TorusGeometry(b.radius * 1.55, b.radius * 0.06, 10, 36);
       ringGeo.rotateX(Math.PI / 2);
       const ringMat = new THREE.MeshStandardMaterial({
@@ -885,6 +960,20 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
         trailLine.frustumCulled = false;
         bodiesGroup.add(trailLine);
 
+        // Corriente de Plasma de Marea (Tidal Disruption Stream) que fluye desde la malla espaguetizada hacia el Agujero Negro al cruzar r_s
+        const tidalStreamPositions = new Float32Array(TIDAL_STREAM_POINTS * 3);
+        const tidalStreamGeo = new THREE.BufferGeometry();
+        tidalStreamGeo.setAttribute('position', new THREE.BufferAttribute(tidalStreamPositions, 3));
+        const tidalStreamMat = new THREE.LineBasicMaterial({
+          color: 0xf43f5e,
+          transparent: true,
+          opacity: 0.88,
+        });
+        const tidalStreamLine = new THREE.Line(tidalStreamGeo, tidalStreamMat);
+        tidalStreamLine.frustumCulled = false;
+        tidalStreamLine.visible = false;
+        bodiesGroup.add(tidalStreamLine);
+
         visualsMap[b.id] = {
           group,
           forceArrow,
@@ -892,6 +981,12 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
           trailLine,
           trailPositions,
           trailCount: 0,
+          deformableMesh: group.userData.deformableMesh,
+          deformableMat: group.userData.deformableMat,
+          basePositions: group.userData.basePositions,
+          wasDeformed: false,
+          tidalStreamLine,
+          tidalStreamPositions,
         };
       });
     };
@@ -1088,7 +1183,8 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
         );
       }
 
-      // 3. Actualizar Posiciones de Cuerpos, Espaguetización Mareal 3D, Vectores y Rastro Orbital
+      // 3. Actualizar Posiciones de Cuerpos, Deformación de Malla 3D (Espaguetización en r_s), Vectores y Rastro Orbital
+      const timeSec = nowMs * 0.001;
       activeBodies.forEach((b) => {
         const vis = visualsMap[b.id];
         if (!vis) return;
@@ -1097,13 +1193,81 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
 
         const tidal = relMetrics.tidalByBodyId[b.id];
         if (tidal && tidal.stretchFactor > 1.04 && !b.isBlackHole && !b.isFixed) {
-          // Espaguetización 3D: alinear eje X del grupo hacia el Agujero Negro y estirar conservando volumen
+          // Espaguetización 3D: alinear eje X del grupo hacia el Agujero Negro y aplicar deformación de malla BufferGeometry + escala tensorial
           _tidalAxis.set(tidal.dirX, tidal.dirY, tidal.dirZ).normalize();
           vis.group.quaternion.setFromUnitVectors(_unitX, _tidalAxis);
-          vis.group.scale.set(tidal.stretchFactor, tidal.transverseScale, tidal.transverseScale);
+          vis.group.scale.set(
+            1.0 + (tidal.stretchFactor - 1.0) * 0.65,
+            tidal.transverseScale,
+            tidal.transverseScale
+          );
+
+          if (vis.deformableMesh && vis.basePositions) {
+            deformPlanetGeometryForSpaghettification(
+              vis.deformableMesh.geometry,
+              vis.basePositions,
+              b.radius,
+              tidal.stretchFactor,
+              tidal.vertexPinchIntensity,
+              timeSec
+            );
+            vis.wasDeformed = true;
+          }
+
+          if (vis.deformableMat) {
+            // Incandescencia térmica por fricción de marea al cruzar el Radio de Schwarzschild
+            const heatRatio = Math.min(1.0, tidal.vertexPinchIntensity * 1.15);
+            vis.deformableMat.emissive.setHex(
+              tidal.crossedSchwarzschild ? 0xf43f5e : heatRatio > 0.25 ? 0xf97316 : 0x000000
+            );
+            vis.deformableMat.emissiveIntensity = 0.15 + heatRatio * 2.2;
+          }
+
+          // Filamento de acreción de plasma arrancado del cuerpo espaguetizado hacia el horizonte del Agujero Negro Binario
+          if (vis.tidalStreamLine && vis.tidalStreamPositions && tidal.distanceToHorizonRatio <= 1.55) {
+            vis.tidalStreamLine.visible = true;
+            const streamArr = vis.tidalStreamPositions;
+            const ax = tidal.attractorPosition.x;
+            const ay = tidal.attractorPosition.y;
+            const az = tidal.attractorPosition.z;
+            for (let k = 0; k < TIDAL_STREAM_POINTS; k++) {
+              const u = k / (TIDAL_STREAM_POINTS - 1);
+              const spiralPhase = u * 8.5 - timeSec * 11.0;
+              const spiralAmp = (1.0 - u) * 0.45 * b.radius * tidal.vertexPinchIntensity;
+              streamArr[k * 3] =
+                b.position.x + (ax - b.position.x) * u + Math.cos(spiralPhase) * spiralAmp;
+              streamArr[k * 3 + 1] =
+                b.position.y + (ay - b.position.y) * u + Math.sin(spiralPhase * 1.3) * spiralAmp * 0.5;
+              streamArr[k * 3 + 2] =
+                b.position.z + (az - b.position.z) * u + Math.sin(spiralPhase) * spiralAmp;
+            }
+            const streamAttr = vis.tidalStreamLine.geometry.attributes
+              .position as THREE.BufferAttribute;
+            streamAttr.needsUpdate = true;
+          } else if (vis.tidalStreamLine) {
+            vis.tidalStreamLine.visible = false;
+          }
         } else {
           vis.group.scale.set(1, 1, 1);
           vis.group.rotation.y += b.isBlackHole ? 0.045 : 0.012;
+          if (vis.wasDeformed && vis.deformableMesh && vis.basePositions) {
+            deformPlanetGeometryForSpaghettification(
+              vis.deformableMesh.geometry,
+              vis.basePositions,
+              b.radius,
+              1.0,
+              0,
+              timeSec
+            );
+            vis.wasDeformed = false;
+          }
+          if (vis.deformableMat && !b.emissive) {
+            vis.deformableMat.emissive.setHex(0x000000);
+            vis.deformableMat.emissiveIntensity = 0.1;
+          }
+          if (vis.tidalStreamLine) {
+            vis.tidalStreamLine.visible = false;
+          }
         }
 
         // Vector 3D Fuerza Gravitacional (Azul)
@@ -1194,16 +1358,26 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
 
       // 5. Actualizar HUD de energías y Reloj Relativista cada 200ms (<= 5Hz) para evitar re-renders a 60Hz
       const now = performance.now();
-      if (now - lastHudUpdate > 220) {
+      if (now - lastHudUpdate > 200) {
         lastHudUpdate = now;
         const energetics = computeSystemEnergetics(activeBodies, cfg.gravityG);
         setLiveStats({
           ...energetics,
           coordTimeSec: relClockRef.current.coordTime,
           properTimeSec: relClockRef.current.properTime,
+          properTimeRate: relMetrics.properTimeRate,
           lorentzGamma: relMetrics.lorentzGamma,
           redshiftZ: relMetrics.gravitationalRedshiftZ,
           maxTidalStretch: relMetrics.maxTidalStretch,
+          maxTidalHeatingK: relMetrics.maxTidalHeatingK,
+          schwarzschildRadiusU: relMetrics.schwarzschildRadiusU,
+          closestDistanceU: relMetrics.closestDistanceU,
+          horizonDistanceRatio: relMetrics.horizonDistanceRatio,
+          isCrossingSchwarzschild: relMetrics.isCrossingSchwarzschild,
+          isBinaryBlackHoleSystem: relMetrics.isBinaryBlackHoleSystem,
+          spaghettificationRegime: relMetrics.spaghettificationRegime,
+          closestBodyNameEs: relMetrics.closestBodyNameEs,
+          closestBodyNameEn: relMetrics.closestBodyNameEn,
         });
       }
 
@@ -1367,6 +1541,26 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
                 {lang === 'es' ? '☄️ Chocar Planetas (Supernova)' : '☄️ Crash Planets (Supernova)'}
               </span>
             </button>
+
+            {/* Botón Inyectar Sonda al Radio de Schwarzschild Binario (Espaguetización 3D) */}
+            <button
+              type="button"
+              data-testid="launch-schwarzschild-probe-top-btn"
+              onClick={() => {
+                setIsPaused(false);
+                clearCataclysmState();
+                setSpaceBodies(bodiesRef.current, false);
+                injectSchwarzschildProbe();
+                audioSynth.playPlanetSpawnWhoosh();
+              }}
+              className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold border border-rose-500/70 bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>
+                {lang === 'es'
+                  ? '🍝 Cruzar Radio de Schwarzschild (Binario)'
+                  : '🍝 Cross Schwarzschild Radius (Binary)'}
+              </span>
+            </button>
           </div>
 
           <TourGuiado labId="space" lang={lang} steps={SPACE_TOUR_STEPS} />
@@ -1458,13 +1652,14 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
           <div className="absolute top-2.5 left-2.5 right-2.5 sm:right-auto sm:top-4 sm:left-4 pointer-events-none bg-[#090D16]/95 border border-slate-800 rounded-lg px-3 py-2 sm:px-3.5 sm:py-2.5 space-y-1.5">
             <div className="text-[10px] sm:text-[11px] font-mono text-purple-400 uppercase truncate">
               {preset === 'binary-bh'
-                ? '🌀 SISTEMA BINARIO DE AGUJEROS NEGROS · ONDAS Y MAREA'
+                ? '🌀 SISTEMA BINARIO DE AGUJEROS NEGROS · HORIZONTE DE SCHWARZSCHILD'
                 : isBlackHole
                 ? '🕳️ MÉTRICA DE KERR-SCHWARZSCHILD · HORIZONTE DE SUCESOS'
                 : 'TELEMETRÍA ORBITAL EN VIVO (VERLET)'}
             </div>
             <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-[11px] sm:text-xs font-mono text-slate-200 tabular-nums">
               <span>r: {liveStats.primaryOrbitalRadius.toFixed(2)} u</span>
+              <span>r/r_s: {liveStats.horizonDistanceRatio.toFixed(2)}</span>
               <span>v: {liveStats.primarySpeed.toFixed(2)} u/s</span>
               <span className="text-cyan-400">E_tot: {liveStats.totalEnergy.toFixed(0)} GJ</span>
             </div>
@@ -1483,13 +1678,19 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
               </span>
               <span
                 className={
-                  liveStats.maxTidalStretch > 1.25
-                    ? 'text-rose-400 font-bold'
-                    : 'text-amber-300'
+                  liveStats.isCrossingSchwarzschild
+                    ? 'text-rose-400 font-extrabold'
+                    : liveStats.maxTidalStretch > 1.25
+                    ? 'text-amber-300 font-bold'
+                    : 'text-emerald-300'
                 }
               >
-                🍝 Marea: {liveStats.maxTidalStretch.toFixed(2)}x
-                {liveStats.maxTidalStretch > 1.25 ? ' [ESPAGUETIZACIÓN]' : ''}
+                🍝 Malla 3D: {liveStats.maxTidalStretch.toFixed(2)}x
+                {liveStats.isCrossingSchwarzschild
+                  ? ' [CRUZANDO r_s · ESPAGUETIZACIÓN]'
+                  : liveStats.maxTidalStretch > 1.25
+                  ? ' [ZONA DE MAREA]'
+                  : ''}
               </span>
             </div>
 
@@ -1782,6 +1983,372 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* UI Interactiva: Reloj de Dilatación Temporal Relativista y Monitor de Espaguetización 3D (Radio de Schwarzschild r_s) */}
+      <ScrollReveal direction="up" delayMs={50}>
+        <div
+          data-testid="relativistic-clock-spaghettification-panel"
+          className="p-5 rounded-xl bg-[#0D1322] border border-fuchsia-500/40 space-y-4"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-mono uppercase tracking-wider text-fuchsia-400">
+                  MÉTRICA DE SCHWARZSCHILD Y TENSOR DE MAREA BINARIO · dτ = dt · √(1 - r_s / r)
+                </span>
+                <span
+                  data-testid="spaghettification-status-badge"
+                  className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded border ${
+                    liveStats.isCrossingSchwarzschild
+                      ? 'bg-rose-500/25 border-rose-400 text-rose-200'
+                      : liveStats.spaghettificationRegime === 'roche-tidal'
+                      ? 'bg-amber-500/20 border-amber-400 text-amber-200'
+                      : 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
+                  }`}
+                >
+                  {liveStats.isCrossingSchwarzschild
+                    ? '🔴 ¡CRUZANDO RADIO DE SCHWARZSCHILD (r ≤ r_s) · ESPAGUETIZACIÓN CRÍTICA 3D!'
+                    : liveStats.spaghettificationRegime === 'roche-tidal'
+                    ? '🟡 ZONA DE ROCHE · DEFORMACIÓN DE MALLA MAREAL ACTIVA'
+                    : '🟢 GEOMETRÍA ESFÉRICA NOMINAL (r > 2.2 r_s)'}
+                </span>
+              </div>
+              <h3 className="text-sm font-bold text-white mt-1">
+                Reloj de Dilatación Temporal Relativista y Monitor de Espaguetización 3D en Agujero Negro Binario
+              </h3>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                data-testid="launch-schwarzschild-probe-btn"
+                onClick={() => {
+                  setIsPaused(false);
+                  clearCataclysmState();
+                  setSpaceBodies(bodiesRef.current, false);
+                  injectSchwarzschildProbe();
+                  audioSynth.playPlanetSpawnWhoosh();
+                }}
+                className="px-3.5 py-2 rounded-lg text-xs font-mono font-bold bg-rose-500 hover:bg-rose-400 text-slate-950 transition-colors cursor-pointer"
+              >
+                🍝 Inyectar Sonda en Radio de Schwarzschild Binario (r ≤ r_s)
+              </button>
+              <button
+                type="button"
+                data-testid="reset-relativistic-clocks-btn"
+                onClick={() => {
+                  relClockRef.current = { coordTime: 0, properTime: 0 };
+                  setLiveStats((prev) => ({
+                    ...prev,
+                    coordTimeSec: 0,
+                    properTimeSec: 0,
+                  }));
+                }}
+                className="px-3 py-2 rounded-lg text-xs font-mono border border-slate-700 bg-[#07090E] hover:bg-slate-800 text-slate-200 transition-colors cursor-pointer"
+              >
+                ⏱️ Sincronizar Relojes (t = τ = 0)
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+            {/* Columna Izquierda (7 cols): Relojes Gemelos Relativistas (Observador Lejano vs. Sonda en el Horizonte) */}
+            <div className="lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Reloj 1: Observador en el Infinito (t_obs) */}
+              <div className="p-3.5 rounded-xl bg-[#07090E] border border-slate-800 flex items-center gap-3.5">
+                <svg
+                  viewBox="0 0 80 80"
+                  className="w-16 h-16 shrink-0"
+                  aria-label="Reloj Observador Lejano"
+                >
+                  <circle
+                    cx="40"
+                    cy="40"
+                    r="35"
+                    fill="#090D16"
+                    stroke="#38BDF8"
+                    strokeWidth="2.5"
+                  />
+                  {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((deg) => (
+                    <line
+                      key={deg}
+                      x1="40"
+                      y1="8"
+                      x2="40"
+                      y2={deg % 90 === 0 ? '14' : '11'}
+                      stroke="#64748B"
+                      strokeWidth={deg % 90 === 0 ? '2' : '1'}
+                      transform={`rotate(${deg} 40 40)`}
+                    />
+                  ))}
+                  {/* Manecilla de minutos */}
+                  <line
+                    x1="40"
+                    y1="40"
+                    x2="40"
+                    y2="20"
+                    stroke="#94A3B8"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    transform={`rotate(${(liveStats.coordTimeSec * 6) % 360} 40 40)`}
+                  />
+                  {/* Manecilla de segundos rápida (1 vuelta cada 10s simulados) */}
+                  <line
+                    x1="40"
+                    y1="40"
+                    x2="40"
+                    y2="13"
+                    stroke="#38BDF8"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    transform={`rotate(${(liveStats.coordTimeSec * 36) % 360} 40 40)`}
+                  />
+                  <circle cx="40" cy="40" r="3" fill="#38BDF8" />
+                </svg>
+
+                <div className="space-y-1 font-mono min-w-0">
+                  <span className="text-[10px] uppercase tracking-wider text-sky-400 block">
+                    RELOJ OBSERVADOR LEJANO (r → ∞)
+                  </span>
+                  <div
+                    data-testid="clock-observer-readout"
+                    className="text-lg font-extrabold text-white tabular-nums"
+                  >
+                    t = {liveStats.coordTimeSec.toFixed(2)} s
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    Ritmo: <span className="text-sky-300 font-semibold">1.000 s/s</span> (Espacio Plano)
+                  </div>
+                </div>
+              </div>
+
+              {/* Reloj 2: Tiempo Propio en la Sonda / Horizonte (τ_sonda) */}
+              <div
+                className={`p-3.5 rounded-xl bg-[#07090E] border flex items-center gap-3.5 ${
+                  liveStats.isCrossingSchwarzschild
+                    ? 'border-rose-500/80 shadow-[0_0_20px_rgba(244,63,94,0.22)]'
+                    : 'border-fuchsia-500/40'
+                }`}
+              >
+                <svg
+                  viewBox="0 0 80 80"
+                  className="w-16 h-16 shrink-0"
+                  aria-label="Reloj Propio en el Horizonte"
+                >
+                  <circle
+                    cx="40"
+                    cy="40"
+                    r="35"
+                    fill="#12081C"
+                    stroke={liveStats.isCrossingSchwarzschild ? '#F43F5E' : '#D946EF'}
+                    strokeWidth="2.5"
+                  />
+                  {[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map((deg) => (
+                    <line
+                      key={deg}
+                      x1="40"
+                      y1="8"
+                      x2="40"
+                      y2={deg % 90 === 0 ? '14' : '11'}
+                      stroke="#701A75"
+                      strokeWidth={deg % 90 === 0 ? '2' : '1'}
+                      transform={`rotate(${deg} 40 40)`}
+                    />
+                  ))}
+                  {/* Manecilla de minutos relativista */}
+                  <line
+                    x1="40"
+                    y1="40"
+                    x2="40"
+                    y2="20"
+                    stroke="#F0ABFC"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    transform={`rotate(${(liveStats.properTimeSec * 6) % 360} 40 40)`}
+                  />
+                  {/* Manecilla de segundos ralentizada por la gravedad (dτ/dt) */}
+                  <line
+                    x1="40"
+                    y1="40"
+                    x2="40"
+                    y2="13"
+                    stroke={liveStats.isCrossingSchwarzschild ? '#F43F5E' : '#E879F9'}
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    transform={`rotate(${(liveStats.properTimeSec * 36) % 360} 40 40)`}
+                  />
+                  <circle
+                    cx="40"
+                    cy="40"
+                    r="3"
+                    fill={liveStats.isCrossingSchwarzschild ? '#F43F5E' : '#E879F9'}
+                  />
+                </svg>
+
+                <div className="space-y-1 font-mono min-w-0">
+                  <span className="text-[10px] uppercase tracking-wider text-fuchsia-400 block truncate">
+                    RELOJ PROPIO ({lang === 'es' ? liveStats.closestBodyNameEs : liveStats.closestBodyNameEn})
+                  </span>
+                  <div
+                    data-testid="clock-proper-readout"
+                    className="text-lg font-extrabold text-fuchsia-200 tabular-nums"
+                  >
+                    τ = {liveStats.properTimeSec.toFixed(2)} s
+                  </div>
+                  <div className="text-[11px] text-slate-300">
+                    dτ/dt:{' '}
+                    <span className="text-rose-300 font-bold">
+                      {(liveStats.properTimeRate * 100).toFixed(1)}%
+                    </span>{' '}
+                    · Δt: +{(liveStats.coordTimeSec - liveStats.properTimeSec).toFixed(2)}s
+                  </div>
+                </div>
+              </div>
+
+              {/* Fila inferior de métricas relativistas: Factor Gamma, Redshift z, Temperatura de Marea */}
+              <div className="sm:col-span-2 grid grid-cols-3 gap-2.5 text-xs font-mono">
+                <div className="p-2.5 rounded-lg bg-[#07090E] border border-slate-800">
+                  <span className="text-[10px] text-slate-400 block">FACTOR LORENTZ GRAV. (γ)</span>
+                  <span className="text-sm font-bold text-fuchsia-300 tabular-nums">
+                    γ = {liveStats.lorentzGamma.toFixed(2)}x
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-[#07090E] border border-slate-800">
+                  <span className="text-[10px] text-slate-400 block">REDSHIFT GRAVITACIONAL (z)</span>
+                  <span className="text-sm font-bold text-amber-300 tabular-nums">
+                    z = {liveStats.redshiftZ.toFixed(3)}
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-[#07090E] border border-slate-800">
+                  <span className="text-[10px] text-slate-400 block">FRICCIÓN DE MAREA (T)</span>
+                  <span className="text-sm font-bold text-rose-300 tabular-nums">
+                    {liveStats.maxTidalHeatingK} K
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Columna Derecha (5 cols): Visualizador de Malla 3D Espaguetizada y Proximidad al Radio de Schwarzschild (r / r_s) */}
+            <div className="lg:col-span-5 p-3.5 rounded-xl bg-[#07090E] border border-slate-800 flex flex-col justify-between gap-3">
+              <div className="flex items-center justify-between gap-2 text-xs font-mono">
+                <span className="text-rose-300 font-bold">
+                  🍝 DEFORMACIÓN DE MALLA 3D (λ = {liveStats.maxTidalStretch.toFixed(2)}x)
+                </span>
+                <span className="text-slate-300 tabular-nums">
+                  r / r_s = <strong className="text-white">{liveStats.horizonDistanceRatio.toFixed(2)}</strong> (r_s = {liveStats.schwarzschildRadiusU.toFixed(1)} u)
+                </span>
+              </div>
+
+              {/* Esquema SVG en vivo de la Malla 3D deformándose al cruzar el Radio de Schwarzschild r_s */}
+              <div className="relative h-24 w-full rounded-lg bg-[#05070E] border border-slate-800/90 overflow-hidden flex items-center justify-center">
+                <svg
+                  viewBox="0 0 260 84"
+                  className="w-full h-full"
+                  aria-label="Monitor de Espaguetización en el Radio de Schwarzschild"
+                >
+                  {/* Horizonte de Sucesos de Schwarzschild (Derecha) */}
+                  <circle
+                    cx="236"
+                    cy="42"
+                    r="28"
+                    fill="#000000"
+                    stroke="#F43F5E"
+                    strokeWidth="1.5"
+                    strokeDasharray="4 3"
+                  />
+                  <circle cx="236" cy="42" r="14" fill="#000000" stroke="#A855F7" strokeWidth="2" />
+                  <text x="195" y="15" fill="#F43F5E" fontSize="8" fontFamily="monospace">
+                    Horizonte r_s
+                  </text>
+
+                  {/* Malla 3D de la Sonda/Planeta estirada longitudinalmente y comprimida transversalmente */}
+                  {(() => {
+                    const stretch = Math.min(4.2, liveStats.maxTidalStretch);
+                    const rx = 14 * stretch;
+                    const ry = Math.max(4.5, 14 / Math.sqrt(stretch));
+                    const cx = Math.max(
+                      52,
+                      Math.min(198, 215 - Math.min(3.2, liveStats.horizonDistanceRatio) * 48)
+                    );
+                    const strokeCol = liveStats.isCrossingSchwarzschild
+                      ? '#F43F5E'
+                      : stretch > 1.25
+                      ? '#F59E0B'
+                      : '#38BDF8';
+                    return (
+                      <g transform={`translate(${cx}, 42)`}>
+                        <ellipse
+                          cx="0"
+                          cy="0"
+                          rx={rx}
+                          ry={ry}
+                          fill={strokeCol}
+                          fillOpacity="0.22"
+                          stroke={strokeCol}
+                          strokeWidth="1.8"
+                        />
+                        {/* Meridianos de la malla 3D deformada */}
+                        <ellipse
+                          cx="0"
+                          cy="0"
+                          rx={rx * 0.65}
+                          ry={ry}
+                          fill="none"
+                          stroke="#FEF08A"
+                          strokeOpacity="0.55"
+                          strokeWidth="0.9"
+                        />
+                        <line
+                          x1={-rx}
+                          y1="0"
+                          x2={rx}
+                          y2="0"
+                          stroke="#FEF08A"
+                          strokeOpacity="0.65"
+                          strokeWidth="1"
+                        />
+                        <line
+                          x1="0"
+                          y1={-ry}
+                          x2="0"
+                          y2={ry}
+                          stroke="#FEF08A"
+                          strokeOpacity="0.65"
+                          strokeWidth="1"
+                        />
+                      </g>
+                    );
+                  })()}
+                </svg>
+              </div>
+
+              {/* Barra de Proximidad al Radio de Schwarzschild (r / r_s) */}
+              <div className="space-y-1 font-mono text-[11px]">
+                <div className="flex justify-between text-[10px] text-slate-400">
+                  <span>0.5 r_s (Singularidad)</span>
+                  <span className="text-rose-400 font-bold">1.0 r_s (Horizonte Schwarzschild)</span>
+                  <span>3.0+ r_s (Zona Segura)</span>
+                </div>
+                <div className="w-full h-2.5 rounded-full bg-slate-900 border border-slate-800 overflow-hidden relative">
+                  <div
+                    className={`h-full transition-all duration-150 ${
+                      liveStats.isCrossingSchwarzschild
+                        ? 'bg-gradient-to-r from-rose-600 via-fuchsia-500 to-amber-400'
+                        : 'bg-gradient-to-r from-cyan-500 to-purple-500'
+                    }`}
+                    style={{
+                      width: `${Math.max(
+                        8,
+                        Math.min(100, (1 - Math.min(3.2, liveStats.horizonDistanceRatio) / 3.4) * 100)
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </ScrollReveal>
 
       {/* Panel Analítico Interactivo: Leyes de Kepler (Animado al Hacer Scroll) */}
       <ScrollReveal direction="up" delayMs={80}>

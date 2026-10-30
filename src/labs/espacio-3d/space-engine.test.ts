@@ -184,12 +184,16 @@ test('Global Zustand store (useLabGlobalStore) preserves mass, gravity, and Blac
   assert.equal(afterSliders.bodies[0].isBlackHole, true);
 });
 
+import * as THREE from 'three';
 import {
   computeRelativisticAndTidalMetrics,
   spawnCustomPlanetOnPlane,
+  injectBinarySchwarzschildSpaghettificationProbe,
+  computeSchwarzschildRadius,
 } from './space-engine';
+import { deformPlanetGeometryForSpaghettification } from './SpaceScene3D';
 
-test('Binary Black Holes preset, 3D Tidal Spaghettification, Relativistic Time Dilation, and Click-to-Spawn Planets', () => {
+test('Binary Black Holes preset, 3D Tidal Spaghettification across Schwarzschild Radius, Relativistic Time Dilation, and Click-to-Spawn Planets', () => {
   const binaryBodies = createSpacePreset('binary-bh', 1.0, 1.0);
   assert.equal(binaryBodies.filter((b) => b.isBlackHole).length, 2);
 
@@ -199,6 +203,39 @@ test('Binary Black Holes preset, 3D Tidal Spaghettification, Relativistic Time D
   assert.ok(relMetrics.lorentzGamma >= 1.0);
   assert.ok(relMetrics.maxTidalStretch >= 1.0);
 
+  // Inyectar sonda directamente dentro del Radio de Schwarzschild (r <= r_s) del Agujero Negro Binario
+  const crossingBodies = injectBinarySchwarzschildSpaghettificationProbe(binaryBodies, 1.2);
+  const crossingMetrics = computeRelativisticAndTidalMetrics(crossingBodies, 1.2);
+  assert.equal(crossingMetrics.isCrossingSchwarzschild, true);
+  assert.equal(crossingMetrics.spaghettificationRegime, 'schwarzschild-spaghettification');
+  assert.ok(crossingMetrics.horizonDistanceRatio <= 1.0);
+  assert.ok(crossingMetrics.maxTidalStretch >= 3.4);
+  assert.ok(crossingMetrics.lorentzGamma >= 5.0);
+
+  const probeState = crossingMetrics.tidalByBodyId['probe-schwarzschild'];
+  assert.ok(probeState);
+  assert.equal(probeState.crossedSchwarzschild, true);
+  assert.ok(probeState.vertexPinchIntensity >= 0.65);
+
+  // Verificar deformación real de vértices en THREE.BufferGeometry (Espaguetización de malla 3D)
+  const sphereGeo = new THREE.SphereGeometry(1.15, 16, 14);
+  const posAttr = sphereGeo.attributes.position as THREE.BufferAttribute;
+  const basePositions = new Float32Array(posAttr.array as Float32Array);
+  deformPlanetGeometryForSpaghettification(
+    sphereGeo,
+    basePositions,
+    1.15,
+    probeState.stretchFactor,
+    probeState.vertexPinchIntensity,
+    1.5
+  );
+  let maxLongitudinalX = 0;
+  for (let i = 0; i < posAttr.count; i++) {
+    maxLongitudinalX = Math.max(maxLongitudinalX, Math.abs(posAttr.getX(i)));
+  }
+  assert.ok(maxLongitudinalX > 1.15 * 1.8);
+  assert.ok(computeSchwarzschildRadius(780, 1.0, true) >= 4.4);
+
   // Verificar creador de planetas con clic en el plano orbital 3D (y = 0)
   const withSpawned = spawnCustomPlanetOnPlane(binaryBodies, 19.5, -14.0, 1.2, 1.0);
   assert.equal(withSpawned.length, binaryBodies.length + 1);
@@ -207,6 +244,7 @@ test('Binary Black Holes preset, 3D Tidal Spaghettification, Relativistic Time D
   assert.equal(newest.position.z, -14.0);
   assert.ok(Math.hypot(newest.velocity.x, newest.velocity.z) > 0.5);
 });
+
 
 
 

@@ -9,6 +9,7 @@ import {
   scaleCentralBodyMass,
   triggerPlanetaryCollisionCourse,
   spawnCustomPlanetOnPlane,
+  injectBinarySchwarzschildSpaghettificationProbe,
 } from '../labs/espacio-3d/space-engine';
 
 export type ActiveModuleView = 'hub' | 'circuits' | 'space' | 'mechanics' | 'kinematics';
@@ -85,6 +86,7 @@ export interface LabGlobalStore {
     showTrails: boolean;
   }>) => void;
   triggerSpaceCollisionCataclysm: () => void;
+  injectSchwarzschildProbe: () => void;
   setSpaceBodies: (bodies: CelestialBody[], bumpRevision?: boolean) => void;
 }
 
@@ -340,6 +342,31 @@ export const useLabGlobalStore = create<LabGlobalStore>((set) => ({
         spaceLab: {
           ...state.spaceLab,
           bodies: crashingBodies,
+          sceneRevision: state.spaceLab.sceneRevision + 1,
+        },
+      };
+    }),
+
+  injectSchwarzschildProbe: () =>
+    set((state) => {
+      const baseBinary =
+        state.spaceLab.preset === 'binary-bh'
+          ? state.spaceLab.bodies
+          : scaleCentralBodyMass(
+              createSpacePreset('binary-bh', 1.0, state.spaceLab.gravityG),
+              state.spaceLab.centralMassSolar,
+              true
+            );
+      const nextBodies = injectBinarySchwarzschildSpaghettificationProbe(
+        baseBinary,
+        state.spaceLab.gravityG
+      );
+      return {
+        spaceLab: {
+          ...state.spaceLab,
+          preset: 'binary-bh',
+          isBlackHole: true,
+          bodies: nextBodies,
           sceneRevision: state.spaceLab.sceneRevision + 1,
         },
       };

@@ -227,3 +227,66 @@ export function updateSpacetimeShaderUniforms(
   bundle.updateUniforms(bodies, G, elapsedSeconds, epsilon, supernovaProgress);
 }
 
+/**
+ * Deforma en tiempo real los vértices 3D (THREE.BufferGeometry) de la malla de un planeta o sonda
+ * cuando se aproxima o cruza el Radio de Schwarzschild (r <= r_s) de un Agujero Negro Binario:
+ * - Estira asimétricamente el hemisferio frontal hacia la singularidad formando un filamento de marea ("espagueti").
+ * - Comprime transversalmente la cintura ecuatorial (efecto de estricción de marea / necking).
+ * - Introduce ondas de cizalladura relativista a lo largo del eje mareal local (+X).
+ */
+export function deformPlanetGeometryForSpaghettification(
+  geometry: THREE.BufferGeometry,
+  basePositions: Float32Array,
+  baseRadius: number,
+  stretchFactor: number,
+  pinchIntensity: number,
+  timeSec: number
+): void {
+  const posAttr = geometry.attributes.position as THREE.BufferAttribute | undefined;
+  if (!posAttr) return;
+
+  const arr = posAttr.array as Float32Array;
+  const rInv = 1 / Math.max(0.1, baseRadius);
+
+  if (stretchFactor <= 1.04 && pinchIntensity <= 0.01) {
+    // Restaurar geometría esférica nominal
+    arr.set(basePositions);
+    posAttr.needsUpdate = true;
+    geometry.computeVertexNormals();
+    return;
+  }
+
+  const effectivePinch = Math.max(0, Math.min(1.0, pinchIntensity));
+  const count = posAttr.count;
+
+  for (let i = 0; i < count; i++) {
+    const idx = i * 3;
+    const bx = basePositions[idx];
+    const by = basePositions[idx + 1];
+    const bz = basePositions[idx + 2];
+
+    // Coordenada longitudinal normalizada en [-1, 1] a lo largo del vector de marea (+X apunta al Agujero Negro)
+    const nx = Math.max(-1, Math.min(1, bx * rInv));
+
+    // Asimetría relativista: el extremo más cercano al horizonte de sucesos (nx > 0) sufre mayor gradiente GM/r³
+    const frontPull = nx >= 0 ? 1.0 + effectivePinch * 0.65 * nx * nx : 1.0 + effectivePinch * 0.28 * nx * nx;
+    const longitudinalScale = (1.0 + (stretchFactor - 1.0) * 0.42) * frontPull;
+
+    // Estricción transversal (necking) en el centro y afilamiento en las puntas del filamento de espaguetización
+    const necking = 1.0 - effectivePinch * 0.48 * Math.exp(-nx * nx * 3.2);
+    const tipTaper = 1.0 - effectivePinch * 0.35 * Math.pow(Math.abs(nx), 1.6);
+    const ripple =
+      effectivePinch > 0.15
+        ? Math.sin(nx * 7.5 - timeSec * 10.0) * 0.08 * effectivePinch * baseRadius
+        : 0;
+
+    arr[idx] = bx * longitudinalScale + effectivePinch * 0.22 * baseRadius * (nx * nx * Math.sign(nx));
+    arr[idx + 1] = by * necking * tipTaper + ripple * 0.5;
+    arr[idx + 2] = bz * necking * tipTaper - ripple * 0.5;
+  }
+
+  posAttr.needsUpdate = true;
+  geometry.computeVertexNormals();
+}
+
+
