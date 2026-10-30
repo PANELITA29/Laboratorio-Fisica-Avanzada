@@ -21,6 +21,12 @@ export interface CelestialBody {
   velocity: Vector3D;
   acceleration: Vector3D;
   isFixed?: boolean;
+  isBlackHole?: boolean;
+  baseMass?: number;
+  baseNameEs?: string;
+  baseNameEn?: string;
+  baseColor?: string;
+  baseRadius?: number;
 }
 
 export type SpacePresetId = 'solar' | 'earth-moon' | 'exoplanet' | 'geostationary' | 'lagrange';
@@ -549,4 +555,196 @@ export function createKeplerianCustomSystem(params: {
     },
   ];
 }
+
+// ============================================================================
+// COLISIONES PLANETARIAS, SUPERNOVA CATACLÍSMICA Y AGUJERO NEGRO RELATIVISTA
+// ============================================================================
+
+export interface PlanetaryCollisionEvent {
+  position: Vector3D;
+  survivorId: string;
+  absorbedId: string;
+  absorbedNameEs: string;
+  absorbedNameEn: string;
+  energyReleasedGJ: number;
+}
+
+export interface CollisionStepResult {
+  bodies: CelestialBody[];
+  collisions: PlanetaryCollisionEvent[];
+  allOrbitersCollided: boolean;
+}
+
+/**
+ * Transforma el astro central entre una estrella/planeta convencional y un
+ * Agujero Negro de Kerr-Schwarzschild con horizonte de sucesos y disco de acreción.
+ */
+export function convertCentralBodyToBlackHole(
+  bodies: CelestialBody[],
+  enableBlackHole: boolean
+): CelestialBody[] {
+  if (bodies.length === 0) return bodies;
+
+  return bodies.map((b, idx) => {
+    if (idx !== 0) return b;
+
+    const origMass = b.baseMass ?? b.mass;
+    const origNameEs = b.baseNameEs ?? b.nameEs;
+    const origNameEn = b.baseNameEn ?? b.nameEn;
+    const origColor = b.baseColor ?? b.color;
+    const origRadius = b.baseRadius ?? b.radius;
+
+    if (enableBlackHole) {
+      return {
+        ...b,
+        baseMass: origMass,
+        baseNameEs: origNameEs,
+        baseNameEn: origNameEn,
+        baseColor: origColor,
+        baseRadius: origRadius,
+        isBlackHole: true,
+        nameEs: 'Agujero Negro (Gargantúa)',
+        nameEn: 'Black Hole (Gargantua)',
+        mass: Math.max(origMass * 1.85, 2200),
+        radius: 2.8,
+        color: '#A855F7',
+        emissive: true,
+      };
+    }
+
+    return {
+      ...b,
+      isBlackHole: false,
+      mass: origMass,
+      nameEs: origNameEs,
+      nameEn: origNameEn,
+      color: origColor,
+      radius: origRadius,
+    };
+  });
+}
+
+/**
+ * Configura todos los planetas en órbita en una trayectoria de caída en espiral
+ * hacia el centro gravitacional para provocar la colisión planetaria total y detonar una Supernova.
+ */
+export function triggerPlanetaryCollisionCourse(bodies: CelestialBody[]): CelestialBody[] {
+  if (bodies.length <= 1) return bodies;
+  const center = bodies[0].position;
+
+  return bodies.map((b, idx) => {
+    if (idx === 0 && b.isFixed) return b;
+    const dx = center.x - b.position.x;
+    const dy = center.y - b.position.y;
+    const dz = center.z - b.position.z;
+    const dist = Math.hypot(dx, dy, dz) || 1;
+    // Impulso centrípeto directo hacia el astro central con un ligero momento angular residual
+    const inwardSpeed = 11.5;
+    return {
+      ...b,
+      velocity: {
+        x: (dx / dist) * inwardSpeed + b.velocity.x * 0.12,
+        y: (dy / dist) * inwardSpeed,
+        z: (dz / dist) * inwardSpeed + b.velocity.z * 0.12,
+      },
+    };
+  });
+}
+
+/**
+ * Detecta colisiones físicas entre cuerpos celestes cuando |r_i - r_j| <= r_i + r_j.
+ * Fusiona masa y momento lineal de forma inelástica y determina si TODOS los planetas
+ * han colisionado (condición de masa crítica para detonar la Supernova).
+ */
+export function detectAndResolveCollisions(bodies: CelestialBody[]): CollisionStepResult {
+  if (bodies.length <= 1) {
+    return { bodies, collisions: [], allOrbitersCollided: false };
+  }
+
+  const nextBodies: CelestialBody[] = bodies.map((b) => ({
+    ...b,
+    position: { ...b.position },
+    velocity: { ...b.velocity },
+    acceleration: { ...b.acceleration },
+  }));
+
+  const removedIndices = new Set<number>();
+  const collisions: PlanetaryCollisionEvent[] = [];
+
+  for (let i = 0; i < nextBodies.length; i++) {
+    if (removedIndices.has(i)) continue;
+    for (let j = i + 1; j < nextBodies.length; j++) {
+      if (removedIndices.has(j)) continue;
+
+      const bi = nextBodies[i];
+      const bj = nextBodies[j];
+      const dx = bj.position.x - bi.position.x;
+      const dy = bj.position.y - bi.position.y;
+      const dz = bj.position.z - bi.position.z;
+      const dist = Math.hypot(dx, dy, dz);
+
+      const collisionThreshold = (bi.radius + bj.radius) * (bi.isBlackHole || bj.isBlackHole ? 1.25 : 1.05);
+
+      if (dist <= collisionThreshold) {
+        // El cuerpo con mayor masa (o fijo) sobrevive y absorbe al menor
+        const iSurvives = bi.isFixed || (!bj.isFixed && bi.mass >= bj.mass);
+        const survivorIdx = iSurvives ? i : j;
+        const absorbedIdx = iSurvives ? j : i;
+
+        const survivor = nextBodies[survivorIdx];
+        const absorbed = nextBodies[absorbedIdx];
+
+        const relVx = absorbed.velocity.x - survivor.velocity.x;
+        const relVy = absorbed.velocity.y - survivor.velocity.y;
+        const relVz = absorbed.velocity.z - survivor.velocity.z;
+        const relSpeedSq = relVx * relVx + relVy * relVy + relVz * relVz;
+        const reducedMass = (survivor.mass * absorbed.mass) / Math.max(1e-5, survivor.mass + absorbed.mass);
+        const energyReleasedGJ = 0.5 * reducedMass * relSpeedSq + survivor.mass * absorbed.mass * 0.25;
+
+        const totalMass = survivor.mass + absorbed.mass;
+        if (!survivor.isFixed) {
+          survivor.velocity = {
+            x: (survivor.mass * survivor.velocity.x + absorbed.mass * absorbed.velocity.x) / totalMass,
+            y: (survivor.mass * survivor.velocity.y + absorbed.mass * absorbed.velocity.y) / totalMass,
+            z: (survivor.mass * survivor.velocity.z + absorbed.mass * absorbed.velocity.z) / totalMass,
+          };
+          survivor.position = {
+            x: (survivor.mass * survivor.position.x + absorbed.mass * absorbed.position.x) / totalMass,
+            y: (survivor.mass * survivor.position.y + absorbed.mass * absorbed.position.y) / totalMass,
+            z: (survivor.mass * survivor.position.z + absorbed.mass * absorbed.position.z) / totalMass,
+          };
+        }
+
+        survivor.mass = totalMass;
+        survivor.radius = Math.min(4.6, Math.cbrt(survivor.radius ** 3 + absorbed.radius ** 3 * 0.65));
+
+        collisions.push({
+          position: { ...absorbed.position },
+          survivorId: survivor.id,
+          absorbedId: absorbed.id,
+          absorbedNameEs: absorbed.nameEs,
+          absorbedNameEn: absorbed.nameEn,
+          energyReleasedGJ,
+        });
+
+        removedIndices.add(absorbedIdx);
+        if (absorbedIdx === i) break;
+      }
+    }
+  }
+
+  if (collisions.length === 0) {
+    return { bodies, collisions: [], allOrbitersCollided: false };
+  }
+
+  const remaining = nextBodies.filter((_, idx) => !removedIndices.has(idx));
+  const allOrbitersCollided = remaining.length <= 1;
+
+  return {
+    bodies: remaining,
+    collisions,
+    allOrbitersCollided,
+  };
+}
+
 

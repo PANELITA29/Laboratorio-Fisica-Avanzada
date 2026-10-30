@@ -18,10 +18,12 @@ export const SPACETIME_VERTEX_SHADER = /* glsl */ `
   uniform float uG;
   uniform float uEpsilon;
   uniform float uScaleFactor;
+  uniform float uSupernovaProgress;
 
   varying vec2 vUv;
   varying vec2 vWorldXZ;
   varying float vDepth;
+  varying float vWaveRipple;
 
   void main() {
     vUv = uv;
@@ -39,11 +41,19 @@ export const SPACETIME_VERTEX_SHADER = /* glsl */ `
     }
 
     // Limitar la profundidad máxima del pozo gravitacional para mantener estabilidad visual
-    totalDeformation = max(-14.5, totalDeformation);
-    displaced.y += totalDeformation - 1.5;
+    totalDeformation = max(-18.5, totalDeformation);
+
+    // Onda gravitacional radial cuando detona una Supernova
+    float rDist = length(displaced.xz);
+    float waveFront = uSupernovaProgress * 38.0;
+    float waveEnv = exp(-pow((rDist - waveFront) * 0.28, 2.0)) * (1.0 - smoothstep(0.75, 1.0, uSupernovaProgress));
+    float ripple = sin((rDist - waveFront) * 1.4) * 2.8 * waveEnv * step(0.001, uSupernovaProgress);
+
+    displaced.y += totalDeformation - 1.5 + ripple;
 
     vDepth = totalDeformation;
     vWorldXZ = displaced.xz;
+    vWaveRipple = waveEnv * step(0.001, uSupernovaProgress);
 
     gl_Position = projectionMatrix * modelViewMatrix * vec4(displaced, 1.0);
   }
@@ -52,10 +62,12 @@ export const SPACETIME_VERTEX_SHADER = /* glsl */ `
 export const SPACETIME_FRAGMENT_SHADER = /* glsl */ `
   uniform float uTime;
   uniform float uGridDensity;
+  uniform float uSupernovaProgress;
 
   varying vec2 vUv;
   varying vec2 vWorldXZ;
   varying float vDepth;
+  varying float vWaveRipple;
 
   void main() {
     // Normalizar la profundidad relativista (0 = espacio plano, 1 = pozo gravitacional profundo)
@@ -65,12 +77,14 @@ export const SPACETIME_FRAGMENT_SHADER = /* glsl */ `
     vec3 colorFlat = vec3(0.08, 0.16, 0.28);
     vec3 colorCyan = vec3(0.02, 0.78, 0.95);
     vec3 colorMagenta = vec3(0.72, 0.22, 0.98);
+    vec3 colorSupernova = vec3(1.0, 0.65, 0.15);
 
     vec3 baseColor = mix(
       mix(colorFlat, colorCyan, smoothstep(0.0, 0.45, normDepth)),
       colorMagenta,
       smoothstep(0.42, 1.0, normDepth)
     );
+    baseColor = mix(baseColor, colorSupernova, clamp(vWaveRipple * 1.35, 0.0, 1.0));
 
     // Rejilla neón sci-fi procedural en coordenadas del mundo (X, Z)
     vec2 gridCoord = abs(fract(vWorldXZ * uGridDensity - 0.5) - 0.5);
@@ -83,7 +97,7 @@ export const SPACETIME_FRAGMENT_SHADER = /* glsl */ `
 
     float contourRing = (0.5 + 0.5 * sin(vDepth * 5.5 - uTime * 1.4)) * smoothstep(0.12, 0.7, normDepth) * 0.35;
 
-    float intensity = clamp(gridLine + subLine + contourRing, 0.0, 1.0);
+    float intensity = clamp(gridLine + subLine + contourRing + vWaveRipple * 0.85, 0.0, 1.0);
     vec3 finalColor = mix(baseColor * 0.22, baseColor * 1.45, intensity);
 
     // Atenuación radial suave en los bordes del tejido espacio-temporal
@@ -100,7 +114,13 @@ export interface SpacetimeShaderMeshHandle {
   material: THREE.ShaderMaterial;
   wireOverlay: THREE.LineSegments<THREE.WireframeGeometry, THREE.LineBasicMaterial>;
   group: THREE.Group;
-  updateUniforms: (bodies: CelestialBody[], G: number, elapsedSeconds: number, epsilon?: number) => void;
+  updateUniforms: (
+    bodies: CelestialBody[],
+    G: number,
+    elapsedSeconds: number,
+    epsilon?: number,
+    supernovaProgress?: number
+  ) => void;
   dispose: () => void;
 }
 
@@ -125,6 +145,7 @@ export function createSpacetimeShaderMesh(isSoftwareGl: boolean = false): Spacet
       uScaleFactor: { value: 0.022 },
       uTime: { value: 0 },
       uGridDensity: { value: 0.35 },
+      uSupernovaProgress: { value: 0 },
     },
     vertexShader: SPACETIME_VERTEX_SHADER,
     fragmentShader: SPACETIME_FRAGMENT_SHADER,
@@ -152,7 +173,8 @@ export function createSpacetimeShaderMesh(isSoftwareGl: boolean = false): Spacet
     bodies: CelestialBody[],
     G: number,
     elapsedSeconds: number,
-    epsilon?: number
+    epsilon?: number,
+    supernovaProgress: number = 0
   ) => {
     const count = Math.min(bodies.length, MAX_SHADER_BODIES);
     const posArr = shaderMaterial.uniforms.uBodyPositions.value as THREE.Vector3[];
@@ -171,6 +193,7 @@ export function createSpacetimeShaderMesh(isSoftwareGl: boolean = false): Spacet
     shaderMaterial.uniforms.uBodyCount.value = count;
     shaderMaterial.uniforms.uG.value = G;
     shaderMaterial.uniforms.uTime.value = elapsedSeconds;
+    shaderMaterial.uniforms.uSupernovaProgress.value = supernovaProgress;
     if (epsilon !== undefined) {
       shaderMaterial.uniforms.uEpsilon.value = epsilon;
     }
@@ -198,8 +221,9 @@ export function updateSpacetimeShaderUniforms(
   bodies: CelestialBody[],
   G: number,
   elapsedSeconds: number,
-  epsilon?: number
+  epsilon?: number,
+  supernovaProgress: number = 0
 ): void {
-  bundle.updateUniforms(bodies, G, elapsedSeconds, epsilon);
+  bundle.updateUniforms(bodies, G, elapsedSeconds, epsilon, supernovaProgress);
 }
 

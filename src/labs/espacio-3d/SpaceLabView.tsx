@@ -14,6 +14,8 @@ import {
   ChevronDown,
   ChevronUp,
   Layers,
+  Flame,
+  Sparkles,
 } from 'lucide-react';
 import { Language, dictionary } from '../../assets/js/i18n';
 import { audioSynth } from '../../assets/js/audio-synth';
@@ -26,6 +28,9 @@ import {
   computeSystemEnergetics,
   computeKeplerAndHohmannAnalytics,
   createKeplerianCustomSystem,
+  convertCentralBodyToBlackHole,
+  triggerPlanetaryCollisionCourse,
+  detectAndResolveCollisions,
 } from './space-engine';
 import {
   createSpacetimeShaderMesh,
@@ -173,6 +178,19 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
   const [showVelocityVectors, setShowVelocityVectors] = useState<boolean>(true);
   const [showTrails, setShowTrails] = useState<boolean>(true);
 
+  // Modo Agujero Negro y Estado de Supernova Cataclísmica
+  const [isBlackHole, setIsBlackHole] = useState<boolean>(false);
+  const [supernovaAlert, setSupernovaAlert] = useState<{
+    active: boolean;
+    totalEnergyGJ: number;
+    absorbedPlanets: string[];
+  }>({
+    active: false,
+    totalEnergyGJ: 0,
+    absorbedPlanets: [],
+  });
+  const [lastCollisionNotice, setLastCollisionNotice] = useState<string | null>(null);
+
   // Telemetría viva throttled a <= 10Hz para el HUD y Reporte
   const [liveStats, setLiveStats] = useState({
     kineticEnergy: 0,
@@ -187,6 +205,22 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
   // Estado mutable de los cuerpos celestes para el bucle Verlet
   const bodiesRef = useRef<CelestialBody[]>(createSpacePreset('solar', 1.0, 1.0));
   const resetTriggerRef = useRef<number>(0);
+  const supernovaAnimRef = useRef<{
+    active: boolean;
+    startTime: number;
+    progress: number;
+    origin: { x: number; y: number; z: number };
+  }>({
+    active: false,
+    startTime: 0,
+    progress: 0,
+    origin: { x: 0, y: 0, z: 0 },
+  });
+  const impactFlashesRef = useRef<
+    Array<{ x: number; y: number; z: number; startTime: number }>
+  >([]);
+  const absorbedHistoryRef = useRef<string[]>([]);
+  const totalCollisionEnergyRef = useRef<number>(0);
 
   const controlsStateRef = useRef({
     preset,
@@ -200,6 +234,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
     showGravityVectors,
     showVelocityVectors,
     showTrails,
+    isBlackHole,
   });
   controlsStateRef.current = {
     preset,
@@ -213,6 +248,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
     showGravityVectors,
     showVelocityVectors,
     showTrails,
+    isBlackHole,
   };
 
   const mountRef = useRef<HTMLDivElement | null>(null);
@@ -251,17 +287,66 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
     ]);
   }, [liveStats, lang, onUpdateTelemetry]);
 
-  const applyPreset = (newPreset: SpacePresetId, newFactor: number = insertionFactor) => {
+  const applyPreset = (
+    newPreset: SpacePresetId,
+    newFactor: number = insertionFactor,
+    keepBlackHole: boolean = isBlackHole
+  ) => {
     setPreset(newPreset);
     setInsertionFactor(newFactor);
     setTargetBodyIndex(1);
-    bodiesRef.current = createSpacePreset(newPreset, newFactor, gravityG);
+    setSupernovaAlert({ active: false, totalEnergyGJ: 0, absorbedPlanets: [] });
+    setLastCollisionNotice(null);
+    supernovaAnimRef.current = { active: false, startTime: 0, progress: 0, origin: { x: 0, y: 0, z: 0 } };
+    absorbedHistoryRef.current = [];
+    totalCollisionEnergyRef.current = 0;
+
+    let baseBodies = createSpacePreset(newPreset, newFactor, gravityG);
+    if (keepBlackHole) {
+      baseBodies = convertCentralBodyToBlackHole(baseBodies, true);
+    }
+    bodiesRef.current = baseBodies;
     resetTriggerRef.current += 1;
+  };
+
+  const handleToggleBlackHole = (forceValue?: boolean) => {
+    const nextBlackHole = forceValue !== undefined ? forceValue : !isBlackHole;
+    setIsBlackHole(nextBlackHole);
+    bodiesRef.current = convertCentralBodyToBlackHole(bodiesRef.current, nextBlackHole);
+    resetTriggerRef.current += 1;
+  };
+
+  const handleTriggerCollisionCataclysm = () => {
+    setIsPaused(false);
+    // Si solo queda 1 cuerpo porque ya habían chocado todos, regeneramos los planetas en curso de colisión
+    if (bodiesRef.current.length <= 1) {
+      let fresh = createSpacePreset(preset, 0.25, gravityG);
+      if (isBlackHole) {
+        fresh = convertCentralBodyToBlackHole(fresh, true);
+      }
+      bodiesRef.current = triggerPlanetaryCollisionCourse(fresh);
+      setSupernovaAlert({ active: false, totalEnergyGJ: 0, absorbedPlanets: [] });
+      absorbedHistoryRef.current = [];
+      totalCollisionEnergyRef.current = 0;
+      resetTriggerRef.current += 1;
+    } else {
+      bodiesRef.current = triggerPlanetaryCollisionCourse(bodiesRef.current);
+    }
   };
 
   const handleInsertionFactorChange = (val: number) => {
     setInsertionFactor(val);
-    bodiesRef.current = createSpacePreset(preset, val, gravityG);
+    setSupernovaAlert({ active: false, totalEnergyGJ: 0, absorbedPlanets: [] });
+    setLastCollisionNotice(null);
+    supernovaAnimRef.current = { active: false, startTime: 0, progress: 0, origin: { x: 0, y: 0, z: 0 } };
+    absorbedHistoryRef.current = [];
+    totalCollisionEnergyRef.current = 0;
+
+    let nextBodies = createSpacePreset(preset, val, gravityG);
+    if (isBlackHole) {
+      nextBodies = convertCentralBodyToBlackHole(nextBodies, true);
+    }
+    bodiesRef.current = nextBodies;
     resetTriggerRef.current += 1;
   };
 
@@ -387,9 +472,103 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
     let lastResetToken = -1;
     const MAX_TRAIL_POINTS = 180;
 
-    // Construye un modelo 3D compuesto (3-12 partes) para cada astro o satélite
+    // Construye un modelo 3D compuesto (3-12 partes) para cada astro, satélite o Agujero Negro
     const createCelestialCompositeGroup = (b: CelestialBody): THREE.Group => {
       const grp = new THREE.Group();
+
+      if (b.isBlackHole) {
+        // Agujero Negro Relativista (Gargantúa) de 7 partes:
+        // 1) Horizonte de Sucesos (Sombra negra absoluta que absorbe toda radiación)
+        const horizonMesh = new THREE.Mesh(
+          new THREE.SphereGeometry(b.radius * 0.92, 32, 32),
+          new THREE.MeshBasicMaterial({ color: 0x000000 })
+        );
+        grp.add(horizonMesh);
+
+        // 2) Esfera de Fotones (Photon Ring incandescente cian-blanco en el borde crítico)
+        const photonRingGeo = new THREE.TorusGeometry(b.radius * 1.04, b.radius * 0.06, 16, 64);
+        const photonRingMat = new THREE.MeshBasicMaterial({
+          color: 0xe0f2fe,
+          transparent: true,
+          opacity: 0.95,
+        });
+        const photonRing = new THREE.Mesh(photonRingGeo, photonRingMat);
+        grp.add(photonRing);
+
+        // 3) Disco de Acreción Interno (Plasma relativista blanco-dorado de alta temperatura)
+        const diskInnerGeo = new THREE.TorusGeometry(b.radius * 1.65, b.radius * 0.24, 14, 64);
+        diskInnerGeo.rotateX(Math.PI / 2);
+        const diskInnerMat = new THREE.MeshStandardMaterial({
+          color: 0xfef08a,
+          emissive: 0xf59e0b,
+          emissiveIntensity: 2.2,
+          roughness: 0.15,
+          transparent: true,
+          opacity: 0.92,
+        });
+        const diskInner = new THREE.Mesh(diskInnerGeo, diskInnerMat);
+        diskInner.scale.y = 0.22;
+        grp.add(diskInner);
+
+        // 4) Disco de Acreción Medio (Doppler naranja-rojizo turbulento)
+        const diskMidGeo = new THREE.TorusGeometry(b.radius * 2.35, b.radius * 0.36, 14, 64);
+        diskMidGeo.rotateX(Math.PI / 2);
+        const diskMidMat = new THREE.MeshStandardMaterial({
+          color: 0xf97316,
+          emissive: 0xea580c,
+          emissiveIntensity: 1.6,
+          roughness: 0.25,
+          transparent: true,
+          opacity: 0.78,
+        });
+        const diskMid = new THREE.Mesh(diskMidGeo, diskMidMat);
+        diskMid.scale.y = 0.16;
+        grp.add(diskMid);
+
+        // 5) Disco de Acreción Exterior + Halo Relativista Violeta
+        const diskOuterGeo = new THREE.TorusGeometry(b.radius * 3.1, b.radius * 0.28, 12, 64);
+        diskOuterGeo.rotateX(Math.PI / 2);
+        const diskOuterMat = new THREE.MeshStandardMaterial({
+          color: 0xa855f7,
+          emissive: 0x9333ea,
+          emissiveIntensity: 1.3,
+          roughness: 0.35,
+          transparent: true,
+          opacity: 0.52,
+        });
+        const diskOuter = new THREE.Mesh(diskOuterGeo, diskOuterMat);
+        diskOuter.scale.y = 0.12;
+        grp.add(diskOuter);
+
+        // 6) Arco de Lente Gravitacional Einstein (luz curvada por encima y debajo de la sombra)
+        const lensingGeo = new THREE.TorusGeometry(b.radius * 1.48, b.radius * 0.08, 14, 56);
+        lensingGeo.rotateX(0.32);
+        const lensingMat = new THREE.MeshBasicMaterial({
+          color: 0xfdba74,
+          transparent: true,
+          opacity: 0.65,
+        });
+        const lensingMesh = new THREE.Mesh(lensingGeo, lensingMat);
+        grp.add(lensingMesh);
+
+        // 7) Chorros Relativistas Polares (Jets astrofísicos de plasma en eje ±Y)
+        const jetGeo = new THREE.ConeGeometry(b.radius * 0.35, b.radius * 3.8, 16, 1, true);
+        const jetMat = new THREE.MeshBasicMaterial({
+          color: 0x38bdf8,
+          transparent: true,
+          opacity: 0.38,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        });
+        const jetTop = new THREE.Mesh(jetGeo, jetMat);
+        jetTop.position.y = b.radius * 2.2;
+        const jetBottom = new THREE.Mesh(jetGeo, jetMat);
+        jetBottom.position.y = -b.radius * 2.2;
+        jetBottom.rotation.x = Math.PI;
+        grp.add(jetTop, jetBottom);
+
+        return grp;
+      }
 
       if (b.id.includes('satellite')) {
         // Satélite compuesto: 1) Bus central dorado, 2) 2 Paneles solares azules, 3) Plato de antena y propulsor
@@ -456,6 +635,86 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
       return grp;
     };
 
+    // Grupo 3D para la Explosión de Supernova y Destellos de Colisión Planetaria
+    const supernovaGroup = new THREE.Group();
+    supernovaGroup.visible = false;
+    scene.add(supernovaGroup);
+
+    const snCoreMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+    const snCoreMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 32), snCoreMat);
+    supernovaGroup.add(snCoreMesh);
+
+    const snShellMat = new THREE.MeshStandardMaterial({
+      color: 0xf97316,
+      emissive: 0xec4899,
+      emissiveIntensity: 2.8,
+      transparent: true,
+      opacity: 0,
+      roughness: 0.2,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const snShellMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 32), snShellMat);
+    supernovaGroup.add(snShellMesh);
+
+    const snRingGeo = new THREE.TorusGeometry(1, 0.08, 16, 72);
+    snRingGeo.rotateX(Math.PI / 2);
+    const snRingMat = new THREE.MeshBasicMaterial({
+      color: 0x38bdf8,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+    });
+    const snRingMesh = new THREE.Mesh(snRingGeo, snRingMat);
+    supernovaGroup.add(snRingMesh);
+
+    // Nebulosa de eyección de Supernova (160 filamentos 3D con InstancedMesh)
+    const ejectaCount = 160;
+    const ejectaGeo = new THREE.SphereGeometry(0.28, 8, 8);
+    const ejectaMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+    });
+    const ejectaInstanced = new THREE.InstancedMesh(ejectaGeo, ejectaMat, ejectaCount);
+    const ejectaDirs: Array<{ x: number; y: number; z: number; speed: number; scale: number }> = [];
+    const ejectaPalette = [0xfef08a, 0xf97316, 0xec4899, 0x38bdf8, 0xa855f7];
+    const tmpEjectaColor = new THREE.Color();
+    for (let i = 0; i < ejectaCount; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      ejectaDirs.push({
+        x: Math.sin(phi) * Math.cos(theta),
+        y: Math.cos(phi) * 0.65,
+        z: Math.sin(phi) * Math.sin(theta),
+        speed: 10 + Math.random() * 24,
+        scale: 0.6 + Math.random() * 1.6,
+      });
+      tmpEjectaColor.setHex(ejectaPalette[i % ejectaPalette.length]);
+      ejectaInstanced.setColorAt(i, tmpEjectaColor);
+    }
+    supernovaGroup.add(ejectaInstanced);
+
+    // Anillo de destello para colisiones planetarias individuales
+    const impactRingGeo = new THREE.RingGeometry(0.4, 1.0, 32);
+    impactRingGeo.rotateX(-Math.PI / 2);
+    const impactRingMat = new THREE.MeshBasicMaterial({
+      color: 0xfef08a,
+      transparent: true,
+      opacity: 0,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const impactRingMesh = new THREE.Mesh(impactRingGeo, impactRingMat);
+    impactRingMesh.visible = false;
+    scene.add(impactRingMesh);
+
     const rebuildVisualsForCurrentBodies = () => {
       while (bodiesGroup.children.length > 0) {
         bodiesGroup.remove(bodiesGroup.children[0]);
@@ -514,10 +773,10 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
     const _dirVec = new THREE.Vector3();
     const _camTargetPos = new THREE.Vector3();
     const _camLookAt = new THREE.Vector3();
-    const _colorLow = new THREE.Color(0xa855f7); // Pozo gravitacional profundo (violeta/magenta)
-    const _colorMid = new THREE.Color(0x06b6d4); // Curvatura media (cian)
-    const _colorFlat = new THREE.Color(0x1e293b); // Espacio plano (azul pizarra)
-    const _tmpColor = new THREE.Color();
+    const _ejectaMatrix = new THREE.Matrix4();
+    const _ejectaPos = new THREE.Vector3();
+    const _ejectaQuat = new THREE.Quaternion();
+    const _ejectaScale = new THREE.Vector3();
 
     let frameId = 0;
     let lastHudUpdate = 0;
@@ -545,17 +804,119 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
       }
 
       const cfg = controlsStateRef.current;
+      const nowMs = performance.now();
 
-      // 1. Integración Física Simpléctica de Velocity Verlet
+      // 1. Integración Física Simpléctica de Velocity Verlet + Detección de Colisiones Planetarias
       if (!cfg.isPaused) {
         const subSteps = 2;
         const dt = (0.016 * cfg.simSpeed) / subSteps;
         for (let s = 0; s < subSteps; s++) {
           bodiesRef.current = stepVerletIntegration(bodiesRef.current, dt, cfg.gravityG);
+          const colResult = detectAndResolveCollisions(bodiesRef.current);
+          if (colResult.collisions.length > 0) {
+            bodiesRef.current = colResult.bodies;
+            rebuildVisualsForCurrentBodies();
+
+            colResult.collisions.forEach((col) => {
+              totalCollisionEnergyRef.current += col.energyReleasedGJ;
+              absorbedHistoryRef.current.push(lang === 'es' ? col.absorbedNameEs : col.absorbedNameEn);
+              impactFlashesRef.current.push({
+                x: col.position.x,
+                y: col.position.y,
+                z: col.position.z,
+                startTime: nowMs,
+              });
+              setLastCollisionNotice(
+                `💥 Colisión gravitacional: ${col.absorbedNameEs} absorbido (+${col.energyReleasedGJ.toFixed(0)} GJ)`
+              );
+            });
+
+            if (colResult.allOrbitersCollided && !supernovaAnimRef.current.active) {
+              // ¡TODOS LOS PLANETAS CHOCARON! Detonar Supernova Cataclísmica
+              const centerPos = bodiesRef.current[0]?.position ?? { x: 0, y: 0, z: 0 };
+              supernovaAnimRef.current = {
+                active: true,
+                startTime: nowMs,
+                progress: 0.001,
+                origin: { ...centerPos },
+              };
+              audioSynth.playSupernovaExplosion();
+              setSupernovaAlert({
+                active: true,
+                totalEnergyGJ: totalCollisionEnergyRef.current + 125000,
+                absorbedPlanets: [...absorbedHistoryRef.current],
+              });
+            } else {
+              audioSynth.playPlanetaryImpact();
+            }
+          }
         }
       }
 
       const activeBodies = bodiesRef.current;
+
+      // 1b. Animación 3D de la Supernova y Onda de Choque Relativista
+      let currentSnProgress = 0;
+      if (supernovaAnimRef.current.active) {
+        const elapsedSn = (nowMs - supernovaAnimRef.current.startTime) / 4200; // 4.2s de expansión
+        if (elapsedSn <= 1.0) {
+          currentSnProgress = elapsedSn;
+          supernovaAnimRef.current.progress = elapsedSn;
+          supernovaGroup.visible = true;
+          supernovaGroup.position.set(
+            supernovaAnimRef.current.origin.x,
+            supernovaAnimRef.current.origin.y,
+            supernovaAnimRef.current.origin.z
+          );
+
+          const coreScale = 2.0 + Math.sin(elapsedSn * Math.PI) * 14.0;
+          snCoreMesh.scale.setScalar(coreScale);
+          snCoreMat.opacity = Math.max(0, 1.0 - elapsedSn * 1.15);
+
+          const shellScale = 2.5 + elapsedSn * 34.0;
+          snShellMesh.scale.setScalar(shellScale);
+          snShellMat.opacity = Math.max(0, (1.0 - elapsedSn) * 0.68);
+
+          const ringScale = 3.0 + elapsedSn * 44.0;
+          snRingMesh.scale.setScalar(ringScale);
+          snRingMat.opacity = Math.max(0, (1.0 - elapsedSn) * 0.92);
+
+          ejectaMat.opacity = Math.max(0, 1.0 - elapsedSn * 0.9);
+          for (let i = 0; i < ejectaCount; i++) {
+            const d = ejectaDirs[i];
+            const dist = elapsedSn * d.speed;
+            _ejectaPos.set(d.x * dist, d.y * dist, d.z * dist);
+            const s = d.scale * (1.0 + elapsedSn * 1.5);
+            _ejectaScale.set(s, s, s);
+            _ejectaMatrix.compose(_ejectaPos, _ejectaQuat, _ejectaScale);
+            ejectaInstanced.setMatrixAt(i, _ejectaMatrix);
+          }
+          ejectaInstanced.instanceMatrix.needsUpdate = true;
+
+          // Destello lumínico extremo durante la Supernova
+          starLight.intensity = 3.8 + Math.sin(elapsedSn * Math.PI) * 32.0;
+        } else {
+          supernovaAnimRef.current.active = false;
+          supernovaGroup.visible = false;
+          starLight.intensity = 3.8;
+        }
+      }
+
+      // Animación de destello de impacto planetario individual
+      if (impactFlashesRef.current.length > 0) {
+        const latest = impactFlashesRef.current[impactFlashesRef.current.length - 1];
+        const tFlash = (nowMs - latest.startTime) / 700;
+        if (tFlash <= 1.0) {
+          impactRingMesh.visible = true;
+          impactRingMesh.position.set(latest.x, latest.y, latest.z);
+          const s = 1.0 + tFlash * 9.5;
+          impactRingMesh.scale.setScalar(s);
+          impactRingMat.opacity = (1.0 - tFlash) * 0.85;
+        } else {
+          impactRingMesh.visible = false;
+          impactFlashesRef.current = [];
+        }
+      }
 
       // 2. Actualizar Malla 3D del Espacio-Tiempo mediante GPU ShaderMaterial (SpaceScene3D)
       spacetimeMesh.visible = cfg.showSpacetimeMesh;
@@ -564,7 +925,9 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
           spacetimeBundle,
           activeBodies,
           cfg.gravityG,
-          performance.now() * 0.001
+          nowMs * 0.001,
+          undefined,
+          currentSnProgress
         );
       }
 
@@ -574,7 +937,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
         if (!vis) return;
 
         vis.group.position.set(b.position.x, b.position.y, b.position.z);
-        vis.group.rotation.y += 0.012;
+        vis.group.rotation.y += b.isBlackHole ? 0.045 : 0.012;
 
         // Vector 3D Fuerza Gravitacional (Azul)
         const accMag = Math.hypot(b.acceleration.x, b.acceleration.y, b.acceleration.z);
@@ -739,7 +1102,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
             </button>
           </div>
 
-          {/* Escenarios Astrofísicos Predefinidos */}
+          {/* Escenarios Astrofísicos Predefinidos + Agujero Negro y Supernova */}
           <div className="flex flex-wrap items-center gap-1.5">
             {(
               [
@@ -763,6 +1126,42 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
                 {item.label}
               </button>
             ))}
+
+            {/* Botón Conmutador Sol <-> Agujero Negro */}
+            <button
+              type="button"
+              data-testid="toggle-blackhole-btn"
+              onClick={() => handleToggleBlackHole()}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                isBlackHole
+                  ? 'bg-fuchsia-600/30 border-fuchsia-400 text-fuchsia-200 shadow-[0_0_16px_rgba(217,70,239,0.35)]'
+                  : 'bg-[#090D18] border-purple-500/50 text-purple-200 hover:bg-purple-950/60'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-fuchsia-400" />
+              <span>
+                {isBlackHole
+                  ? lang === 'es'
+                    ? '🕳️ Agujero Negro: ACTIVO'
+                    : '🕳️ Black Hole: ON'
+                  : lang === 'es'
+                  ? '🕳️ Convertir Sol en Agujero Negro'
+                  : '🕳️ Turn Sun into Black Hole'}
+              </span>
+            </button>
+
+            {/* Botón Colisionar Todos los Planetas -> Supernova */}
+            <button
+              type="button"
+              data-testid="trigger-supernova-collision-btn"
+              onClick={handleTriggerCollisionCataclysm}
+              className="px-3 py-1.5 rounded-lg text-xs font-mono font-bold border border-amber-500/60 bg-gradient-to-r from-amber-500/20 to-rose-500/20 hover:from-amber-500/30 hover:to-rose-500/30 text-amber-200 transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <Flame className="w-3.5 h-3.5 text-amber-400" />
+              <span>
+                {lang === 'es' ? '☄️ Chocar Planetas (Supernova)' : '☄️ Crash Planets (Supernova)'}
+              </span>
+            </button>
           </div>
 
           <TourGuiado labId="space" lang={lang} steps={SPACE_TOUR_STEPS} />
@@ -853,14 +1252,64 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
           {/* Minimal Spec Badge (Top-Left, solid surface without backdrop-blur over WebGL) */}
           <div className="absolute top-2.5 left-2.5 right-2.5 sm:right-auto sm:top-4 sm:left-4 pointer-events-none bg-[#090D16]/95 border border-slate-800 rounded-lg px-3 py-2 sm:px-3.5 sm:py-2.5 space-y-1">
             <div className="text-[10px] sm:text-[11px] font-mono text-purple-400 uppercase truncate">
-              TELEMETRÍA ORBITAL EN VIVO (VERLET)
+              {isBlackHole
+                ? '🕳️ MÉTRICA DE KERR-SCHWARZSCHILD · HORIZONTE DE SUCESOS'
+                : 'TELEMETRÍA ORBITAL EN VIVO (VERLET)'}
             </div>
             <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-[11px] sm:text-xs font-mono text-slate-200 tabular-nums">
               <span>r: {liveStats.primaryOrbitalRadius.toFixed(2)} u</span>
               <span>v: {liveStats.primarySpeed.toFixed(2)} u/s</span>
               <span className="text-cyan-400">E_tot: {liveStats.totalEnergy.toFixed(0)} GJ</span>
             </div>
+            {lastCollisionNotice && !supernovaAlert.active && (
+              <div className="text-[11px] font-mono text-amber-300 pt-0.5">
+                {lastCollisionNotice}
+              </div>
+            )}
           </div>
+
+          {/* Alerta Cataclísmica de Supernova cuando todos los planetas chocan */}
+          {supernovaAlert.active && (
+            <div
+              data-testid="supernova-alert-banner"
+              className="absolute top-16 sm:top-4 right-2.5 left-2.5 sm:left-auto sm:max-w-md bg-[#13071E]/95 border-2 border-amber-400/80 rounded-xl p-3.5 shadow-[0_0_35px_rgba(245,158,11,0.45)] space-y-2 z-20"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-mono font-extrabold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+                  <Flame className="w-4 h-4 text-rose-400" />
+                  ¡SUPERNOVA CATACLÍSMICA DETONADA!
+                </span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-500/20 border border-rose-400/40 text-rose-200">
+                  MASA CRÍTICA
+                </span>
+              </div>
+              <p className="text-xs text-slate-200 leading-relaxed">
+                Todos los cuerpos planetarios ({supernovaAlert.absorbedPlanets.join(', ') || 'Sistema Orbital'}) colisionaron liberando{' '}
+                <strong className="text-amber-300 font-mono">
+                  {supernovaAlert.totalEnergyGJ.toFixed(0)} GJ
+                </strong>{' '}
+                y una onda gravitacional sobre el tejido espacio-temporal.
+              </p>
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {!isBlackHole && (
+                  <button
+                    type="button"
+                    onClick={() => handleToggleBlackHole(true)}
+                    className="px-3 py-1.5 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-400 text-slate-950 font-mono font-bold text-xs cursor-pointer transition-colors"
+                  >
+                    🕳️ Colapsar en Agujero Negro
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => applyPreset(preset, 1.0, isBlackHole)}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-100 font-mono text-xs cursor-pointer transition-colors"
+                >
+                  🔄 Regenerar Planetas
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Collapsible Unified Control Dock (Flujo normal en móvil/tablet, flotante inferior en escritorio lg+) */}
@@ -991,7 +1440,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
                   <input
                     id="insertion-vel-slider"
                     type="range"
-                    min={0.5}
+                    min={0.1}
                     max={1.6}
                     step={0.02}
                     value={insertionFactor}

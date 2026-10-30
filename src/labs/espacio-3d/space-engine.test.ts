@@ -106,3 +106,40 @@ test('SpaceScene3D custom GLSL ShaderMaterial initializes uniforms and updates N
   assert.equal(handle.material.uniforms.uTime.value, 2.5);
 });
 
+import {
+  convertCentralBodyToBlackHole,
+  triggerPlanetaryCollisionCourse,
+  detectAndResolveCollisions,
+} from './space-engine';
+
+test('Black Hole conversion and Supernova planetary collision detection', () => {
+  const solarBodies = createSpacePreset('solar', 1.0, 1.0);
+  const bhBodies = convertCentralBodyToBlackHole(solarBodies, true);
+  assert.equal(bhBodies[0].isBlackHole, true);
+  assert.ok(bhBodies[0].mass > solarBodies[0].mass);
+
+  const restoredBodies = convertCentralBodyToBlackHole(bhBodies, false);
+  assert.equal(restoredBodies[0].isBlackHole, false);
+  assert.equal(restoredBodies[0].mass, solarBodies[0].mass);
+
+  // Provocar colisión planetaria total y verificar que se activa allOrbitersCollided (Supernova)
+  let crashingBodies = triggerPlanetaryCollisionCourse(bhBodies);
+  let supernovaTriggered = false;
+
+  for (let step = 0; step < 300; step++) {
+    crashingBodies = stepVerletIntegration(crashingBodies, 0.025, 1.0);
+    const col = detectAndResolveCollisions(crashingBodies);
+    if (col.collisions.length > 0) {
+      crashingBodies = col.bodies;
+      if (col.allOrbitersCollided) {
+        supernovaTriggered = true;
+        break;
+      }
+    }
+  }
+
+  assert.equal(supernovaTriggered, true);
+  assert.equal(crashingBodies.length, 1);
+});
+
+
