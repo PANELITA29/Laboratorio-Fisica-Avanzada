@@ -37,7 +37,7 @@ import { ScrollReveal } from './components/QuantumAnimations';
 import CardSwap, { Card, CardSwapRef } from './components/CardSwap';
 import DotField from './components/DotField';
 import ShapeGrid from './components/ShapeGrid';
-import { LabCoverIcon, LabCoverBadge, LAB_THEMES, LabId } from './components/LabCoverIcons';
+import { LabCoverBadge, LAB_THEMES, LabId } from './components/LabCoverIcons';
 import { CircuitLabView } from './labs/circuitos/CircuitLabView';
 import { SpaceLabView } from './labs/espacio-3d/SpaceLabView';
 import { MechanicsLabView } from './labs/mecanica-3d/MechanicsLabView';
@@ -1129,34 +1129,6 @@ export default function App() {
                             </Card>
                           ))}
                         </CardSwap>
-                      </div>
-
-                      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800/80 text-xs font-mono">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="text-slate-400 mr-1">
-                            {lang === 'es' ? 'Acceso rápido:' : 'Quick access:'}
-                          </span>
-                          {visibleModules.map((m) => (
-                            <button
-                              key={m.id}
-                              type="button"
-                              onClick={() => selectModuleView(m.id)}
-                              className={`px-2.5 py-1 rounded-md border text-[11px] font-semibold instrument-transition cursor-pointer flex items-center gap-1.5 ${
-                                activeMod?.id === m.id
-                                  ? 'bg-cyan-400/20 text-cyan-300 border-cyan-500/40'
-                                  : 'bg-slate-900/60 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
-                              }`}
-                            >
-                              <LabCoverIcon labId={m.id} size={14} className="shrink-0" />
-                              <span>{m.code} · {m.title.split(':')[0]}</span>
-                            </button>
-                          ))}
-                        </div>
-                        <div className="text-slate-400 text-[11px] hidden sm:block">
-                          {lang === 'es'
-                            ? '💡 Teclado: Flechas ← / → para navegar'
-                            : '💡 Keyboard: Use ← / → arrow keys to navigate'}
-                        </div>
                       </div>
                     </div>
                   )}
