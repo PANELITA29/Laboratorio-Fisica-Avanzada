@@ -37,6 +37,7 @@ import { LabQRCodeModal, HubQRCodeBanner } from './components/LabQRCodeModal';
 import { ScrollReveal } from './components/QuantumAnimations';
 import CardSwap, { Card, CardSwapRef } from './components/CardSwap';
 import DotField from './components/DotField';
+import ShapeGrid from './components/ShapeGrid';
 import { LabCoverIcon, LabCoverBadge, LAB_THEMES, LabId } from './components/LabCoverIcons';
 import { CircuitLabView } from './labs/circuitos/CircuitLabView';
 import { SpaceLabView } from './labs/espacio-3d/SpaceLabView';
@@ -193,6 +194,38 @@ export default function App() {
             mobileMaxRatio={1.0}
             maxDots={25000}
             adaptivePerformance={true}
+          />
+        </div>
+      )}
+
+      {/* Fondo interactivo matricial ShapeGrid en todos los Laboratorios */}
+      {activeView !== 'hub' && (
+        <div
+          className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-35"
+          aria-hidden="true"
+        >
+          <ShapeGrid
+            shape="square"
+            direction="diagonal"
+            lineColor="#00dfff"
+            hoverColor="#75ff4f"
+            hoverFillColor="#ffc300"
+            fillOpacity={0.15}
+            cellSize={40}
+            mobileCellSize={50}
+            speed={0.5}
+            tiltX={0}
+            tiltY={0}
+            rainbow={false}
+            lineWidth={1}
+            radius={1.5}
+            trail={0.6}
+            glow={0.35}
+            twinkle={0}
+            fade={1}
+            clickCascade
+            intro
+            mobileDpr={1.0}
           />
         </div>
       )}
