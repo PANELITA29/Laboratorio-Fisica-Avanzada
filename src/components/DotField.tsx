@@ -1,10 +1,52 @@
 import React, { useEffect, useRef, useState } from 'react';
 import './DotField.css';
 
-const PIXEL_BUDGET = 9e6;
-const MAX_DOTS = 120000;
+const PIXEL_BUDGET = 8e6;
+const MAX_DOTS = 80000;
 const PATTERNS: Record<string, number> = { grid: 0, hex: 1, spiral: 2, scatter: 3 };
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+
+export interface DevicePerformanceProfile {
+  isMobile: boolean;
+  isLowEnd: boolean;
+  defaultMaxRatio: number;
+  spacingMultiplier: number;
+  maxDotsLimit: number;
+  pixelBudget: number;
+}
+
+export const getDeviceProfile = (): DevicePerformanceProfile => {
+  if (typeof window === 'undefined') {
+    return {
+      isMobile: false,
+      isLowEnd: false,
+      defaultMaxRatio: 1.5,
+      spacingMultiplier: 1,
+      maxDotsLimit: 50000,
+      pixelBudget: 6e6
+    };
+  }
+  const isTouch = 'ontouchstart' in window || (navigator.maxTouchPoints && navigator.maxTouchPoints > 0);
+  const isNarrowScreen = window.innerWidth <= 768;
+  const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const isMobile = isNarrowScreen || (isTouch && isMobileUA);
+
+  const cores = navigator.hardwareConcurrency || 4;
+  // @ts-expect-error non-standard deviceMemory in Chromium / Android
+  const memory = (navigator as unknown as { deviceMemory?: number }).deviceMemory || 4;
+  const isLowEnd = isMobile && (cores <= 4 || memory <= 4);
+
+  return {
+    isMobile,
+    isLowEnd,
+    // Dispositivos de gama baja: relación de aspecto a 1.0 para evitar multiplicar por 4 o 9 los píxeles a renderizar
+    defaultMaxRatio: isLowEnd ? 1.0 : isMobile ? 1.2 : 1.75,
+    // En móviles reducir densidad aumentando el espaciado entre puntos
+    spacingMultiplier: isLowEnd ? 1.6 : isMobile ? 1.35 : 1.0,
+    maxDotsLimit: isLowEnd ? 12000 : isMobile ? 22000 : 65000,
+    pixelBudget: isLowEnd ? 2e6 : isMobile ? 3e6 : 8e6
+  };
+};
 
 const VERTEX = `#version 300 es
 precision highp float;
@@ -82,7 +124,12 @@ void main() {
   float spark = 0.0;
   if (uSparkle > 0.0) {
     float phase = 0.5 + 0.5 * sin(uTime * (0.55 + aDot.w * 0.9) + aDot.z * 6.2831853);
-    spark = pow(phase, 48.0) * step(0.72, fract(aDot.z * 7.31 + aDot.w * 3.17)) * uSparkle;
+    // Optimización: exponenciación por cuadratura rápida en lugar de pow(phase, 48.0)
+    float p2 = phase * phase;
+    float p4 = p2 * p2;
+    float p16 = p4 * p4;
+    float p32 = p16 * p16;
+    spark = p32 * step(0.72, fract(aDot.z * 7.31 + aDot.w * 3.17)) * uSparkle;
   }
 
   float pool = 0.0;
@@ -142,8 +189,18 @@ void main() {
   float dist = length(vLocal);
   float d = dist - vRadius;
   float edge = max(fwidth(dist), 1e-4) + vBlur;
+
+  // Optimización de descarte temprano: si está fuera del radio del punto y sin halo de resplandor, descartar de inmediato
+  if (d > edge && vHalo < 0.001) {
+    discard;
+  }
+
   float cover = 1.0 - smoothstep(-0.5 * edge, 0.5 * edge, d);
-  float glow = vHalo * exp(-max(d, 0.0) / vHaloWidth) * 0.5;
+  float glow = 0.0;
+  if (vHalo > 0.001) {
+    glow = vHalo * exp(-max(d, 0.0) / vHaloWidth) * 0.5;
+  }
+
   float alpha = min(cover + glow, 1.0) * vAlpha * uOpacity;
   if (alpha < 0.002) discard;
   fragColor = vec4(vColor * alpha, alpha);
@@ -303,6 +360,7 @@ const link = (gl: WebGL2RenderingContext): ShaderProgramInfo | null => {
 export interface DotFieldProps {
   dotRadius?: number;
   dotSpacing?: number;
+  mobileDotSpacing?: number;
   pattern?: 'grid' | 'hex' | 'spiral' | 'scatter';
   gradientFrom?: string;
   gradientTo?: string;
@@ -323,6 +381,9 @@ export interface DotFieldProps {
   lightMode?: boolean;
   opacity?: number;
   maxDevicePixelRatio?: number;
+  mobileMaxRatio?: number;
+  maxDots?: number;
+  adaptivePerformance?: boolean;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -330,6 +391,7 @@ export interface DotFieldProps {
 export const DotField: React.FC<DotFieldProps> = ({
   dotRadius = 1.5,
   dotSpacing = 14,
+  mobileDotSpacing,
   pattern = 'grid',
   gradientFrom = '#5227FF',
   gradientTo = '#FF9FFC',
@@ -350,6 +412,9 @@ export const DotField: React.FC<DotFieldProps> = ({
   lightMode = false,
   opacity = 1,
   maxDevicePixelRatio = 2,
+  mobileMaxRatio,
+  maxDots,
+  adaptivePerformance = true,
   className = '',
   style
 }) => {
@@ -358,8 +423,26 @@ export const DotField: React.FC<DotFieldProps> = ({
   const wakeRef = useRef<(() => void) | null>(null);
   const [generation, setGeneration] = useState(0);
 
+  // Perfil del dispositivo para optimización de gama baja / móviles
+  const profile = useRef<DevicePerformanceProfile>(getDeviceProfile()).current;
+
+  // Espaciado y densidad adaptativos para 60 FPS estables
+  const effectiveSpacing = adaptivePerformance
+    ? (profile.isMobile && mobileDotSpacing !== undefined
+        ? mobileDotSpacing
+        : Math.round(dotSpacing * profile.spacingMultiplier))
+    : dotSpacing;
+
+  const effectiveMaxRatio = profile.isMobile && mobileMaxRatio !== undefined
+    ? mobileMaxRatio
+    : Math.min(maxDevicePixelRatio, profile.defaultMaxRatio);
+
+  const effectiveMaxDots = maxDots !== undefined
+    ? maxDots
+    : profile.maxDotsLimit;
+
   const radius = clamp(dotRadius, 0.25, 12);
-  const step = radius * 2 + clamp(dotSpacing, 1, 200);
+  const step = radius * 2 + clamp(effectiveSpacing, 1, 200);
   const angle = (gradientAngle * Math.PI) / 180;
   const settings = {
     radius,
@@ -384,7 +467,9 @@ export const DotField: React.FC<DotFieldProps> = ({
     intro,
     light: lightMode,
     opacity: clamp(opacity, 0, 1),
-    maxRatio: clamp(maxDevicePixelRatio, 0.5, 3)
+    maxRatio: clamp(effectiveMaxRatio, 0.5, 3),
+    maxDotsLimit: effectiveMaxDots,
+    pixelBudget: profile.pixelBudget
   };
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
@@ -442,8 +527,8 @@ export const DotField: React.FC<DotFieldProps> = ({
       const reach = lensReach(s.lensRadius, strengthOf(s, s.holdToZoom ? 1 : 0), s.twist * (s.holdToZoom ? 1.6 : 1));
       const margin = Math.ceil(reach + s.wave + s.step * 2);
       const area = (size.width + margin * 2) * (size.height + margin * 2);
-      const step = Math.max(s.step, Math.sqrt(area / MAX_DOTS));
-      const key = `${size.width}|${size.height}|${step}|${s.pattern}|${margin}`;
+      const step = Math.max(s.step, Math.sqrt(area / s.maxDotsLimit));
+      const key = `${Math.round(size.width)}|${Math.round(size.height)}|${Math.round(step * 10)}|${s.pattern}|${margin}`;
       if (key === layoutKey) return;
       layoutKey = key;
       const data = buildDots(size.width, size.height, step, s.pattern, margin);
@@ -460,7 +545,7 @@ export const DotField: React.FC<DotFieldProps> = ({
       const ratio = Math.min(
         window.devicePixelRatio || 1,
         s.maxRatio,
-        Math.sqrt(PIXEL_BUDGET / (cssWidth * cssHeight))
+        Math.sqrt(s.pixelBudget / (cssWidth * cssHeight))
       );
       const width = Math.max(1, Math.round(cssWidth * ratio));
       const height = Math.max(1, Math.round(cssHeight * ratio));

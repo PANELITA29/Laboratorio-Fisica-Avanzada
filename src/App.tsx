@@ -170,23 +170,28 @@ export default function App() {
             gradientFrom="#0135ff"
             gradientTo="#3ac1ff"
             dotRadius={1}
-            dotSpacing={18}
-            cursorRadius={160}
+            dotSpacing={22}
+            mobileDotSpacing={32}
+            cursorRadius={140}
             bulgeStrength={-0.6}
-            glowRadius={40}
+            glowRadius={36}
             pattern="scatter"
             glowColor="#00ff0b"
             gradientAngle={147}
             twist={0}
             glowIntensity={0.8}
-            baseOpacity={0.45}
+            baseOpacity={0.42}
             waveAmplitude={0}
-            speed={1}
+            speed={0.85}
             sparkle
             interactive
             holdToZoom
             intro
             lightMode={false}
+            maxDevicePixelRatio={1.5}
+            mobileMaxRatio={1.0}
+            maxDots={25000}
+            adaptivePerformance={true}
           />
         </div>
       )}
