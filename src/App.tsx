@@ -550,11 +550,11 @@ export default function App() {
                   <span className="text-cyan-400 font-semibold">Δt = 16.67 ms</span>
                 </div>
 
-                <h1 className="font-['Outfit'] font-black tracking-tight text-center max-w-4xl mx-auto">
-                  <span className="block text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-transparent bg-clip-text bg-gradient-to-b from-white via-slate-100 to-slate-300 drop-shadow-[0_2px_16px_rgba(255,255,255,0.12)] leading-[1.12] pb-1">
+                <h1 className="font-['Outfit'] font-black tracking-tight text-center mx-auto max-w-4xl">
+                  <span className="block text-3xl sm:text-4xl md:text-5xl lg:text-6xl text-transparent bg-clip-text bg-gradient-to-r from-slate-100 to-slate-400 leading-[1.12] pb-1">
                     {translations.heroTitleLine1}
                   </span>
-                  <span className="block text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-300 to-teal-300 font-semibold mt-2 sm:mt-3 text-lg sm:text-xl md:text-2xl lg:text-3xl tracking-tight leading-snug">
+                  <span className="block text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-300 to-slate-300 font-semibold mt-2 sm:mt-3 text-lg sm:text-xl md:text-2xl lg:text-3xl tracking-tight leading-snug">
                     {translations.heroTitleLine2}
                   </span>
                 </h1>
