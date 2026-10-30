@@ -9,7 +9,7 @@ import { CelestialBody, DEFAULT_G } from './space-engine';
  * sobre un plano subdividido, integrado con una rejilla holográfica neón estilo sci-fi.
  */
 
-export const MAX_SHADER_BODIES = 8;
+export const MAX_SHADER_BODIES = 12;
 
 export const SPACETIME_VERTEX_SHADER = /* glsl */ `
   uniform vec3 uBodyPositions[${MAX_SHADER_BODIES}];

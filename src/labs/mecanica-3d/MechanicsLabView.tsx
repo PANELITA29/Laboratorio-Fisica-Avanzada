@@ -435,6 +435,19 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
     );
     scene.add(tensionArrow, weightArrow, velArrow);
 
+    // Estela 3D de Fase / Roseta de Foucault para visualizar la trayectoria de la esfera principal
+    const MAX_TRAIL_PTS = 96;
+    const trailPositions = new Float32Array(MAX_TRAIL_PTS * 3);
+    const trailGeo = new THREE.BufferGeometry();
+    trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+    trailGeo.setDrawRange(0, 0);
+    const trailLine = new THREE.Line(
+      trailGeo,
+      new THREE.LineBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.72 })
+    );
+    scene.add(trailLine);
+    let trailCount = 0;
+
     // Superficie 3D de Ondas Mecánicas e Interferencia en la base del laboratorio
     const waveSegs = isSoftwareGl ? 36 : 52;
     const waveGeo = new THREE.PlaneGeometry(24, 18, waveSegs, waveSegs);
@@ -518,6 +531,26 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
 
       _p1.set(x1, y1, z1);
       bob1Group.position.copy(_p1);
+
+      // Actualizar estela 3D de fase / roseta de Foucault
+      if (!cfg.isPaused) {
+        const tAttr = trailGeo.attributes.position as THREE.BufferAttribute;
+        const arr = tAttr.array as Float32Array;
+        if (trailCount < MAX_TRAIL_PTS) {
+          arr[trailCount * 3] = _p1.x;
+          arr[trailCount * 3 + 1] = _p1.y - 0.55;
+          arr[trailCount * 3 + 2] = _p1.z;
+          trailCount++;
+        } else {
+          arr.copyWithin(0, 3);
+          const last = (MAX_TRAIL_PTS - 1) * 3;
+          arr[last] = _p1.x;
+          arr[last + 1] = _p1.y - 0.55;
+          arr[last + 2] = _p1.z;
+        }
+        trailGeo.setDrawRange(0, trailCount);
+        tAttr.needsUpdate = true;
+      }
 
       const r1Attr = rod1Geo.attributes.position as THREE.BufferAttribute;
       r1Attr.setXYZ(0, _pivot1.x, _pivot1.y, _pivot1.z);
@@ -725,6 +758,25 @@ export const MechanicsLabView: React.FC<MechanicsLabViewProps> = ({
                 {lang === 'es' ? p.labelEs : p.labelEn}
               </button>
             ))}
+
+            <button
+              type="button"
+              data-testid="seismic-impulse-btn"
+              onClick={() => {
+                setIsPaused(false);
+                const cur = pendulumStateRef.current;
+                const dirSign = cur.omega >= 0 ? 1 : -1;
+                pendulumStateRef.current = {
+                  ...cur,
+                  omega: Math.max(-5.5, Math.min(5.5, cur.omega + dirSign * 2.2)),
+                  phiDot: cur.phiDot + 0.45,
+                };
+                audioSynth.playSeismicPulseSound();
+              }}
+              className="px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold border bg-amber-950/75 border-amber-500/70 text-amber-200 hover:bg-amber-900/70 transition-colors cursor-pointer"
+            >
+              ⚡ Pulso Sísmico (Δp)
+            </button>
           </div>
 
           <TourGuiado labId="mechanics" lang={lang} steps={MECHANICS_TOUR_STEPS} />

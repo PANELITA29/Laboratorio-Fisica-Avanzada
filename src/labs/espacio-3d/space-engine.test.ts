@@ -184,6 +184,31 @@ test('Global Zustand store (useLabGlobalStore) preserves mass, gravity, and Blac
   assert.equal(afterSliders.bodies[0].isBlackHole, true);
 });
 
+import {
+  computeRelativisticAndTidalMetrics,
+  spawnCustomPlanetOnPlane,
+} from './space-engine';
+
+test('Binary Black Holes preset, 3D Tidal Spaghettification, Relativistic Time Dilation, and Click-to-Spawn Planets', () => {
+  const binaryBodies = createSpacePreset('binary-bh', 1.0, 1.0);
+  assert.equal(binaryBodies.filter((b) => b.isBlackHole).length, 2);
+
+  // Verificar dilatación temporal gravitatoria (dτ/dt < 1) y elongación de marea (λ >= 1)
+  const relMetrics = computeRelativisticAndTidalMetrics(binaryBodies, 1.2);
+  assert.ok(relMetrics.properTimeRate > 0 && relMetrics.properTimeRate < 1.0);
+  assert.ok(relMetrics.lorentzGamma >= 1.0);
+  assert.ok(relMetrics.maxTidalStretch >= 1.0);
+
+  // Verificar creador de planetas con clic en el plano orbital 3D (y = 0)
+  const withSpawned = spawnCustomPlanetOnPlane(binaryBodies, 19.5, -14.0, 1.2, 1.0);
+  assert.equal(withSpawned.length, binaryBodies.length + 1);
+  const newest = withSpawned[withSpawned.length - 1];
+  assert.equal(newest.position.x, 19.5);
+  assert.equal(newest.position.z, -14.0);
+  assert.ok(Math.hypot(newest.velocity.x, newest.velocity.z) > 0.5);
+});
+
+
 
 
 

@@ -408,6 +408,78 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
         light: THREE.PointLight;
       }
     > = {};
+    let resistorThermalMap: Record<
+      string,
+      {
+        ceramicMat: THREE.MeshStandardMaterial;
+        baseColorHex: number;
+        midPos: THREE.Vector3;
+      }
+    > = {};
+
+    // Pool pre-asignado de Chispas Balísticas 3D y Humo Térmico por Efecto Joule (P = I²·R > 5.0 W)
+    const sparkGroup = new THREE.Group();
+    scene.add(sparkGroup);
+    const sparkGeo = new THREE.OctahedronGeometry(0.11, 0);
+    interface Spark3D {
+      mesh: THREE.Mesh;
+      mat: THREE.MeshBasicMaterial;
+      vel: THREE.Vector3;
+      life: number;
+      maxLife: number;
+      originIdx: number;
+    }
+    const sparkPool: Spark3D[] = [];
+    for (let i = 0; i < 28; i++) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: i % 2 === 0 ? 0xfef08a : 0xf97316,
+        transparent: true,
+        opacity: 0,
+      });
+      const mesh = new THREE.Mesh(sparkGeo, mat);
+      mesh.visible = false;
+      sparkGroup.add(mesh);
+      sparkPool.push({
+        mesh,
+        mat,
+        vel: new THREE.Vector3(),
+        life: (i / 28) * 0.9,
+        maxLife: 0.55 + (i % 5) * 0.12,
+        originIdx: i,
+      });
+    }
+
+    const smokeGeo = new THREE.SphereGeometry(0.24, 10, 10);
+    interface Smoke3D {
+      mesh: THREE.Mesh;
+      mat: THREE.MeshBasicMaterial;
+      life: number;
+      maxLife: number;
+      driftX: number;
+      driftZ: number;
+      originIdx: number;
+    }
+    const smokePool: Smoke3D[] = [];
+    for (let i = 0; i < 14; i++) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0x64748b,
+        transparent: true,
+        opacity: 0,
+      });
+      const mesh = new THREE.Mesh(smokeGeo, mat);
+      mesh.visible = false;
+      sparkGroup.add(mesh);
+      smokePool.push({
+        mesh,
+        mat,
+        life: (i / 14) * 1.1,
+        maxLife: 1.1 + (i % 4) * 0.2,
+        driftX: ((i % 5) - 2) * 0.35,
+        driftZ: ((i % 3) - 1) * 0.35,
+        originIdx: i,
+      });
+    }
+
     let interactableMeshes: THREE.Object3D[] = [];
     let lastStructureKey = '';
 
@@ -417,6 +489,7 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
       }
       particleCarriers = [];
       bulbGlowMap = {};
+      resistorThermalMap = {};
       interactableMeshes = [powerSwitchMesh, ...nodePostMeshes];
 
       const {
@@ -566,26 +639,35 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
         } else if (comp.type === 'resistor') {
           const isOpenFault = !maskValues && comp.faultState === 'OPEN';
           const isShortFault = !maskValues && comp.faultState === 'SHORT';
+          const baseColorHex = maskValues
+            ? 0x3b0764
+            : isOpenFault
+            ? 0x334155
+            : bandMode === 5
+            ? 0xbae6fd
+            : 0xfef3c7;
 
+          const ceramicMat = new THREE.MeshStandardMaterial({
+            color: baseColorHex,
+            emissive: 0x000000,
+            emissiveIntensity: 0,
+            roughness: 0.5,
+            metalness: 0.08,
+            transparent: isOpenFault,
+            opacity: isOpenFault ? 0.42 : 1.0,
+          });
           const ceramicBody = new THREE.Mesh(
             new THREE.CylinderGeometry(0.56, 0.56, 2.65, 24).rotateX(Math.PI / 2),
-            new THREE.MeshStandardMaterial({
-              color: maskValues
-                ? 0x3b0764
-                : isOpenFault
-                ? 0x334155
-                : bandMode === 5
-                ? 0xbae6fd
-                : 0xfef3c7,
-              roughness: 0.5,
-              metalness: 0.08,
-              transparent: isOpenFault,
-              opacity: isOpenFault ? 0.42 : 1.0,
-            })
+            ceramicMat
           );
           ceramicBody.userData = { compId: comp.id, compType: comp.type, compLabel: comp.label };
           compGroup.add(ceramicBody);
           interactableMeshes.push(ceramicBody);
+          resistorThermalMap[comp.id] = {
+            ceramicMat,
+            baseColorHex,
+            midPos: mid.clone(),
+          };
 
           if (!maskValues) {
             if (bandMode === 5) {
@@ -1032,6 +1114,106 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
       };
 
       phase = (phase + 0.014) % 1000;
+
+      // Sobrecarga Térmica 3D y Chispas Balísticas cuando P = I²·R > 5.0 W
+      const overloadedPositions: THREE.Vector3[] = [];
+      Object.entries(resistorThermalMap).forEach(([cId, rObj]) => {
+        const bInfo = branchById[cId];
+        const powerW = circuitActive && bInfo ? bInfo.power : 0;
+        if (powerW > 5.0) {
+          overloadedPositions.push(rObj.midPos);
+          const thermalFactor = Math.min(1.6, (powerW - 5.0) / 18.0 + 0.45);
+          const pulse = 0.78 + 0.28 * Math.sin(phase * 18);
+          rObj.ceramicMat.color.setHex(0xf97316);
+          rObj.ceramicMat.emissive.setHex(0xef4444);
+          rObj.ceramicMat.emissiveIntensity = thermalFactor * pulse * 1.45;
+        } else if (powerW > 2.5) {
+          const warmFactor = (powerW - 2.5) / 2.5;
+          rObj.ceramicMat.color.setHex(rObj.baseColorHex);
+          rObj.ceramicMat.emissive.setHex(0xd97706);
+          rObj.ceramicMat.emissiveIntensity = warmFactor * 0.35;
+        } else {
+          rObj.ceramicMat.color.setHex(rObj.baseColorHex);
+          rObj.ceramicMat.emissive.setHex(0x000000);
+          rObj.ceramicMat.emissiveIntensity = 0;
+        }
+      });
+
+      // También incluir bombillas sobrecargadas o recién fundidas en los orígenes de chispas 3D
+      comps.forEach((c) => {
+        if (c.type === 'bulb') {
+          const bInfo = branchById[c.id];
+          const st = sol.componentStates[c.id];
+          const pW = bInfo ? bInfo.power : st?.power ?? 0;
+          if ((circuitActive && pW > 12.0) || st?.isBurnedOut || bInfo?.isBurnedOut) {
+            const pA = NODE_3D_COORDS[c.nodeA];
+            const pB = NODE_3D_COORDS[c.nodeB];
+            if (pA && pB) {
+              overloadedPositions.push(new THREE.Vector3().addVectors(pA, pB).multiplyScalar(0.5));
+            }
+          }
+        }
+      });
+
+      if (overloadedPositions.length > 0) {
+        const dtSpark = 0.018;
+        sparkPool.forEach((sp, idx) => {
+          sp.life += dtSpark;
+          const src = overloadedPositions[idx % overloadedPositions.length];
+          if (sp.life >= sp.maxLife) {
+            sp.life = 0;
+            const angle = ((idx * 137.5) % 360) * (Math.PI / 180) + phase * 3.1;
+            const speedH = 1.6 + (idx % 5) * 0.55;
+            const speedY = 2.6 + (idx % 4) * 0.75;
+            sp.mesh.position.set(
+              src.x + Math.cos(angle) * 0.3,
+              src.y + 0.65,
+              src.z + Math.sin(angle) * 0.3
+            );
+            sp.vel.set(Math.cos(angle) * speedH, speedY, Math.sin(angle) * speedH);
+          } else {
+            sp.mesh.position.x += sp.vel.x * dtSpark;
+            sp.mesh.position.y += sp.vel.y * dtSpark;
+            sp.mesh.position.z += sp.vel.z * dtSpark;
+            sp.vel.y -= 9.2 * dtSpark; // gravedad balística sobre la chispa
+            if (sp.mesh.position.y < 0.15) {
+              sp.mesh.position.y = 0.15;
+              sp.vel.y = Math.abs(sp.vel.y) * 0.42;
+            }
+          }
+          const lifeRatio = 1 - sp.life / sp.maxLife;
+          sp.mesh.visible = true;
+          sp.mat.opacity = Math.max(0, Math.min(1, lifeRatio * 1.15));
+          sp.mesh.scale.setScalar(0.65 + lifeRatio * 0.7);
+        });
+
+        smokePool.forEach((sm, idx) => {
+          sm.life += dtSpark * 0.75;
+          const src = overloadedPositions[idx % overloadedPositions.length];
+          if (sm.life >= sm.maxLife) {
+            sm.life = 0;
+            sm.mesh.position.set(src.x, src.y + 0.7, src.z);
+          } else {
+            const prog = sm.life / sm.maxLife;
+            sm.mesh.position.set(
+              src.x + sm.driftX * prog + Math.sin(phase * 6 + idx) * 0.18,
+              src.y + 0.7 + prog * 2.9,
+              src.z + sm.driftZ * prog
+            );
+            sm.mesh.scale.setScalar(0.75 + prog * 1.85);
+            sm.mat.opacity = Math.sin(prog * Math.PI) * 0.38;
+          }
+          sm.mesh.visible = true;
+        });
+      } else {
+        sparkPool.forEach((sp) => {
+          sp.mesh.visible = false;
+        });
+        smokePool.forEach((sm) => {
+          sm.mesh.visible = false;
+        });
+      }
+
       particleCarriers.forEach((pc) => {
         const st = sol.componentStates[pc.compId];
         const compObj = comps.find((c) => c.id === pc.compId);
@@ -1115,6 +1297,8 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
                 className={`px-2.5 py-1 rounded-md border text-[10px] font-mono ${
                   b.isBurnedOut
                     ? 'bg-rose-950/95 border-rose-400 text-rose-200'
+                    : b.isOverloaded
+                    ? 'bg-orange-950/95 border-orange-400 text-orange-100 shadow-[0_0_12px_rgba(249,115,22,0.45)]'
                     : !maskNominalValues && b.faultState === 'SHORT'
                     ? 'bg-rose-950/90 border-rose-500 text-rose-200'
                     : !maskNominalValues && b.faultState === 'OPEN'
@@ -1151,6 +1335,11 @@ export const CircuitWorkbench3D: React.FC<CircuitWorkbench3DProps> = ({
                 {b.isBurnedOut && (
                   <span className="ml-1 font-bold uppercase text-rose-300">
                     [🔥 FILAMENTO FUNDIDO &gt;15W]
+                  </span>
+                )}
+                {!b.isBurnedOut && b.isOverloaded && (
+                  <span className="ml-1 font-bold uppercase text-orange-300">
+                    [🔥 SOBRECARGA TÉRMICA + CHISPAS 3D]
                   </span>
                 )}
                 {!maskNominalValues && !b.isBurnedOut && b.componentType === 'wire' && (

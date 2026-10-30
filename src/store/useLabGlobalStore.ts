@@ -8,6 +8,7 @@ import {
   createKeplerianCustomSystem,
   scaleCentralBodyMass,
   triggerPlanetaryCollisionCourse,
+  spawnCustomPlanetOnPlane,
 } from '../labs/espacio-3d/space-engine';
 
 export type ActiveModuleView = 'hub' | 'circuits' | 'space' | 'mechanics' | 'kinematics';
@@ -22,6 +23,7 @@ export interface ExternalResistorSync {
 export interface SpaceLabGlobalState {
   preset: SpacePresetId;
   isBlackHole: boolean;
+  planetCreatorMode: boolean;
   centralMassSolar: number;
   gravityG: number;
   insertionFactor: number;
@@ -64,6 +66,8 @@ export interface LabGlobalStore {
 
   // Acciones atómicas de Gravitación 3D (garantizan invariancia entre Agujero Negro, Masa y Gravedad)
   setSpaceBlackHole: (enable?: boolean) => void;
+  setSpacePlanetCreatorMode: (active?: boolean) => void;
+  spawnPlanetAtCoords: (x: number, z: number) => void;
   setSpaceCentralMass: (massSolar: number) => void;
   setSpaceGravityG: (g: number) => void;
   setSpaceInsertionFactor: (factor: number) => void;
@@ -110,6 +114,7 @@ export const useLabGlobalStore = create<LabGlobalStore>((set) => ({
   spaceLab: {
     preset: 'solar',
     isBlackHole: false,
+    planetCreatorMode: false,
     centralMassSolar: 1.0,
     gravityG: 1.0,
     insertionFactor: 1.0,
@@ -155,6 +160,32 @@ export const useLabGlobalStore = create<LabGlobalStore>((set) => ({
           ...state.spaceLab,
           isBlackHole: nextIsBlackHole,
           bodies: updatedBodies,
+          sceneRevision: state.spaceLab.sceneRevision + 1,
+        },
+      };
+    }),
+
+  setSpacePlanetCreatorMode: (active) =>
+    set((state) => ({
+      spaceLab: {
+        ...state.spaceLab,
+        planetCreatorMode: active !== undefined ? active : !state.spaceLab.planetCreatorMode,
+      },
+    })),
+
+  spawnPlanetAtCoords: (x, z) =>
+    set((state) => {
+      const nextBodies = spawnCustomPlanetOnPlane(
+        state.spaceLab.bodies,
+        x,
+        z,
+        state.spaceLab.gravityG,
+        state.spaceLab.insertionFactor
+      );
+      return {
+        spaceLab: {
+          ...state.spaceLab,
+          bodies: nextBodies,
           sceneRevision: state.spaceLab.sceneRevision + 1,
         },
       };
@@ -229,16 +260,18 @@ export const useLabGlobalStore = create<LabGlobalStore>((set) => ({
   setSpacePreset: (preset, factor) =>
     set((state) => {
       const nextFactor = factor !== undefined ? factor : state.spaceLab.insertionFactor;
+      const effectiveBlackHole = preset === 'binary-bh' ? true : state.spaceLab.isBlackHole;
       const baseBodies = createSpacePreset(preset, nextFactor, state.spaceLab.gravityG);
       const updatedBodies = scaleCentralBodyMass(
         baseBodies,
         state.spaceLab.centralMassSolar,
-        state.spaceLab.isBlackHole
+        effectiveBlackHole
       );
       return {
         spaceLab: {
           ...state.spaceLab,
           preset,
+          isBlackHole: effectiveBlackHole,
           insertionFactor: nextFactor,
           bodies: updatedBodies,
           sceneRevision: state.spaceLab.sceneRevision + 1,

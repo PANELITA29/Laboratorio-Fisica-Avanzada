@@ -628,6 +628,8 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
     }
   };
 
+  const prevOverloadCountRef = useRef<number>(0);
+
   // Sincronizar audio procedural
   useEffect(() => {
     audioSynth.updateCircuitHum(isPowered ? topologyResult.totalCurrent : 0);
@@ -641,6 +643,14 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
       audioSynth.playBurnoutSound();
     }
     prevBurnoutCountRef.current = burnedCount;
+
+    const overloadCount = isPowered
+      ? topologyResult.branches.filter((b) => b.isOverloaded && !b.isBurnedOut).length
+      : 0;
+    if (overloadCount > prevOverloadCountRef.current) {
+      audioSynth.playSparkCrackle();
+    }
+    prevOverloadCountRef.current = overloadCount;
 
     return () => {
       audioSynth.stopCircuitHum();
@@ -1518,6 +1528,37 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
             ))}
           </div>
 
+          {/* Botón Directo a Sobrecarga Térmica 3D (Chispas + Efecto Joule > 5W) */}
+          <button
+            type="button"
+            data-testid="trigger-thermal-overload-btn"
+            onClick={() => {
+              setDiagnosisMission(null);
+              setShowBlackBoxModal(false);
+              setRevealAllBranches(true);
+              setIsPowered(true);
+              setTopology('parallel');
+              setComponents(
+                buildTopologyComponents3D({
+                  topology: 'parallel',
+                  sourceVoltage: 30,
+                  r1: 12,
+                  r2: 18,
+                  r3: 45,
+                  f1: 'ON',
+                  f2: 'ON',
+                  f3: 'ON',
+                  isPowered: true,
+                })
+              );
+              audioSynth.playSparkCrackle();
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold border bg-orange-950/70 border-orange-500/60 text-orange-200 hover:bg-orange-900/70 transition-colors cursor-pointer"
+          >
+            <Flame className="w-3.5 h-3.5 text-orange-400" />
+            <span>🔥 Sobrecarga Térmica (Chispas 3D)</span>
+          </button>
+
           {/* Botón Directo a Misión Caja Negra (Objetivo C) */}
           <button
             type="button"
@@ -1597,6 +1638,35 @@ export const CircuitLabView: React.FC<CircuitLabViewProps> = ({
             className="px-3 py-1.5 rounded-lg bg-rose-500 text-slate-950 font-mono font-bold hover:bg-rose-400 transition-colors shrink-0 cursor-pointer"
           >
             🔧 Reemplazar Fusible (10A) y pasar a V⎓
+          </button>
+        </div>
+      )}
+
+      {/* Alerta Térmica de Resistencia en Sobrecarga por Efecto Joule (P > 5.0 W con Chispas 3D) */}
+      {isPowered && topologyResult.branches.some((b) => b.isOverloaded && !b.isBurnedOut) && (
+        <div
+          role="alert"
+          data-testid="resistor-thermal-overload-banner"
+          className="p-3.5 rounded-xl bg-orange-950/90 border border-orange-500/80 flex flex-wrap items-center justify-between gap-3 text-xs text-orange-100 shadow-lg"
+        >
+          <div className="flex items-center gap-2.5">
+            <Flame className="w-5 h-5 text-orange-400 shrink-0" />
+            <span>
+              <strong>¡Sobrecarga Térmica 3D por Efecto Joule ($P = I^2 \cdot R &gt; 5.0\text{ W}$)!</strong> Las resistencias sobrecargadas brillan al rojo vivo y emiten chispas balísticas 3D y humo térmico.
+            </span>
+          </div>
+          <button
+            type="button"
+            data-testid="cool-down-circuit-btn"
+            onClick={() => {
+              setSourceVoltage(12);
+              setR1(Math.max(40, r1));
+              setR2(Math.max(40, r2));
+              setR3(Math.max(40, r3));
+            }}
+            className="px-3 py-1.5 rounded-lg bg-cyan-400 text-slate-950 font-mono font-bold hover:bg-cyan-300 transition-colors shrink-0 cursor-pointer"
+          >
+            ❄️ Enfriar y Estabilizar (&lt; 5.0 W)
           </button>
         </div>
       )}

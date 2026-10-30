@@ -16,6 +16,8 @@ import {
   Layers,
   Flame,
   Sparkles,
+  PlusCircle,
+  Clock,
 } from 'lucide-react';
 import { Language, dictionary } from '../../assets/js/i18n';
 import { audioSynth } from '../../assets/js/audio-synth';
@@ -32,6 +34,7 @@ import {
   scaleCentralBodyMass,
   triggerPlanetaryCollisionCourse,
   detectAndResolveCollisions,
+  computeRelativisticAndTidalMetrics,
 } from './space-engine';
 import {
   createSpacetimeShaderMesh,
@@ -154,6 +157,8 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
   // Estado global centralizado en Zustand (useLabGlobalStore) para evitar reinicios erróneos entre Agujero Negro, Masa y Gravedad
   const spaceLab = useLabGlobalStore((s) => s.spaceLab);
   const setSpaceBlackHole = useLabGlobalStore((s) => s.setSpaceBlackHole);
+  const setSpacePlanetCreatorMode = useLabGlobalStore((s) => s.setSpacePlanetCreatorMode);
+  const spawnPlanetAtCoords = useLabGlobalStore((s) => s.spawnPlanetAtCoords);
   const setSpaceCentralMass = useLabGlobalStore((s) => s.setSpaceCentralMass);
   const setSpaceGravityG = useLabGlobalStore((s) => s.setSpaceGravityG);
   const setSpaceInsertionFactor = useLabGlobalStore((s) => s.setSpaceInsertionFactor);
@@ -167,6 +172,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
   const {
     preset,
     isBlackHole,
+    planetCreatorMode,
     centralMassSolar,
     gravityG,
     insertionFactor,
@@ -221,13 +227,18 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
   });
   const [lastCollisionNotice, setLastCollisionNotice] = useState<string | null>(null);
 
-  // Telemetría viva throttled a <= 10Hz para el HUD y Reporte
+  // Telemetría viva throttled a <= 10Hz para el HUD y Reporte (+ Reloj Relativista y Espaguetización)
   const [liveStats, setLiveStats] = useState({
     kineticEnergy: 0,
     potentialEnergy: 0,
     totalEnergy: 0,
     primaryOrbitalRadius: 16,
     primarySpeed: 8.6,
+    coordTimeSec: 0,
+    properTimeSec: 0,
+    lorentzGamma: 1.0,
+    redshiftZ: 0.0,
+    maxTidalStretch: 1.0,
   });
 
   const [validationFeedback, setValidationFeedback] = useState<Record<string, SpaceValidationResult>>({});
@@ -235,6 +246,10 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
   // Estado mutable de los cuerpos celestes para el bucle Verlet sincronizado con el store global
   const bodiesRef = useRef<CelestialBody[]>(useLabGlobalStore.getState().spaceLab.bodies);
   const resetTriggerRef = useRef<number>(useLabGlobalStore.getState().spaceLab.sceneRevision);
+  const relClockRef = useRef<{ coordTime: number; properTime: number }>({
+    coordTime: 0,
+    properTime: 0,
+  });
   const supernovaAnimRef = useRef<{
     active: boolean;
     startTime: number;
@@ -265,6 +280,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
     showVelocityVectors,
     showTrails,
     isBlackHole,
+    planetCreatorMode,
   });
   controlsStateRef.current = {
     preset,
@@ -279,6 +295,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
     showVelocityVectors,
     showTrails,
     isBlackHole,
+    planetCreatorMode,
   };
 
   const mountRef = useRef<HTMLDivElement | null>(null);
@@ -743,6 +760,88 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
     impactRingMesh.visible = false;
     scene.add(impactRingMesh);
 
+    // Cursor 3D Holográfico para el Modo Creador de Planetas (Clic en el Lienzo 3D)
+    const spawnCursorGroup = new THREE.Group();
+    spawnCursorGroup.visible = false;
+    const spawnCursorRing = new THREE.Mesh(
+      new THREE.RingGeometry(0.95, 1.35, 32).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.85,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      })
+    );
+    const spawnCursorGhost = new THREE.Mesh(
+      new THREE.SphereGeometry(0.85, 20, 20),
+      new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.45,
+        wireframe: true,
+      })
+    );
+    spawnCursorGroup.add(spawnCursorRing, spawnCursorGhost);
+    scene.add(spawnCursorGroup);
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    const orbitalPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const planeHitPoint = new THREE.Vector3();
+    let pointerDownPos = { x: 0, y: 0 };
+
+    const updateCanvasPointer = (e: MouseEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    };
+
+    const handleCanvasPointerMove = (e: MouseEvent) => {
+      if (!controlsStateRef.current.planetCreatorMode) {
+        if (spawnCursorGroup.visible) spawnCursorGroup.visible = false;
+        return;
+      }
+      updateCanvasPointer(e);
+      raycaster.setFromCamera(pointer, camera);
+      if (raycaster.ray.intersectPlane(orbitalPlane, planeHitPoint)) {
+        const r = Math.hypot(planeHitPoint.x, planeHitPoint.z);
+        if (r >= 4.2 && r <= 34.0) {
+          spawnCursorGroup.visible = true;
+          spawnCursorGroup.position.set(planeHitPoint.x, 0, planeHitPoint.z);
+        } else {
+          spawnCursorGroup.visible = false;
+        }
+      } else {
+        spawnCursorGroup.visible = false;
+      }
+    };
+
+    const handleCanvasPointerDown = (e: MouseEvent) => {
+      pointerDownPos = { x: e.clientX, y: e.clientY };
+    };
+
+    const handleCanvasPointerUp = (e: MouseEvent) => {
+      if (!controlsStateRef.current.planetCreatorMode) return;
+      const moveDist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+      if (moveDist > 6) return; // Ignorar si el usuario estaba rotando la cámara con OrbitControls
+
+      updateCanvasPointer(e);
+      raycaster.setFromCamera(pointer, camera);
+      if (raycaster.ray.intersectPlane(orbitalPlane, planeHitPoint)) {
+        const r = Math.hypot(planeHitPoint.x, planeHitPoint.z);
+        if (r >= 4.2 && r <= 34.0) {
+          useLabGlobalStore.getState().setSpaceBodies(bodiesRef.current, false);
+          useLabGlobalStore.getState().spawnPlanetAtCoords(planeHitPoint.x, planeHitPoint.z);
+          audioSynth.playPlanetSpawnWhoosh();
+        }
+      }
+    };
+
+    renderer.domElement.addEventListener('mousemove', handleCanvasPointerMove);
+    renderer.domElement.addEventListener('mousedown', handleCanvasPointerDown);
+    renderer.domElement.addEventListener('mouseup', handleCanvasPointerUp);
+
     const rebuildVisualsForCurrentBodies = () => {
       while (bodiesGroup.children.length > 0) {
         bodiesGroup.remove(bodiesGroup.children[0]);
@@ -805,6 +904,8 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
     const _ejectaPos = new THREE.Vector3();
     const _ejectaQuat = new THREE.Quaternion();
     const _ejectaScale = new THREE.Vector3();
+    const _unitX = new THREE.Vector3(1, 0, 0);
+    const _tidalAxis = new THREE.Vector3(1, 0, 0);
 
     let frameId = 0;
     let lastHudUpdate = 0;
@@ -833,6 +934,10 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
 
       const cfg = controlsStateRef.current;
       const nowMs = performance.now();
+
+      if (!cfg.planetCreatorMode && spawnCursorGroup.visible) {
+        spawnCursorGroup.visible = false;
+      }
 
       // 1. Integración Física Simpléctica de Velocity Verlet + Detección de Colisiones Planetarias
       if (!cfg.isPaused) {
@@ -882,6 +987,14 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
       }
 
       const activeBodies = bodiesRef.current;
+
+      // 1a. Evaluar Métricas Relativistas (Dilatación Temporal dτ/dt y Espaguetización Mareal 3D)
+      const relMetrics = computeRelativisticAndTidalMetrics(activeBodies, cfg.gravityG);
+      if (!cfg.isPaused) {
+        const stepRealSec = 0.016 * cfg.simSpeed;
+        relClockRef.current.coordTime += stepRealSec;
+        relClockRef.current.properTime += stepRealSec * relMetrics.properTimeRate;
+      }
 
       // 1b. Animación 3D de la Supernova y Onda de Choque Relativista
       let currentSnProgress = 0;
@@ -975,13 +1088,23 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
         );
       }
 
-      // 3. Actualizar Posiciones de Cuerpos, Vectores 3D Conmutables y Rastro Orbital
+      // 3. Actualizar Posiciones de Cuerpos, Espaguetización Mareal 3D, Vectores y Rastro Orbital
       activeBodies.forEach((b) => {
         const vis = visualsMap[b.id];
         if (!vis) return;
 
         vis.group.position.set(b.position.x, b.position.y, b.position.z);
-        vis.group.rotation.y += b.isBlackHole ? 0.045 : 0.012;
+
+        const tidal = relMetrics.tidalByBodyId[b.id];
+        if (tidal && tidal.stretchFactor > 1.04 && !b.isBlackHole && !b.isFixed) {
+          // Espaguetización 3D: alinear eje X del grupo hacia el Agujero Negro y estirar conservando volumen
+          _tidalAxis.set(tidal.dirX, tidal.dirY, tidal.dirZ).normalize();
+          vis.group.quaternion.setFromUnitVectors(_unitX, _tidalAxis);
+          vis.group.scale.set(tidal.stretchFactor, tidal.transverseScale, tidal.transverseScale);
+        } else {
+          vis.group.scale.set(1, 1, 1);
+          vis.group.rotation.y += b.isBlackHole ? 0.045 : 0.012;
+        }
 
         // Vector 3D Fuerza Gravitacional (Azul)
         const accMag = Math.hypot(b.acceleration.x, b.acceleration.y, b.acceleration.z);
@@ -1069,12 +1192,19 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
         controls.update();
       }
 
-      // 5. Actualizar HUD de energías cada 200ms (<= 5Hz) para evitar re-renders a 60Hz
+      // 5. Actualizar HUD de energías y Reloj Relativista cada 200ms (<= 5Hz) para evitar re-renders a 60Hz
       const now = performance.now();
       if (now - lastHudUpdate > 220) {
         lastHudUpdate = now;
         const energetics = computeSystemEnergetics(activeBodies, cfg.gravityG);
-        setLiveStats(energetics);
+        setLiveStats({
+          ...energetics,
+          coordTimeSec: relClockRef.current.coordTime,
+          properTimeSec: relClockRef.current.properTime,
+          lorentzGamma: relMetrics.lorentzGamma,
+          redshiftZ: relMetrics.gravitationalRedshiftZ,
+          maxTidalStretch: relMetrics.maxTidalStretch,
+        });
       }
 
       renderer.render(scene, camera);
@@ -1100,6 +1230,9 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      renderer.domElement.removeEventListener('mousemove', handleCanvasPointerMove);
+      renderer.domElement.removeEventListener('mousedown', handleCanvasPointerDown);
+      renderer.domElement.removeEventListener('mouseup', handleCanvasPointerUp);
       cancelAnimationFrame(frameId);
       clearTimeout(frameId);
       controls.dispose();
@@ -1146,7 +1279,7 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
             </button>
           </div>
 
-          {/* Escenarios Astrofísicos Predefinidos + Agujero Negro y Supernova */}
+          {/* Escenarios Astrofísicos Predefinidos + Agujero Negro Binario, Creador con Clic y Supernova */}
           <div className="flex flex-wrap items-center gap-1.5">
             {(
               [
@@ -1155,11 +1288,16 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
                 { id: 'exoplanet', label: t.presetExoplanet },
                 { id: 'geostationary', label: t.presetGeostationary },
                 { id: 'lagrange', label: t.presetLagrange },
+                {
+                  id: 'binary-bh',
+                  label: lang === 'es' ? '🌀 Agujeros Negros Binarios' : '🌀 Binary Black Holes',
+                },
               ] as Array<{ id: SpacePresetId; label: string }>
             ).map((item) => (
               <button
                 key={item.id}
                 type="button"
+                data-testid={`preset-btn-${item.id}`}
                 onClick={() => applyPreset(item.id, 1.0)}
                 className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
                   preset === item.id
@@ -1191,6 +1329,29 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
                   : lang === 'es'
                   ? '🕳️ Convertir Sol en Agujero Negro'
                   : '🕳️ Turn Sun into Black Hole'}
+              </span>
+            </button>
+
+            {/* Botón Modo Creador de Planetas con Clic en el Lienzo 3D */}
+            <button
+              type="button"
+              data-testid="toggle-planet-creator-btn"
+              onClick={() => setSpacePlanetCreatorMode()}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                planetCreatorMode
+                  ? 'bg-cyan-500 text-slate-950 border-cyan-300 shadow-[0_0_14px_rgba(6,182,212,0.4)]'
+                  : 'bg-[#090D18] border-cyan-500/50 text-cyan-200 hover:bg-cyan-950/50'
+              }`}
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>
+                {planetCreatorMode
+                  ? lang === 'es'
+                    ? '🪐 Clic en 3D para Crear: ACTIVO'
+                    : '🪐 Click 3D to Spawn: ON'
+                  : lang === 'es'
+                  ? '🪐 Creador de Planetas (Clic 3D)'
+                  : '🪐 Planet Creator (3D Click)'}
               </span>
             </button>
 
@@ -1290,13 +1451,15 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
           <div
             ref={mountRef}
             data-testid="space-3d-canvas"
-            className="w-full h-full"
+            className={`w-full h-full ${planetCreatorMode ? 'cursor-crosshair' : ''}`}
           />
 
-          {/* Minimal Spec Badge (Top-Left, solid surface without backdrop-blur over WebGL) */}
-          <div className="absolute top-2.5 left-2.5 right-2.5 sm:right-auto sm:top-4 sm:left-4 pointer-events-none bg-[#090D16]/95 border border-slate-800 rounded-lg px-3 py-2 sm:px-3.5 sm:py-2.5 space-y-1">
+          {/* Minimal Spec Badge + Reloj Relativista y Espaguetización Mareal (Top-Left) */}
+          <div className="absolute top-2.5 left-2.5 right-2.5 sm:right-auto sm:top-4 sm:left-4 pointer-events-none bg-[#090D16]/95 border border-slate-800 rounded-lg px-3 py-2 sm:px-3.5 sm:py-2.5 space-y-1.5">
             <div className="text-[10px] sm:text-[11px] font-mono text-purple-400 uppercase truncate">
-              {isBlackHole
+              {preset === 'binary-bh'
+                ? '🌀 SISTEMA BINARIO DE AGUJEROS NEGROS · ONDAS Y MAREA'
+                : isBlackHole
                 ? '🕳️ MÉTRICA DE KERR-SCHWARZSCHILD · HORIZONTE DE SUCESOS'
                 : 'TELEMETRÍA ORBITAL EN VIVO (VERLET)'}
             </div>
@@ -1305,6 +1468,36 @@ export const SpaceLabView: React.FC<SpaceLabViewProps> = ({
               <span>v: {liveStats.primarySpeed.toFixed(2)} u/s</span>
               <span className="text-cyan-400">E_tot: {liveStats.totalEnergy.toFixed(0)} GJ</span>
             </div>
+
+            {/* Reloj de Dilatación Temporal Relativista y Estiramiento Mareal (Espaguetización) */}
+            <div
+              data-testid="relativistic-telemetry-hud"
+              className="pt-1 border-t border-slate-800/90 flex flex-wrap items-center gap-2.5 text-[10px] sm:text-[11px] font-mono tabular-nums"
+            >
+              <span className="text-slate-300 flex items-center gap-1">
+                <Clock className="w-3 h-3 text-fuchsia-400" />
+                <span>t_obs: {liveStats.coordTimeSec.toFixed(1)}s</span>
+              </span>
+              <span className="text-fuchsia-300 font-semibold">
+                τ_sonda: {liveStats.properTimeSec.toFixed(1)}s (γ={liveStats.lorentzGamma.toFixed(2)}x)
+              </span>
+              <span
+                className={
+                  liveStats.maxTidalStretch > 1.25
+                    ? 'text-rose-400 font-bold'
+                    : 'text-amber-300'
+                }
+              >
+                🍝 Marea: {liveStats.maxTidalStretch.toFixed(2)}x
+                {liveStats.maxTidalStretch > 1.25 ? ' [ESPAGUETIZACIÓN]' : ''}
+              </span>
+            </div>
+
+            {planetCreatorMode && (
+              <div className="text-[10px] font-mono text-cyan-300 pt-0.5">
+                🎯 Haz clic en cualquier punto de la malla 3D para inyectar un nuevo planeta en órbita.
+              </div>
+            )}
             {lastCollisionNotice && !supernovaAlert.active && (
               <div className="text-[11px] font-mono text-amber-300 pt-0.5">
                 {lastCollisionNotice}

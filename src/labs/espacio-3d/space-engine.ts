@@ -29,7 +29,13 @@ export interface CelestialBody {
   baseRadius?: number;
 }
 
-export type SpacePresetId = 'solar' | 'earth-moon' | 'exoplanet' | 'geostationary' | 'lagrange';
+export type SpacePresetId =
+  | 'solar'
+  | 'earth-moon'
+  | 'exoplanet'
+  | 'geostationary'
+  | 'lagrange'
+  | 'binary-bh';
 
 export const DEFAULT_G = 1.0;
 export const SOFTENING_EPSILON = 1.6;
@@ -367,6 +373,62 @@ export function createSpacePreset(
     ];
   }
 
+  if (preset === 'binary-bh') {
+    // Sistema Binario de Agujeros Negros en espiral relativista + planeta circumbinario sometido a mareas extremas
+    const mBH = 780;
+    const rBin = 6.8;
+    // Dos masas iguales M orbitando su baricentro a distancia 2*rBin: F = G*M^2 / (2*rBin)^2 = M * v^2 / rBin -> v = sqrt(G*M / (4*rBin))
+    const vBin = Math.sqrt((G * mBH) / (4 * rBin)) * insertionVelocityFactor;
+    const rTest = 21.5;
+    const vTest = Math.sqrt((G * (2 * mBH)) / rTest);
+
+    return [
+      {
+        id: 'bh-alpha',
+        nameEs: 'Agujero Negro Alfa',
+        nameEn: 'Black Hole Alpha',
+        mass: mBH,
+        baseMass: mBH,
+        radius: 2.25,
+        baseRadius: 2.25,
+        color: '#A855F7',
+        baseColor: '#A855F7',
+        emissive: true,
+        isBlackHole: true,
+        position: { x: rBin, y: 0, z: 0 },
+        velocity: { x: 0, y: 0, z: vBin },
+        acceleration: { x: 0, y: 0, z: 0 },
+      },
+      {
+        id: 'bh-beta',
+        nameEs: 'Agujero Negro Beta',
+        nameEn: 'Black Hole Beta',
+        mass: mBH,
+        baseMass: mBH,
+        radius: 2.25,
+        baseRadius: 2.25,
+        color: '#EC4899',
+        baseColor: '#EC4899',
+        emissive: true,
+        isBlackHole: true,
+        position: { x: -rBin, y: 0, z: 0 },
+        velocity: { x: 0, y: 0, z: -vBin },
+        acceleration: { x: 0, y: 0, z: 0 },
+      },
+      {
+        id: 'planet-tidal',
+        nameEs: 'Exoplaneta Circumbinario',
+        nameEn: 'Circumbinary Exoplanet',
+        mass: 12,
+        radius: 1.15,
+        color: '#06B6D4',
+        position: { x: 0, y: 0, z: rTest },
+        velocity: { x: -vTest, y: 0, z: 0 },
+        acceleration: { x: 0, y: 0, z: 0 },
+      },
+    ];
+  }
+
   // Preset 'lagrange': Solución triangular equilátera de Lagrange para 3 cuerpos de masas iguales M = 320
   const M = 320;
   const R = 13.5; // Radio circunscrito del triángulo equilátero
@@ -593,8 +655,15 @@ export function convertCentralBodyToBlackHole(
 ): CelestialBody[] {
   if (bodies.length === 0) return bodies;
 
+  const isBinarySystem = bodies.some((b) => b.id === 'bh-alpha' || b.id === 'bh-beta');
+  if (isBinarySystem && enableBlackHole) {
+    return bodies.map((b) =>
+      b.id === 'bh-alpha' || b.id === 'bh-beta' ? { ...b, isBlackHole: true } : b
+    );
+  }
+
   return bodies.map((b, idx) => {
-    if (idx !== 0) return b;
+    if (idx !== 0 && !b.id.startsWith('bh-')) return b;
 
     const origMass = b.baseMass ?? b.mass;
     const origNameEs = b.baseNameEs ?? b.nameEs;
@@ -613,10 +682,14 @@ export function convertCentralBodyToBlackHole(
         baseColor: origColor,
         baseRadius: origRadius,
         isBlackHole: true,
-        nameEs: `Agujero Negro (${solarEquiv.toFixed(1)} M☉)`,
-        nameEn: `Black Hole (${solarEquiv.toFixed(1)} M☉)`,
-        mass: origMass * 1.85,
-        radius: scaledBhRadius,
+        nameEs: b.id.startsWith('bh-')
+          ? b.nameEs
+          : `Agujero Negro (${solarEquiv.toFixed(1)} M☉)`,
+        nameEn: b.id.startsWith('bh-')
+          ? b.nameEn
+          : `Black Hole (${solarEquiv.toFixed(1)} M☉)`,
+        mass: b.id.startsWith('bh-') ? origMass : origMass * 1.85,
+        radius: b.id.startsWith('bh-') ? origRadius : scaledBhRadius,
         color: '#A855F7',
         emissive: true,
       };
@@ -645,6 +718,26 @@ export function scaleCentralBodyMass(
 ): CelestialBody[] {
   if (bodies.length === 0) return bodies;
   const clampedSolar = Math.max(0.2, centralMassSolar);
+  const isBinarySystem = bodies.some((b) => b.id === 'bh-alpha' || b.id === 'bh-beta');
+
+  if (isBinarySystem) {
+    const binMass = 780 * clampedSolar;
+    const binRadius = Math.max(1.6, Math.min(3.4, 2.25 * Math.cbrt(clampedSolar)));
+    return bodies.map((b) => {
+      if (b.id === 'bh-alpha' || b.id === 'bh-beta') {
+        return {
+          ...b,
+          mass: binMass,
+          baseMass: binMass,
+          radius: binRadius,
+          baseRadius: binRadius,
+          isBlackHole: true,
+        };
+      }
+      return b;
+    });
+  }
+
   const newBaseMass = 1200 * clampedSolar;
   const newBaseRadius = Math.min(4.2, 2.6 * Math.cbrt(clampedSolar));
 
@@ -789,5 +882,234 @@ export function detectAndResolveCollisions(bodies: CelestialBody[]): CollisionSt
     allOrbitersCollided,
   };
 }
+
+// ============================================================================
+// ESPAGUETIZACIÓN 3D (FUERZAS DE MAREA), DILATACIÓN TEMPORAL RELATIVISTA
+// Y CREADOR INTERACTIVO DE PLANETAS CON CLIC EN EL LIENZO 3D
+// ============================================================================
+
+export interface BodyTidalState {
+  stretchFactor: number; // Factor longitudinal de estiramiento (1.0 = esférico, >1.0 = espaguetizado)
+  transverseScale: number; // Compresión transversal (1 / sqrt(stretchFactor)) para conservar volumen
+  dirX: number;
+  dirY: number;
+  dirZ: number;
+}
+
+export interface RelativisticSystemTelemetry {
+  schwarzschildRadiusU: number;
+  closestDistanceU: number;
+  properTimeRate: number; // dτ / dt = sqrt(1 - r_s / r)
+  lorentzGamma: number; // γ = 1 / sqrt(1 - r_s / r)
+  gravitationalRedshiftZ: number; // z = γ - 1
+  maxTidalStretch: number;
+  tidalByBodyId: Record<string, BodyTidalState>;
+}
+
+/**
+ * Calcula en cada fotograma:
+ * 1) El estiramiento mareal (espaguetización) ΔF_T ∝ 2 G M R_p / r³ sobre cada planeta.
+ * 2) La dilatación temporal relativista dτ/dt = sqrt(1 - r_s/r) del cuerpo más cercano al horizonte.
+ */
+export function computeRelativisticAndTidalMetrics(
+  bodies: CelestialBody[],
+  G: number = DEFAULT_G
+): RelativisticSystemTelemetry {
+  const tidalByBodyId: Record<string, BodyTidalState> = {};
+  if (bodies.length === 0) {
+    return {
+      schwarzschildRadiusU: 0,
+      closestDistanceU: 16,
+      properTimeRate: 1.0,
+      lorentzGamma: 1.0,
+      gravitationalRedshiftZ: 0,
+      maxTidalStretch: 1.0,
+      tidalByBodyId,
+    };
+  }
+
+  // Identificar los pozos gravitatorios principales (Agujeros Negros o el cuerpo más masivo)
+  const blackHoles = bodies.filter((b) => b.isBlackHole);
+  const attractors = blackHoles.length > 0 ? blackHoles : [bodies[0]];
+  const hasBlackHole = blackHoles.length > 0;
+
+  let minRatioDist = 999;
+  let effectiveRs = 0.5;
+  let closestDist = 16;
+  let maxTidalStretch = 1.0;
+
+  for (const b of bodies) {
+    if (b.isBlackHole || (b === bodies[0] && b.isFixed)) {
+      tidalByBodyId[b.id] = {
+        stretchFactor: 1.0,
+        transverseScale: 1.0,
+        dirX: 1,
+        dirY: 0,
+        dirZ: 0,
+      };
+      continue;
+    }
+
+    // Buscar el atractor que ejerce el mayor gradiente de marea M / r³ sobre este cuerpo
+    let bestAttractor = attractors[0];
+    let maxTidalGradient = -1;
+    let bestDx = 1;
+    let bestDy = 0;
+    let bestDz = 0;
+    let bestDist = 16;
+
+    for (const att of attractors) {
+      if (att.id === b.id) continue;
+      const dx = att.position.x - b.position.x;
+      const dy = att.position.y - b.position.y;
+      const dz = att.position.z - b.position.z;
+      const dist = Math.max(1.2, Math.hypot(dx, dy, dz));
+      const grad = (G * att.mass) / (dist * dist * dist);
+      if (grad > maxTidalGradient) {
+        maxTidalGradient = grad;
+        bestAttractor = att;
+        bestDx = dx / dist;
+        bestDy = dy / dist;
+        bestDz = dz / dist;
+        bestDist = dist;
+      }
+    }
+
+    // Radio de Schwarzschild efectivo en unidades de la escena 3D
+    const rs = bestAttractor.isBlackHole
+      ? Math.max(2.4, (2 * G * bestAttractor.mass) / 620)
+      : Math.max(0.55, (2 * G * bestAttractor.mass) / 2800);
+
+    if (bestDist / rs < minRatioDist) {
+      minRatioDist = bestDist / rs;
+      effectiveRs = rs;
+      closestDist = bestDist;
+    }
+
+    // Fuerza de marea (Espaguetización): se intensifica drásticamente al acercarse al límite de Roche (~2.8 * r_s)
+    const tidalCoeff = bestAttractor.isBlackHole ? 2.15 : 0.35;
+    const rawStretch =
+      1.0 + tidalCoeff * ((G * bestAttractor.mass * Math.max(0.7, b.radius)) / Math.pow(Math.max(2.1, bestDist), 2.65));
+    const stretchFactor = Math.min(3.8, Math.max(1.0, rawStretch));
+    const transverseScale = 1.0 / Math.sqrt(stretchFactor);
+
+    if (stretchFactor > maxTidalStretch) {
+      maxTidalStretch = stretchFactor;
+    }
+
+    tidalByBodyId[b.id] = {
+      stretchFactor,
+      transverseScale,
+      dirX: bestDx,
+      dirY: bestDy,
+      dirZ: bestDz,
+    };
+  }
+
+  // Si sólo hay agujeros negros (ej. colapsaron todos los planetas o binario puro), evaluar entre ellos
+  if (minRatioDist === 999 && attractors.length >= 1) {
+    effectiveRs = hasBlackHole ? Math.max(2.6, (2 * G * attractors[0].mass) / 620) : 0.6;
+    if (attractors.length >= 2) {
+      const dx = attractors[1].position.x - attractors[0].position.x;
+      const dz = attractors[1].position.z - attractors[0].position.z;
+      closestDist = Math.max(effectiveRs * 1.15, Math.hypot(dx, dz));
+    } else {
+      closestDist = effectiveRs * 3.5;
+    }
+  }
+
+  // Factor de dilatación temporal relativista de Schwarzschild: dτ = dt * sqrt(1 - r_s / r)
+  const metricTerm = Math.max(0.03, 1.0 - effectiveRs / Math.max(effectiveRs * 1.03, closestDist));
+  const properTimeRate = Math.sqrt(metricTerm);
+  const lorentzGamma = 1.0 / properTimeRate;
+  const gravitationalRedshiftZ = lorentzGamma - 1.0;
+
+  return {
+    schwarzschildRadiusU: effectiveRs,
+    closestDistanceU: closestDist,
+    properTimeRate,
+    lorentzGamma,
+    gravitationalRedshiftZ,
+    maxTidalStretch,
+    tidalByBodyId,
+  };
+}
+
+const SPAWN_PLANET_PALETTE = [
+  '#38BDF8',
+  '#34D399',
+  '#F472B6',
+  '#FBBF24',
+  '#A78BFA',
+  '#FB7185',
+  '#2DD4BF',
+];
+
+/**
+ * Crea e inyecta un nuevo planeta/exoplaneta en las coordenadas (x, z) del plano orbital 3D
+ * con velocidad tangencial analítica v = factor * sqrt(G * M_central / r).
+ */
+export function spawnCustomPlanetOnPlane(
+  bodies: CelestialBody[],
+  x: number,
+  z: number,
+  G: number = DEFAULT_G,
+  insertionFactor: number = 1.0
+): CelestialBody[] {
+  // Calcular baricentro y masa atractiva dominante
+  let totalMass = 0;
+  let cmX = 0;
+  let cmZ = 0;
+  let cmVx = 0;
+  let cmVz = 0;
+
+  const heavyBodies = bodies.filter((b) => b.mass >= 150);
+  const refSet = heavyBodies.length > 0 ? heavyBodies : bodies;
+
+  for (const b of refSet) {
+    totalMass += b.mass;
+    cmX += b.position.x * b.mass;
+    cmZ += b.position.z * b.mass;
+    cmVx += b.velocity.x * b.mass;
+    cmVz += b.velocity.z * b.mass;
+  }
+
+  if (totalMass > 0) {
+    cmX /= totalMass;
+    cmZ /= totalMass;
+    cmVx /= totalMass;
+    cmVz /= totalMass;
+  } else {
+    totalMass = 1000;
+  }
+
+  const dx = x - cmX;
+  const dz = z - cmZ;
+  const r = Math.max(4.5, Math.hypot(dx, dz));
+  const ux = dx / r;
+  const uz = dz / r;
+
+  // Velocidad tangencial perpendicular al vector radial (-uz, ux) en el plano X-Z
+  const vCirc = Math.sqrt((G * totalMass) / r) * insertionFactor;
+  const vx = cmVx - uz * vCirc;
+  const vz = cmVz + ux * vCirc;
+
+  const customIndex = bodies.filter((b) => b.id.startsWith('custom-planet-')).length + 1;
+  const color = SPAWN_PLANET_PALETTE[(customIndex - 1) % SPAWN_PLANET_PALETTE.length];
+  const newPlanet: CelestialBody = {
+    id: `custom-planet-${Date.now()}-${customIndex}`,
+    nameEs: `Exoplaneta K-${customIndex}`,
+    nameEn: `Exoplanet K-${customIndex}`,
+    mass: 14 + (customIndex % 4) * 6,
+    radius: 0.95 + (customIndex % 3) * 0.18,
+    color,
+    position: { x: cmX + ux * r, y: 0, z: cmZ + uz * r },
+    velocity: { x: vx, y: 0, z: vz },
+    acceleration: { x: 0, y: 0, z: 0 },
+  };
+
+  return [...bodies, newPlanet];
+}
+
 
 

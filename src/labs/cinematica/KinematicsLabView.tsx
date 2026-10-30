@@ -1521,10 +1521,23 @@ export const KinematicsLabView: React.FC<KinematicsLabViewProps> = ({
           ctx.restore();
         }
 
-        // Marcador de Impacto exacto sobre el suelo amarillo (y = 0)
+        // Marcador de Impacto exacto sobre el suelo amarillo (y = 0) + Onda de Choque Cinética (E_k = ½·m·v²)
         if (traj.rangeM > 0.2) {
           const impactScreenX = toScreenX(traj.rangeM);
+          const impactEkJoules = 0.5 * traj.params.massKg * traj.impactSpeedMs * traj.impactSpeedMs;
+          const ekLabel =
+            impactEkJoules >= 1000
+              ? `${(impactEkJoules / 1000).toFixed(2)} kJ`
+              : `${impactEkJoules.toFixed(1)} J`;
           ctx.save();
+          if (isCurrent && (!isPlayingRef.current || maxTimeRender >= traj.flightTimeS - 0.05)) {
+            const shockRadiusPx = Math.min(34, Math.max(11, Math.log10(1 + impactEkJoules) * 7.5));
+            ctx.strokeStyle = 'rgba(250, 204, 21, 0.55)';
+            ctx.lineWidth = 1.8;
+            ctx.beginPath();
+            ctx.ellipse(impactScreenX, originY, shockRadiusPx, shockRadiusPx * 0.32, 0, 0, Math.PI * 2);
+            ctx.stroke();
+          }
           ctx.fillStyle = traj.color;
           ctx.strokeStyle = '#07090E';
           ctx.lineWidth = 1.5;
@@ -1536,7 +1549,11 @@ export const KinematicsLabView: React.FC<KinematicsLabViewProps> = ({
             ctx.font = 'bold 10px "JetBrains Mono", monospace';
             ctx.textAlign = 'center';
             ctx.fillStyle = '#FACC15';
-            ctx.fillText(`Impacto: ${traj.rangeM.toFixed(1)} m (y=0)`, impactScreenX, originY - 22);
+            ctx.fillText(
+              `Impacto: ${traj.rangeM.toFixed(1)} m · E_k=${ekLabel}`,
+              impactScreenX,
+              originY - 22
+            );
           }
           ctx.restore();
         }
@@ -2094,6 +2111,24 @@ export const KinematicsLabView: React.FC<KinematicsLabViewProps> = ({
                   className="min-h-[2.25rem] px-2.5 py-1.5 rounded-lg bg-[#07090E] hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-cyan-300 font-mono cursor-pointer whitespace-nowrap"
                 >
                   Demo Galileo
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="wind-gust-btn"
+                  onClick={() => {
+                    const nextWind = windSpeed <= -12 ? 16 : -16;
+                    setIsVacuum(false);
+                    setWindSpeed(nextWind);
+                    handleFireCannon(
+                      { isVacuum: false, windSpeed: nextWind },
+                      `Ráfaga ${nextWind > 0 ? '+' : ''}${nextWind} m/s`
+                    );
+                  }}
+                  className="min-h-[2.25rem] px-2.5 py-1.5 rounded-lg bg-sky-950/70 hover:bg-sky-900/70 border border-sky-500/60 text-sky-200 font-mono font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                >
+                  <Wind className="w-3.5 h-3.5 text-sky-400" />
+                  <span>🌪️ Ráfaga Turbulenta</span>
                 </button>
 
                 <button
