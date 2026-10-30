@@ -36,6 +36,7 @@ import { ColorCodeModal } from './components/ColorCodeModal';
 import { LabQRCodeModal, HubQRCodeBanner } from './components/LabQRCodeModal';
 import { ScrollReveal } from './components/QuantumAnimations';
 import CardSwap, { Card, CardSwapRef } from './components/CardSwap';
+import DotField from './components/DotField';
 import { CircuitLabView } from './labs/circuitos/CircuitLabView';
 import { SpaceLabView } from './labs/espacio-3d/SpaceLabView';
 import { MechanicsLabView } from './labs/mecanica-3d/MechanicsLabView';
@@ -158,7 +159,38 @@ export default function App() {
   ];
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#07090E] text-slate-100 flex flex-col pb-16 md:pb-0">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#07090E] text-slate-100 flex flex-col pb-16 md:pb-0 relative">
+      {/* Fondo interactivo estelar WebGL2 DotField de pantalla completa en el Menú Principal */}
+      {activeView === 'hub' && (
+        <div
+          className="fixed inset-0 pointer-events-none z-0 overflow-hidden"
+          aria-hidden="true"
+        >
+          <DotField
+            gradientFrom="#0135ff"
+            gradientTo="#3ac1ff"
+            dotRadius={1}
+            dotSpacing={18}
+            cursorRadius={160}
+            bulgeStrength={-0.6}
+            glowRadius={40}
+            pattern="scatter"
+            glowColor="#00ff0b"
+            gradientAngle={147}
+            twist={0}
+            glowIntensity={0.8}
+            baseOpacity={0.45}
+            waveAmplitude={0}
+            speed={1}
+            sparkle
+            interactive
+            holdToZoom
+            intro
+            lightMode={false}
+          />
+        </div>
+      )}
+
       <header
         ref={navbarRef}
         className="hub-navbar sticky top-0 z-40 overflow-hidden bg-[#07090E]/95 border-b border-slate-800 py-2.5 no-print"
@@ -504,7 +536,7 @@ export default function App() {
       </div>
 
       <main
-        className={`flex-1 fluid-container ${
+        className={`flex-1 fluid-container relative z-10 ${
           activeView === 'hub' ? 'py-[var(--fluid-pad-y)]' : 'py-2.5 sm:py-3'
         }`}
       >
