@@ -1018,16 +1018,16 @@ export default function App() {
                       </div>
 
                       <div
-                        className="relative w-full flex items-center justify-center py-2"
-                        style={{ minHeight: '520px', height: '560px' }}
+                        className="relative w-full flex items-center justify-center py-3"
+                        style={{ minHeight: '580px', height: '650px' }}
                       >
                         <CardSwap
                           ref={cardSwapRef}
-                          width={480}
-                          height={400}
-                          cardDistance={110}
-                          verticalDistance={24}
-                          depth={90}
+                          width={490}
+                          height={485}
+                          cardDistance={95}
+                          verticalDistance={20}
+                          depth={85}
                           skewAmount={0}
                           visibleCards={Math.min(4, visibleModules.length)}
                           delay={4500}
@@ -1052,10 +1052,10 @@ export default function App() {
                           {visibleModules.map((mod) => (
                             <Card
                               key={mod.id}
-                              className="cursor-pointer group flex flex-col justify-between select-none"
+                              className="cursor-pointer group flex flex-col justify-between h-full select-none"
                             >
-                              <div>
-                                <div className="card-swap-head flex items-center justify-between px-4 py-2.5 bg-[#0D1424]/95 border-b border-slate-800">
+                              <div className="flex-1 flex flex-col min-h-0">
+                                <div className="card-swap-head flex items-center justify-between px-3.5 py-2.5 bg-[#0D1424]/95 border-b border-slate-800 shrink-0">
                                   <div className="flex items-center gap-2.5 min-w-0">
                                     <LabCoverBadge labId={mod.id} size="sm" isActive={activeMod?.id === mod.id} />
                                     <div className="truncate">
@@ -1072,17 +1072,17 @@ export default function App() {
                                   </span>
                                 </div>
 
-                                <div className="relative aspect-[21/9] w-full schematic-grid-bg border-b border-slate-800 flex items-center justify-center overflow-hidden">
+                                <div className="relative h-40 sm:h-44 w-full schematic-grid-bg border-b border-slate-800 flex items-center justify-center overflow-hidden shrink-0">
                                   {mod.svgRender}
-                                  <div className="absolute top-2 left-3 font-mono text-[10px] text-cyan-300 bg-[#070A12]/90 px-2 py-0.5 rounded border border-slate-800">
+                                  <div className="absolute top-2 left-3 font-mono text-[10px] text-cyan-300 bg-[#070A12]/90 px-2 py-0.5 rounded border border-slate-800 shadow-sm">
                                     {mod.equationsHeader}
                                   </div>
-                                  <div className="absolute bottom-2 right-3 font-mono text-[10px] text-slate-300 bg-[#070A12]/90 px-2 py-0.5 rounded border border-slate-800">
+                                  <div className="absolute bottom-2 right-3 font-mono text-[10px] text-slate-300 bg-[#070A12]/90 px-2 py-0.5 rounded border border-slate-800 shadow-sm">
                                     {mod.equationsFooter}
                                   </div>
                                 </div>
 
-                                <div className="p-3.5 space-y-2">
+                                <div className="p-3.5 space-y-2 flex-1 flex flex-col justify-center min-h-0">
                                   <p className="text-xs text-slate-300 line-clamp-2 leading-relaxed">
                                     {mod.description}
                                   </p>
@@ -1102,7 +1102,7 @@ export default function App() {
                                 </div>
                               </div>
 
-                              <div className="p-3.5 pt-0 grid grid-cols-2 gap-2">
+                              <div className="px-3.5 pb-4 pt-1 grid grid-cols-2 gap-2.5 shrink-0 border-t border-slate-800/40 bg-gradient-to-t from-[#080C16] to-transparent">
                                 <button
                                   type="button"
                                   onClick={(e) => {
@@ -1111,8 +1111,8 @@ export default function App() {
                                   }}
                                   className="min-h-[2.5rem] w-full py-2 px-3 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-mono font-bold text-xs flex items-center justify-center gap-1.5 instrument-transition shadow-md shadow-cyan-500/20 cursor-pointer"
                                 >
-                                  <Play className="w-3.5 h-3.5 fill-current" />
-                                  <span>{mod.playBtnText}</span>
+                                  <Play className="w-3.5 h-3.5 fill-current shrink-0" />
+                                  <span className="truncate">{mod.playBtnText}</span>
                                 </button>
                                 <button
                                   type="button"
@@ -1120,10 +1120,10 @@ export default function App() {
                                     e.stopPropagation();
                                     setSelectedObjectivesModule(mod.id);
                                   }}
-                                  className="min-h-[2.5rem] w-full py-2 px-3 rounded-lg bg-[#0E1525] hover:bg-slate-800 border border-slate-700 text-slate-200 font-mono text-xs flex items-center justify-center gap-1.5 instrument-transition cursor-pointer"
+                                  className="min-h-[2.5rem] w-full py-2 px-2 rounded-lg bg-[#0E1525] hover:bg-slate-800 border border-slate-700 text-slate-200 font-mono text-[11px] sm:text-xs flex items-center justify-center gap-1.5 instrument-transition cursor-pointer"
                                 >
-                                  <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
-                                  <span>{mod.objectivesBtnText}</span>
+                                  <BookOpen className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                                  <span className="truncate">{mod.objectivesBtnText}</span>
                                 </button>
                               </div>
                             </Card>
